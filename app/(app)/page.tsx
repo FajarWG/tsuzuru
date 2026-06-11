@@ -1,0 +1,351 @@
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import { formatJPY, formatIDR } from "@/lib/format";
+import MonthlyBillsBanner from "@/components/dashboard/MonthlyBillsBanner";
+import {
+  IconPlus,
+  IconWallet,
+  IconBuildingBank,
+  IconTrendingUp,
+  IconTrendingDown,
+  IconChevronRight,
+  IconCreditCard,
+  IconActivity,
+  IconReceipt,
+  IconTools,
+  IconDeviceLaptop,
+  IconShirt,
+  IconHome,
+  IconHeart,
+  IconHelp,
+  IconPizza,
+  IconGlass,
+  IconBus,
+  IconDeviceGamepad
+} from "@tabler/icons-react";
+
+// Helper to determine the category icon
+function getCategoryIcon(category: string, subCategory: string | null) {
+  if (category === "income") return <IconTrendingUp className="size-5 text-brand-green" />;
+  if (category === "template") return <IconTools className="size-5 text-secondary" />;
+  
+  if (category === "pocket_money") {
+    switch (subCategory) {
+      case "food": return <IconPizza className="size-5 text-amber-600" />;
+      case "drinks": return <IconGlass className="size-5 text-blue-500" />;
+      case "transport": return <IconBus className="size-5 text-slate-500" />;
+      case "entertainment": return <IconDeviceGamepad className="size-5 text-purple-500" />;
+      default: return <IconWallet className="size-5 text-stone-500" />;
+    }
+  }
+
+  if (category === "shopping") {
+    switch (subCategory) {
+      case "electronics": return <IconDeviceLaptop className="size-5 text-cyan-600" />;
+      case "clothing": return <IconShirt className="size-5 text-pink-500" />;
+      case "household": return <IconHome className="size-5 text-orange-500" />;
+      case "health": return <IconHeart className="size-5 text-rose-500" />;
+      default: return <IconCreditCard className="size-5 text-stone-500" />;
+    }
+  }
+
+  return <IconHelp className="size-5 text-stone-400" />;
+}
+
+export default async function DashboardPage() {
+  const session = await auth();
+
+  if (!session || !session.user) {
+    redirect("/login");
+  }
+
+  const userId = session.user.id;
+
+  // 1. Fetch User Settings & Accounts
+  const settings = await prisma.userSettings.findUnique({
+    where: { userId },
+  });
+
+  const accounts = await prisma.account.findMany({
+    where: { userId, isActive: true },
+  });
+
+  // 2. Calculate Totals
+  const totalJPY = accounts
+    .filter((a) => a.currency === "JPY")
+    .reduce((sum, a) => sum + a.balance, 0);
+
+  const totalIDR = accounts
+    .filter((a) => a.currency === "IDR")
+    .reduce((sum, a) => sum + a.balance, 0);
+
+  // 3. Greeting logic based on time
+  const hour = new Date().getHours();
+  let greeting = "Good evening";
+  if (hour < 12) greeting = "Good morning";
+  else if (hour < 17) greeting = "Good afternoon";
+
+  // 4. Calculate actual spending this month
+  const today = new Date();
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+
+  // Expenses in JPY this month (budget limits are defined in JPY)
+  const monthlyExpenses = await prisma.transaction.findMany({
+    where: {
+      userId,
+      type: "expense",
+      currency: "JPY",
+      date: {
+        gte: startOfMonth,
+        lte: endOfMonth,
+      },
+    },
+  });
+
+  const actualSpentTotal = monthlyExpenses.reduce((sum, t) => sum + t.amount, 0);
+  const actualPocketSpent = monthlyExpenses
+    .filter((t) => t.category === "pocket_money")
+    .reduce((sum, t) => sum + t.amount, 0);
+  const actualShoppingSpent = monthlyExpenses
+    .filter((t) => t.category === "shopping")
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  // 5. Fetch Recent Transactions (last 5)
+  const recentTransactions = await prisma.transaction.findMany({
+    where: { userId },
+    orderBy: { date: "desc" },
+    take: 5,
+    include: { account: true },
+  });
+
+  // 6. Check if monthly templates need processing
+  // Check if we already have template deductions for this month
+  const templatesProcessed = await prisma.transaction.findFirst({
+    where: {
+      userId,
+      isTemplate: true,
+      date: {
+        gte: startOfMonth,
+        lte: endOfMonth,
+      },
+    },
+  });
+
+  const templates = await prisma.monthlyTemplate.findMany({
+    where: { userId, isActive: true },
+  });
+
+  const showTemplatesBanner = today.getDate() === 1 && !templatesProcessed && templates.length > 0;
+
+  // Budget progress caps
+  const budgetExpectation = settings?.monthlyBudget || 150000;
+  const pocketLimit = settings?.pocketMoneyLimit || 40000;
+  const shoppingLimit = settings?.shoppingLimit || 60000;
+
+  // Calculate percentages
+  const budgetPercent = Math.min((actualSpentTotal / budgetExpectation) * 100, 100);
+  const pocketPercent = Math.min((actualPocketSpent / pocketLimit) * 100, 100);
+  const shoppingPercent = Math.min((actualShoppingSpent / shoppingLimit) * 100, 100);
+
+  const pocketRemainingPercent = 100 - pocketPercent;
+  const pocketIsLow = pocketRemainingPercent < 20; // Used is > 80%
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <p className="text-xs text-muted-foreground tracking-wide font-sans">
+            {greeting}, {session.user.name?.split(" ")[0]}
+          </p>
+          <h1 className="font-serif text-3xl font-bold tracking-wide text-primary mt-0.5">
+            綴る
+          </h1>
+        </div>
+        {session.user.image && (
+          <img
+            src={session.user.image}
+            alt="Profile"
+            className="size-10 rounded-full border border-border/80 shadow-sm"
+          />
+        )}
+      </div>
+
+      {/* Monthly Bills Ready Banner */}
+      {showTemplatesBanner && (
+        <MonthlyBillsBanner userId={userId} templates={templates} />
+      )}
+
+      {/* Balance Summary Card */}
+      <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
+        <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+          Total Balance
+        </h2>
+        <div className="grid grid-cols-2 gap-4 divide-x divide-border/40">
+          <div>
+            <p className="text-[10px] text-muted-foreground tracking-wide font-medium">JPY Balance</p>
+            <p className="text-2xl font-sans font-bold tracking-tight text-foreground mt-1">
+              {formatJPY(totalJPY)}
+            </p>
+          </div>
+          <div className="pl-4">
+            <p className="text-[10px] text-muted-foreground tracking-wide font-medium">IDR Balance</p>
+            <p className="text-xl font-sans font-bold tracking-tight text-foreground mt-1.5">
+              {formatIDR(totalIDR)}
+            </p>
+          </div>
+        </div>
+
+        {/* Sub accounts list */}
+        <div className="flex flex-col gap-2.5 mt-2 pt-3 border-t border-border/30">
+          {accounts.map((acc) => (
+            <div key={acc.id} className="flex justify-between items-center text-xs">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-muted text-primary/80">
+                  {acc.type === "investment" ? (
+                    <IconActivity className="size-4" />
+                  ) : acc.type === "ewallet" ? (
+                    <IconCreditCard className="size-4" />
+                  ) : (
+                    <IconBuildingBank className="size-4" />
+                  )}
+                </span>
+                <span className="font-medium text-foreground">{acc.name}</span>
+              </div>
+              <span className="font-sans font-semibold text-muted-foreground">
+                {acc.currency === "JPY" ? formatJPY(acc.balance) : formatIDR(acc.balance)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Budget Progress Card */}
+      <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
+        <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+          Budget Progress (JPY)
+        </h2>
+
+        {/* Monthly Budget */}
+        <div className="flex flex-col gap-2">
+          <div className="flex justify-between text-xs font-medium">
+            <span className="text-foreground">Monthly Budget</span>
+            <span className="text-muted-foreground">
+              {formatJPY(actualSpentTotal)} / {formatJPY(budgetExpectation)}
+            </span>
+          </div>
+          <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary rounded-full transition-all duration-500"
+              style={{ width: `${budgetPercent}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Pocket Money */}
+        <div className="flex flex-col gap-2">
+          <div className="flex justify-between text-xs font-medium">
+            <span className="text-foreground">Pocket Money</span>
+            <span className="text-muted-foreground">
+              {formatJPY(actualPocketSpent)} / {formatJPY(pocketLimit)}
+            </span>
+          </div>
+          <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                pocketIsLow ? "bg-destructive" : "bg-secondary"
+              }`}
+              style={{ width: `${pocketPercent}%` }}
+            />
+          </div>
+          {pocketIsLow && (
+            <p className="text-[10px] text-destructive font-medium tracking-wide">
+              ⚠️ Pocket money budget is critically low (&lt; 20% remaining)!
+            </p>
+          )}
+        </div>
+
+        {/* Shopping */}
+        <div className="flex flex-col gap-2">
+          <div className="flex justify-between text-xs font-medium">
+            <span className="text-foreground">Shopping</span>
+            <span className="text-muted-foreground">
+              {formatJPY(actualShoppingSpent)} / {formatJPY(shoppingLimit)}
+            </span>
+          </div>
+          <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-stone-500 dark:bg-stone-400 rounded-full transition-all duration-500"
+              style={{ width: `${shoppingPercent}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Transactions Section */}
+      <div className="flex flex-col gap-3">
+        <div className="flex justify-between items-center px-1">
+          <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+            Recent Transactions
+          </h2>
+          <Link
+            href="/transactions"
+            className="text-xs text-primary hover:underline flex items-center font-medium"
+          >
+            See all
+            <IconChevronRight className="size-4" />
+          </Link>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {recentTransactions.length === 0 ? (
+            <div className="bg-white dark:bg-zinc-900 border border-border/40 rounded-2xl p-6 text-center text-xs text-muted-foreground">
+              No transactions recorded yet.
+            </div>
+          ) : (
+            recentTransactions.map((tx) => (
+              <div
+                key={tx.id}
+                className="bg-white dark:bg-zinc-900 border border-border/40 rounded-2xl p-4 flex justify-between items-center gap-3 shadow-xs hover:border-border/80 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-muted rounded-xl text-primary">
+                    {getCategoryIcon(tx.category, tx.subCategory)}
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs font-semibold text-foreground leading-tight">
+                      {tx.description || tx.category.replace("_", " ")}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground leading-none">
+                      {tx.account.name} • {tx.subCategory || tx.category}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-right flex flex-col items-end gap-0.5">
+                  <span
+                    className={`text-xs font-sans font-bold ${
+                      tx.type === "expense" ? "text-destructive" : "text-brand-green"
+                    }`}
+                  >
+                    {tx.type === "expense" ? "-" : "+"}
+                    {tx.currency === "JPY" ? formatJPY(tx.amount) : formatIDR(tx.amount)}
+                  </span>
+                  <span className="text-[9px] text-muted-foreground leading-none">
+                    {new Date(tx.date).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
