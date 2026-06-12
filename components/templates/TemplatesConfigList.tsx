@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { formatJPY, formatIDR } from "@/lib/format";
 import { markTemplatePaidAction, updateTemplateAction } from "@/lib/actions/templates";
+import { toast } from "sonner";
 import {
   IconCheck,
   IconLoader,
@@ -123,6 +124,7 @@ export default function TemplatesConfigList({
       });
 
       if (res.success) {
+        toast.success("Template updated successfully");
         setItems((prev) =>
           prev.map((t) =>
             t.id === editingItem.id
@@ -166,6 +168,7 @@ export default function TemplatesConfigList({
     try {
       const res = await markTemplatePaidAction(payingItem.id);
       if (res.success) {
+        toast.success("Bill marked as paid");
         setPaySuccessId(payingItem.id);
         setTimeout(() => setPaySuccessId(null), 2500);
         closePay();

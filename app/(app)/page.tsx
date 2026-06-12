@@ -20,6 +20,7 @@ import {
   IconDeviceGamepad,
   IconCreditCard,
   IconAdjustments,
+  IconCurrencyYen,
 } from "@tabler/icons-react";
 
 // Helper to determine the category icon
@@ -73,6 +74,8 @@ export default async function DashboardPage() {
   const today = new Date();
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
+  const startOfPreviousMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const endOfPreviousMonth = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
 
   const monthlyExpenses = await prisma.transaction.findMany({
     where: {
@@ -83,6 +86,15 @@ export default async function DashboardPage() {
     },
   });
 
+  const previousMonthlyExpenses = await prisma.transaction.findMany({
+    where: {
+      userId,
+      type: "expense",
+      currency: "JPY",
+      date: { gte: startOfPreviousMonth, lte: endOfPreviousMonth },
+    },
+  });
+
   const actualSpentTotal = monthlyExpenses.reduce((s, t) => s + t.amount, 0);
   const actualPocketSpent = monthlyExpenses
     .filter((t) => t.category === "pocket_money")
@@ -90,6 +102,7 @@ export default async function DashboardPage() {
   const actualShoppingSpent = monthlyExpenses
     .filter((t) => t.category === "shopping")
     .reduce((s, t) => s + t.amount, 0);
+  const previousSpentTotal = previousMonthlyExpenses.reduce((s, t) => s + t.amount, 0);
 
   // Recent transactions
   const recentTransactions = await prisma.transaction.findMany({
@@ -108,6 +121,13 @@ export default async function DashboardPage() {
   const pocketPercent = Math.min((actualPocketSpent / pocketLimit) * 100, 100);
   const shoppingPercent = Math.min((actualShoppingSpent / shoppingLimit) * 100, 100);
   const pocketIsLow = (100 - pocketPercent) < 20;
+  const budgetRemaining = Math.max(budgetExpectation - actualSpentTotal, 0);
+  const monthDelta = actualSpentTotal - previousSpentTotal;
+  const categoryTotals = monthlyExpenses.reduce<Record<string, number>>((totals, tx) => {
+    totals[tx.category] = (totals[tx.category] || 0) + tx.amount;
+    return totals;
+  }, {});
+  const topCategory = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0];
 
   return (
     <div className="flex flex-col gap-5">
@@ -136,6 +156,61 @@ export default async function DashboardPage() {
         totalJPY={totalJPY}
         totalIDR={totalIDR}
       />
+
+      {recentTransactions.length === 0 && (
+        <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-6 flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="font-serif text-base font-bold text-primary">ようこそ (Welcome to Tsuzuru)</h2>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              We have set up a default Kakeibo (家計簿) workspace with standard accounts, budgets, and bill templates to help you start tracking right away.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 border-t border-border/10 pt-4">
+            <div className="flex gap-3">
+              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <span className="text-[10px] font-bold">1</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs font-semibold text-foreground">4 Financial Accounts Configured</span>
+                <span className="text-[10px] text-muted-foreground leading-relaxed">
+                  Includes JPY accounts (Yucho Bank ¥100k, PayPay ¥20k, PayPay Investasi ¥50k) and an IDR account (Jago Rp5M).
+                </span>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <span className="text-[10px] font-bold">2</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs font-semibold text-foreground">Monthly Budget Limits Set</span>
+                <span className="text-[10px] text-muted-foreground leading-relaxed">
+                  A monthly budget of ¥150,000 JPY is set, allocating ¥40,000 for Pocket Money and ¥60,000 for Shopping.
+                </span>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <span className="text-[10px] font-bold">3</span>
+              </div>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs font-semibold text-foreground">5 Recurring Bill Templates Ready</span>
+                <span className="text-[10px] text-muted-foreground leading-relaxed">
+                  Rent, Electricity, Water, Gas, and SIM Card templates are ready. Pay them with one click in settings!
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-muted/45 border border-border/20 rounded-xl p-3 text-center mt-1">
+            <p className="text-[10px] font-medium text-muted-foreground leading-relaxed">
+              💡 Tip: Click the <strong className="text-primary font-bold">+</strong> button in the bottom navigation to log a new expense, or adjust your settings.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Budget Progress Card */}
       <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
@@ -190,6 +265,77 @@ export default async function DashboardPage() {
               className="h-full bg-amber-500/70 rounded-full transition-all duration-500"
               style={{ width: `${shoppingPercent}%` }}
             />
+          </div>
+        </div>
+      </div>
+
+      {/* Monthly Insights Card */}
+      <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
+        <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+          Monthly Insights (今月の洞察)
+        </h2>
+
+        <div className="grid grid-cols-1 gap-3">
+          {/* Remaining Budget */}
+          <div className="flex items-start gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
+            <div className="p-2 bg-primary/10 text-primary rounded-lg shrink-0">
+              <IconCurrencyYen className="size-4" />
+            </div>
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Remaining Budget</span>
+              <span className="text-sm font-bold text-foreground">
+                {formatJPY(budgetRemaining)} <span className="text-xs font-normal text-muted-foreground">left of {formatJPY(budgetExpectation)}</span>
+              </span>
+              <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
+                {budgetRemaining > 0 
+                  ? `${Math.round((budgetRemaining / budgetExpectation) * 100)}% of your monthly budget is still available.` 
+                  : "You have spent or exceeded your monthly budget limits."}
+              </p>
+            </div>
+          </div>
+
+          {/* Spending Trend */}
+          <div className="flex items-start gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
+            <div className={`p-2 rounded-lg shrink-0 ${monthDelta > 0 ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}>
+              <IconTrendingUp className="size-4" />
+            </div>
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Spending Trend</span>
+              <span className="text-sm font-bold text-foreground">
+                {monthDelta === 0 
+                  ? "No change" 
+                  : `${monthDelta > 0 ? "+" : ""}${formatJPY(monthDelta)}`}
+                <span className="text-xs font-normal text-muted-foreground"> vs last month</span>
+              </span>
+              <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
+                {monthDelta > 0 
+                  ? `You are spending more than last month's JPY total (¥${previousSpentTotal.toLocaleString()}).` 
+                  : monthDelta < 0 
+                    ? `You've spent less than last month's JPY total (¥${previousSpentTotal.toLocaleString()}) so far.`
+                    : "Your spending matches last month's pattern exactly."}
+              </p>
+            </div>
+          </div>
+
+          {/* Top Category */}
+          <div className="flex items-start gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
+            <div className="p-2 bg-amber-500/10 text-amber-600 dark:text-amber-500 rounded-lg shrink-0">
+              <IconWallet className="size-4" />
+            </div>
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Top Category</span>
+              <span className="text-sm font-bold text-foreground capitalize">
+                {topCategory ? topCategory[0].replace(/_/g, " ") : "None"}
+                {topCategory && (
+                  <span className="text-xs font-normal text-muted-foreground"> ({formatJPY(topCategory[1])})</span>
+                )}
+              </span>
+              <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
+                {topCategory 
+                  ? `${Math.round((topCategory[1] / Math.max(actualSpentTotal, 1)) * 100)}% of your JPY expenses went to ${topCategory[0].replace(/_/g, " ")}.`
+                  : "No JPY transactions logged this month yet."}
+              </p>
+            </div>
           </div>
         </div>
       </div>

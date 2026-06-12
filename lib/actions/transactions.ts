@@ -8,11 +8,19 @@ interface CreateTransactionInput {
   accountId: string;
   type: "expense" | "income";
   amount: number;
-  category: "pocket_money" | "shopping" | "income" | "template";
+  category: "pocket_money" | "shopping" | "income" | "template" | "adjustment";
   subCategory?: string | null;
   mealNumber?: number | null;
   description?: string | null;
   date?: Date;
+}
+
+interface UpdateTransactionInput extends CreateTransactionInput {
+  id: string;
+}
+
+function getBalanceDelta(type: "expense" | "income", amount: number) {
+  return type === "expense" ? -amount : amount;
 }
 
 export async function createTransactionAction(data: CreateTransactionInput) {
@@ -27,13 +35,7 @@ export async function createTransactionAction(data: CreateTransactionInput) {
 
     const transactionDate = data.date || new Date();
 
-    // Calculate new balance
-    let newBalance = account.balance;
-    if (data.type === "expense") {
-      newBalance -= data.amount;
-    } else {
-      newBalance += data.amount;
-    }
+    const newBalance = account.balance + getBalanceDelta(data.type, data.amount);
 
     // Execute database transaction to guarantee consistency
     await prisma.$transaction([
@@ -64,6 +66,110 @@ export async function createTransactionAction(data: CreateTransactionInput) {
     return { success: true };
   } catch (error) {
     console.error("Failed to create transaction:", error);
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+export async function updateTransactionAction(data: UpdateTransactionInput) {
+  try {
+    if (!data.amount || data.amount <= 0) {
+      throw new Error("Please enter a valid amount");
+    }
+
+    const existing = await prisma.transaction.findFirst({
+      where: { id: data.id, userId: data.userId },
+    });
+
+    if (!existing) {
+      throw new Error("Transaction not found");
+    }
+
+    const account = await prisma.account.findFirst({
+      where: { id: data.accountId, userId: data.userId },
+    });
+
+    if (!account) {
+      throw new Error("Account not found");
+    }
+
+    const oldDelta = getBalanceDelta(existing.type as "expense" | "income", existing.amount);
+    const newDelta = getBalanceDelta(data.type, data.amount);
+
+    await prisma.$transaction(async (tx) => {
+      if (existing.accountId === data.accountId) {
+        await tx.account.update({
+          where: { id: data.accountId },
+          data: { balance: { increment: newDelta - oldDelta } },
+        });
+      } else {
+        await tx.account.update({
+          where: { id: existing.accountId },
+          data: { balance: { increment: -oldDelta } },
+        });
+        await tx.account.update({
+          where: { id: data.accountId },
+          data: { balance: { increment: newDelta } },
+        });
+      }
+
+      await tx.transaction.update({
+        where: { id: data.id },
+        data: {
+          accountId: data.accountId,
+          type: data.type,
+          amount: data.amount,
+          currency: account.currency,
+          category: data.category,
+          subCategory: data.subCategory,
+          mealNumber: data.mealNumber,
+          description: data.description,
+          date: data.date || existing.date,
+        },
+      });
+    });
+
+    revalidatePath("/");
+    revalidatePath("/transactions");
+    revalidatePath("/charts");
+    revalidatePath("/settings");
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to update transaction:", error);
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+export async function deleteTransactionAction(transactionId: string, userId: string) {
+  try {
+    const existing = await prisma.transaction.findFirst({
+      where: { id: transactionId, userId },
+    });
+
+    if (!existing) {
+      throw new Error("Transaction not found");
+    }
+
+    const oldDelta = getBalanceDelta(existing.type as "expense" | "income", existing.amount);
+
+    await prisma.$transaction([
+      prisma.transaction.delete({
+        where: { id: transactionId },
+      }),
+      prisma.account.update({
+        where: { id: existing.accountId },
+        data: { balance: { increment: -oldDelta } },
+      }),
+    ]);
+
+    revalidatePath("/");
+    revalidatePath("/transactions");
+    revalidatePath("/charts");
+    revalidatePath("/settings");
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to delete transaction:", error);
     return { success: false, error: (error as Error).message };
   }
 }

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createBillAction, settleBillAction, deleteBillAction } from "@/lib/actions/bill-friends";
+import { toast } from "sonner";
 import { formatJPY, formatIDR } from "@/lib/format";
 import {
   IconPlus,
@@ -114,6 +115,7 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
       const res = await createBillAction({ personName, amount: parsedAmount, currency, direction, description: description || undefined });
 
       if (res.success) {
+        toast.success("Bill added successfully");
         setBills((prev) => [
           {
             id: `temp-${Date.now()}`,
@@ -139,6 +141,7 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
     try {
       const res = await settleBillAction(id);
       if (res.success) {
+        toast.success("Bill settled successfully");
         setBills((prev) => prev.map((b) => b.id === id ? { ...b, isSettled: true, settledAt: new Date() } : b));
       } else {
         setActionError(res.error || "Failed to settle");
@@ -155,6 +158,7 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
     try {
       const res = await deleteBillAction(id);
       if (res.success) {
+        toast.success("Bill deleted successfully");
         setBills((prev) => prev.filter((b) => b.id !== id));
       } else {
         setActionError(res.error || "Failed to delete");

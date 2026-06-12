@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { formatJPY, formatIDR } from "@/lib/format";
 import { updateAccountBalanceWithHistoryAction, updateAccountNameAction } from "@/lib/actions/accounts";
+import { toast } from "sonner";
 import {
   IconBuildingBank,
   IconCreditCard,
@@ -133,6 +134,7 @@ export default function BalanceSummaryCard({
             : a
         )
       );
+      toast.success("Account updated successfully");
       setSaveSuccess(true);
       setTimeout(() => {
         setSaveSuccess(false);

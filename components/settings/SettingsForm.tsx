@@ -5,28 +5,29 @@ import { signOut } from "next-auth/react";
 import { updateUserSettingsAction } from "@/lib/actions/settings";
 import TemplatesConfigList from "@/components/templates/TemplatesConfigList";
 import {
-  IconLogout,
-  IconCreditCard,
-  IconUser,
-  IconCurrencyYen,
   IconCalendarRepeat,
-  IconSettings,
-  IconLoader,
   IconCheck,
+  IconCreditCard,
+  IconCurrencyYen,
+  IconLoader,
+  IconLogout,
+  IconSettings,
+  IconUser,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface UserSettingsData {
   monthlyBudget: number;
@@ -64,6 +65,12 @@ interface SettingsFormProps {
   };
 }
 
+function formatCurrency(amount: number, currency: string) {
+  return currency === "JPY"
+    ? `¥${Number(amount).toLocaleString()}`
+    : `Rp${Number(amount).toLocaleString("id-ID")}`;
+}
+
 export default function SettingsForm({
   userId,
   userSettings,
@@ -71,7 +78,6 @@ export default function SettingsForm({
   templates,
   profile,
 }: SettingsFormProps) {
-  // Budget dialog state
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [monthlyBudget, setMonthlyBudget] = useState(String(userSettings.monthlyBudget));
   const [pocketMoneyLimit, setPocketMoneyLimit] = useState(String(userSettings.pocketMoneyLimit));
@@ -117,8 +123,6 @@ export default function SettingsForm({
     }
   };
 
-  const handleSignOut = () => signOut({ callbackUrl: "/login" });
-
   const accountsForTemplates = accounts.map((a) => ({
     id: a.id,
     name: a.name,
@@ -127,90 +131,149 @@ export default function SettingsForm({
 
   return (
     <div className="flex flex-col gap-5 flex-1 pb-10">
-      {/* Page header */}
       <div>
         <h1 className="font-serif text-2xl font-bold tracking-wide text-primary">Settings</h1>
         <p className="text-xs text-muted-foreground mt-1">
-          Manage your recurring bills, budget, and profile.
+          Manage recurring bills, budget, accounts, and profile.
         </p>
       </div>
 
-      {/* ====== 1. Monthly Templates (TOP) ====== */}
-      <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <IconCalendarRepeat className="size-4 text-primary" />
-          <h2 className="text-sm font-bold text-foreground">Monthly Templates</h2>
-        </div>
-        <TemplatesConfigList
-          hideHeader
-          templates={templates}
-          accounts={accountsForTemplates}
-        />
-      </div>
+      <Tabs defaultValue="templates" className="gap-4">
+        <TabsList className="grid h-auto w-full grid-cols-4 rounded-2xl">
+          <TabsTrigger value="templates" className="text-[10px]">
+            <IconCalendarRepeat className="size-3.5" />
+            Bills
+          </TabsTrigger>
+          <TabsTrigger value="budget" className="text-[10px]">
+            <IconCurrencyYen className="size-3.5" />
+            Budget
+          </TabsTrigger>
+          <TabsTrigger value="accounts" className="text-[10px]">
+            <IconCreditCard className="size-3.5" />
+            Accounts
+          </TabsTrigger>
+          <TabsTrigger value="profile" className="text-[10px]">
+            <IconUser className="size-3.5" />
+            Profile
+          </TabsTrigger>
+        </TabsList>
 
-      {/* ====== 2. Budget Settings (Button → Dialog) ====== */}
-      <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <IconCurrencyYen className="size-4 text-primary" />
-            <div>
-              <h2 className="text-sm font-bold text-foreground">Budget (JPY)</h2>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                Monthly: ¥{Number(userSettings.monthlyBudget).toLocaleString()} · Pocket: ¥{Number(userSettings.pocketMoneyLimit).toLocaleString()} · Shopping: ¥{Number(userSettings.shoppingLimit).toLocaleString()}
-              </p>
+        <TabsContent value="templates" className="mt-0">
+          <section className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <IconCalendarRepeat className="size-4 text-primary" />
+              <h2 className="text-sm font-bold text-foreground">Monthly Templates</h2>
             </div>
-          </div>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            onClick={() => {
-              setBudgetOpen(true);
-              setBudgetError(null);
-              setBudgetSuccess(false);
-            }}
-            aria-label="Edit budget settings"
-          >
-            <IconSettings className="size-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* ====== 3. Profile & Sign Out ====== */}
-      <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
-        <div className="flex items-center gap-2 pb-2 border-b border-border/20">
-          <IconUser className="size-4 text-primary" />
-          <h2 className="text-sm font-bold text-foreground">Profile</h2>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {profile.image && (
-            <img
-              src={profile.image}
-              alt="Avatar"
-              className="size-11 rounded-full border shadow-sm"
+            <TemplatesConfigList
+              hideHeader
+              templates={templates}
+              accounts={accountsForTemplates}
             />
-          )}
-          <div className="flex flex-col gap-0.5">
-            <span className="text-sm font-bold text-foreground leading-tight">
-              {profile.name || "Guest User"}
-            </span>
-            <span className="text-xs text-muted-foreground leading-none">
-              {profile.email || "No email linked"}
-            </span>
-          </div>
-        </div>
+          </section>
+        </TabsContent>
 
-        <Button
-          variant="destructive"
-          onClick={handleSignOut}
-          className="w-full gap-2"
-        >
-          <IconLogout className="size-4" />
-          Sign Out
-        </Button>
-      </div>
+        <TabsContent value="budget" className="mt-0">
+          <section className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2">
+                <IconCurrencyYen className="size-4 text-primary mt-0.5" />
+                <div>
+                  <h2 className="text-sm font-bold text-foreground">Budget Limits</h2>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Monthly spending guardrails in JPY.
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                onClick={() => {
+                  setBudgetOpen(true);
+                  setBudgetError(null);
+                  setBudgetSuccess(false);
+                }}
+                aria-label="Edit budget settings"
+              >
+                <IconSettings className="size-4" />
+              </Button>
+            </div>
 
-      {/* ====== Budget Edit Dialog ====== */}
+            <div className="mt-5 grid grid-cols-1 gap-2">
+              {[
+                ["Monthly", userSettings.monthlyBudget],
+                ["Pocket Money", userSettings.pocketMoneyLimit],
+                ["Shopping", userSettings.shoppingLimit],
+              ].map(([label, value]) => (
+                <div key={label} className="flex items-center justify-between rounded-2xl bg-muted/50 px-4 py-3">
+                  <span className="text-xs font-semibold text-muted-foreground">{label}</span>
+                  <span className="text-sm font-bold text-foreground">¥{Number(value).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </TabsContent>
+
+        <TabsContent value="accounts" className="mt-0">
+          <section className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <IconCreditCard className="size-4 text-primary" />
+              <h2 className="text-sm font-bold text-foreground">Accounts</h2>
+            </div>
+            <div className="flex flex-col gap-2">
+              {accounts.map((account) => (
+                <div key={account.id} className="flex items-center justify-between rounded-2xl border border-border/40 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold text-foreground">{account.name}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {account.currency} · {account.isActive ? "Active" : "Inactive"}
+                    </p>
+                  </div>
+                  <p className="shrink-0 text-xs font-bold">
+                    {formatCurrency(account.balance, account.currency)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        </TabsContent>
+
+        <TabsContent value="profile" className="mt-0">
+          <section className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-border/20">
+              <IconUser className="size-4 text-primary" />
+              <h2 className="text-sm font-bold text-foreground">Profile</h2>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {profile.image && (
+                <img
+                  src={profile.image}
+                  alt="Avatar"
+                  className="size-11 rounded-full border shadow-sm"
+                />
+              )}
+              <div className="flex min-w-0 flex-col gap-0.5">
+                <span className="truncate text-sm font-bold text-foreground leading-tight">
+                  {profile.name || "Google User"}
+                </span>
+                <span className="truncate text-xs text-muted-foreground leading-none">
+                  {profile.email || "No email linked"}
+                </span>
+              </div>
+            </div>
+
+            <Button
+              variant="destructive"
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="w-full gap-2"
+            >
+              <IconLogout className="size-4" />
+              Sign Out
+            </Button>
+          </section>
+        </TabsContent>
+      </Tabs>
+
       <Dialog open={budgetOpen} onOpenChange={(open) => { if (!isSavingBudget) setBudgetOpen(open); }}>
         <DialogContent className="max-w-[360px] rounded-2xl">
           <DialogHeader>
@@ -292,7 +355,7 @@ export default function SettingsForm({
                 <IconLoader className="size-4 animate-spin" />
               ) : budgetSuccess ? (
                 <>
-                  <IconCheck className="size-4" /> Saved!
+                  <IconCheck className="size-4" /> Saved
                 </>
               ) : (
                 "Save"

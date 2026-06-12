@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createTransactionAction } from "@/lib/actions/transactions";
 import { IconPlus, IconLoader, IconCalendar } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Dialog,
@@ -128,6 +129,7 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
       });
 
       if (res.success) {
+        toast.success("Transaction added successfully");
         setOpen(false);
         router.refresh();
       } else {

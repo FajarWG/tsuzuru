@@ -21,6 +21,7 @@ export default async function TransactionsPage() {
         select: {
           id: true,
           name: true,
+          currency: true,
         },
       },
     },
@@ -32,12 +33,13 @@ export default async function TransactionsPage() {
     select: {
       id: true,
       name: true,
+      currency: true,
     },
   });
 
   return (
     <div className="flex flex-col flex-1">
-      <TransactionsList transactions={transactions} accounts={accounts} />
+      <TransactionsList userId={userId} transactions={transactions} accounts={accounts} />
     </div>
   );
 }
