@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Suspense } from "react";
-import { formatJPY, formatIDR } from "@/lib/format";
 import BalanceSummaryCard from "@/components/dashboard/BalanceSummaryCard";
 import WelcomeDialog from "@/components/dashboard/WelcomeDialog";
 import MonthlyInsightsCard from "@/components/dashboard/MonthlyInsightsCard";
@@ -154,7 +153,6 @@ async function BudgetProgressSection({
   const pocketLimit = settings?.pocketMoneyLimit || 40000;
   const shoppingLimit = settings?.shoppingLimit || 60000;
   const currency = settings?.budgetCurrency || "JPY";
-  const formatFn = currency === "JPY" ? formatJPY : formatIDR;
 
   const actualSpentTotal = monthlyExpenses.reduce((s, t) => s + t.amount, 0);
   const actualPocketSpent = monthlyExpenses
@@ -189,9 +187,9 @@ async function BudgetProgressSection({
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Remaining Budget</span>
               <span className="text-sm font-bold text-foreground">
-                <AnimatedNumber value={budgetRemaining} formatFn={formatFn} />{" "}
+                <AnimatedNumber value={budgetRemaining} currency={currency} />{" "}
                 <span className="text-xs font-normal text-muted-foreground">
-                  left of <AnimatedNumber value={budgetExpectation} formatFn={formatFn} />
+                  left of <AnimatedNumber value={budgetExpectation} currency={currency} />
                 </span>
               </span>
               <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
@@ -210,9 +208,9 @@ async function BudgetProgressSection({
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Pocket Money</span>
               <span className="text-sm font-bold text-foreground">
-                <AnimatedNumber value={pocketRemaining} formatFn={formatFn} />{" "}
+                <AnimatedNumber value={pocketRemaining} currency={currency} />{" "}
                 <span className="text-xs font-normal text-muted-foreground">
-                  left of <AnimatedNumber value={pocketLimit} formatFn={formatFn} />
+                  left of <AnimatedNumber value={pocketLimit} currency={currency} />
                 </span>
               </span>
               <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
@@ -231,9 +229,9 @@ async function BudgetProgressSection({
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Shopping</span>
               <span className="text-sm font-bold text-foreground">
-                <AnimatedNumber value={shoppingRemaining} formatFn={formatFn} />{" "}
+                <AnimatedNumber value={shoppingRemaining} currency={currency} />{" "}
                 <span className="text-xs font-normal text-muted-foreground">
-                  left of <AnimatedNumber value={shoppingLimit} formatFn={formatFn} />
+                  left of <AnimatedNumber value={shoppingLimit} currency={currency} />
                 </span>
               </span>
               <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">

@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { useMotionValue, useSpring, animate } from "framer-motion";
+import { formatJPY, formatIDR } from "@/lib/format";
 
 interface AnimatedNumberProps {
   value: number;
+  currency?: string; // e.g. "JPY" or "IDR"
   formatFn?: (val: number) => string;
   className?: string;
   animateOnMount?: boolean;
@@ -12,12 +14,22 @@ interface AnimatedNumberProps {
 
 export default function AnimatedNumber({
   value,
-  formatFn = (val) => val.toLocaleString(),
+  currency,
+  formatFn,
   className,
   animateOnMount = false,
 }: AnimatedNumberProps) {
   const ref = useRef<HTMLSpanElement>(null);
   const isMounted = useRef(false);
+
+  // Resolve formatting function (fallback to normal locale string if not specified)
+  const resolvedFormatFn = useMemo(() => {
+    return formatFn || (
+      currency === "JPY" ? formatJPY :
+      currency === "IDR" ? formatIDR :
+      (val: number) => val.toLocaleString()
+    );
+  }, [formatFn, currency]);
 
   // Initialize the motion value
   const motionValue = useMotionValue(animateOnMount ? 0 : value);
@@ -34,7 +46,7 @@ export default function AnimatedNumber({
       isMounted.current = true;
       if (!animateOnMount) {
         if (ref.current) {
-          ref.current.textContent = formatFn(value);
+          ref.current.textContent = resolvedFormatFn(value);
         }
         return;
       }
@@ -45,20 +57,20 @@ export default function AnimatedNumber({
       ease: [0.25, 1, 0.5, 1], // easeOutQuart
     });
     return () => controls.stop();
-  }, [value, motionValue, animateOnMount, formatFn]);
+  }, [value, motionValue, animateOnMount, resolvedFormatFn]);
 
   useEffect(() => {
     const unsubscribe = springValue.on("change", (latest) => {
       if (ref.current) {
-        ref.current.textContent = formatFn(latest);
+        ref.current.textContent = resolvedFormatFn(latest);
       }
     });
     return () => unsubscribe();
-  }, [springValue, formatFn]);
+  }, [springValue, resolvedFormatFn]);
 
   return (
     <span ref={ref} className={className}>
-      {formatFn(animateOnMount ? 0 : value)}
+      {resolvedFormatFn(animateOnMount ? 0 : value)}
     </span>
   );
 }
