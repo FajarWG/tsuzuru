@@ -2,18 +2,31 @@
 
 import { useState } from "react";
 import { signOut } from "next-auth/react";
-import { updateUserSettingsAction, updateAccountsAction } from "@/lib/actions/settings";
-import { formatJPY, formatIDR } from "@/lib/format";
+import { updateUserSettingsAction } from "@/lib/actions/settings";
+import TemplatesConfigList from "@/components/templates/TemplatesConfigList";
 import {
-  IconCheck,
-  IconLoader,
-  IconAlertCircle,
   IconLogout,
-  IconSettings,
   IconCreditCard,
   IconUser,
-  IconCurrencyYen
+  IconCurrencyYen,
+  IconCalendarRepeat,
+  IconSettings,
+  IconLoader,
+  IconCheck,
 } from "@tabler/icons-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
 
 interface UserSettingsData {
   monthlyBudget: number;
@@ -29,10 +42,21 @@ interface AccountItem {
   isActive: boolean;
 }
 
+interface TemplateItem {
+  id: string;
+  name: string;
+  amount: number;
+  currency: string;
+  accountId: string;
+  isActive: boolean;
+  intervalMonths: number;
+}
+
 interface SettingsFormProps {
   userId: string;
   userSettings: UserSettingsData;
   accounts: AccountItem[];
+  templates: TemplateItem[];
   profile: {
     name?: string | null;
     email?: string | null;
@@ -44,44 +68,30 @@ export default function SettingsForm({
   userId,
   userSettings,
   accounts,
+  templates,
   profile,
 }: SettingsFormProps) {
-  // 1. Budget Settings State
+  // Budget dialog state
+  const [budgetOpen, setBudgetOpen] = useState(false);
   const [monthlyBudget, setMonthlyBudget] = useState(String(userSettings.monthlyBudget));
   const [pocketMoneyLimit, setPocketMoneyLimit] = useState(String(userSettings.pocketMoneyLimit));
   const [shoppingLimit, setShoppingLimit] = useState(String(userSettings.shoppingLimit));
-  
   const [isSavingBudget, setIsSavingBudget] = useState(false);
   const [budgetSuccess, setBudgetSuccess] = useState(false);
   const [budgetError, setBudgetError] = useState<string | null>(null);
 
-  // 2. Account Settings State
-  const [accountStates, setAccountStates] = useState<AccountItem[]>(accounts);
-  const [isSavingAccounts, setIsSavingAccounts] = useState(false);
-  const [accountsSuccess, setAccountsSuccess] = useState(false);
-  const [accountsError, setAccountsError] = useState<string | null>(null);
-
-  const handleAccountChange = (id: string, field: keyof AccountItem, value: any) => {
-    setAccountStates((prev) =>
-      prev.map((acc) => (acc.id === id ? { ...acc, [field]: value } : acc))
-    );
-  };
-
-  const handleSaveBudget = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSavingBudget(true);
-    setBudgetSuccess(false);
-    setBudgetError(null);
-
+  const handleSaveBudget = async () => {
     const budgetVal = parseFloat(monthlyBudget);
     const pocketVal = parseFloat(pocketMoneyLimit);
     const shoppingVal = parseFloat(shoppingLimit);
 
     if (isNaN(budgetVal) || isNaN(pocketVal) || isNaN(shoppingVal)) {
-      setBudgetError("Please enter valid numbers for budget limits");
-      setIsSavingBudget(false);
+      setBudgetError("Please enter valid numbers");
       return;
     }
+
+    setIsSavingBudget(true);
+    setBudgetError(null);
 
     try {
       const res = await updateUserSettingsAction({
@@ -93,237 +103,92 @@ export default function SettingsForm({
 
       if (res.success) {
         setBudgetSuccess(true);
-        setTimeout(() => setBudgetSuccess(false), 2000);
+        setTimeout(() => {
+          setBudgetSuccess(false);
+          setBudgetOpen(false);
+        }, 1000);
       } else {
-        setBudgetError(res.error || "Failed to save budget settings");
+        setBudgetError(res.error || "Failed to save");
       }
-    } catch (err) {
+    } catch {
       setBudgetError("An unexpected error occurred");
     } finally {
       setIsSavingBudget(false);
     }
   };
 
-  const handleSaveAccounts = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSavingAccounts(true);
-    setAccountsSuccess(false);
-    setAccountsError(null);
+  const handleSignOut = () => signOut({ callbackUrl: "/login" });
 
-    // Validate account values
-    for (const acc of accountStates) {
-      if (!acc.name.trim()) {
-        setAccountsError("Account names cannot be empty");
-        setIsSavingAccounts(false);
-        return;
-      }
-      if (isNaN(acc.balance)) {
-        setAccountsError("Balances must be valid numbers");
-        setIsSavingAccounts(false);
-        return;
-      }
-    }
-
-    try {
-      const res = await updateAccountsAction(userId, accountStates);
-      if (res.success) {
-        setAccountsSuccess(true);
-        setTimeout(() => setAccountsSuccess(false), 2000);
-      } else {
-        setAccountsError(res.error || "Failed to update accounts");
-      }
-    } catch (err) {
-      setAccountsError("An unexpected error occurred");
-    } finally {
-      setIsSavingAccounts(false);
-    }
-  };
-
-  const handleSignOut = () => {
-    signOut({ callbackUrl: "/login" });
-  };
+  const accountsForTemplates = accounts.map((a) => ({
+    id: a.id,
+    name: a.name,
+    currency: a.currency,
+  }));
 
   return (
-    <div className="flex flex-col gap-6 flex-1 pb-10">
-      {/* Header */}
+    <div className="flex flex-col gap-5 flex-1 pb-10">
+      {/* Page header */}
       <div>
-        <h1 className="font-serif text-2xl font-bold tracking-wide text-primary">
-          Settings
-        </h1>
+        <h1 className="font-serif text-2xl font-bold tracking-wide text-primary">Settings</h1>
         <p className="text-xs text-muted-foreground mt-1">
-          Manage your budget limits, active financial accounts, and profile settings.
+          Manage your recurring bills, budget, and profile.
         </p>
       </div>
 
-      {/* 1. Budget Settings Section */}
-      <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-2xs rounded-2xl p-5 flex flex-col gap-4">
-        <div className="flex items-center gap-2 pb-2 border-b border-border/20">
-          <IconCurrencyYen className="size-5 text-primary" />
-          <h2 className="text-sm font-bold text-foreground">Budget Settings (JPY)</h2>
+      {/* ====== 1. Monthly Templates (TOP) ====== */}
+      <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <IconCalendarRepeat className="size-4 text-primary" />
+          <h2 className="text-sm font-bold text-foreground">Monthly Templates</h2>
         </div>
-
-        {budgetError && (
-          <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-xl flex items-center gap-2">
-            <IconAlertCircle className="size-4 shrink-0" />
-            <span>{budgetError}</span>
-          </div>
-        )}
-
-        <form onSubmit={handleSaveBudget} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] font-semibold text-muted-foreground">
-              Monthly Expected Budget
-            </label>
-            <input
-              type="number"
-              value={monthlyBudget}
-              onChange={(e) => setMonthlyBudget(e.target.value)}
-              className="h-10 px-3 border border-border/60 rounded-xl bg-background text-xs font-semibold text-foreground focus:outline-none focus:border-primary"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-semibold text-muted-foreground">
-                Pocket Money Limit
-              </label>
-              <input
-                type="number"
-                value={pocketMoneyLimit}
-                onChange={(e) => setPocketMoneyLimit(e.target.value)}
-                className="h-10 px-3 border border-border/60 rounded-xl bg-background text-xs font-semibold text-foreground focus:outline-none focus:border-primary"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-semibold text-muted-foreground">
-                Shopping Limit
-              </label>
-              <input
-                type="number"
-                value={shoppingLimit}
-                onChange={(e) => setShoppingLimit(e.target.value)}
-                className="h-10 px-3 border border-border/60 rounded-xl bg-background text-xs font-semibold text-foreground focus:outline-none focus:border-primary"
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="w-full h-10 rounded-xl bg-primary text-primary-foreground hover:bg-primary/95 text-xs font-semibold tracking-wide transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
-            disabled={isSavingBudget}
-          >
-            {isSavingBudget ? (
-              <>
-                <IconLoader className="size-4 animate-spin" />
-                Saving...
-              </>
-            ) : budgetSuccess ? (
-              <>
-                <IconCheck className="size-4" />
-                Saved successfully!
-              </>
-            ) : (
-              "Save Budget Settings"
-            )}
-          </button>
-        </form>
+        <TemplatesConfigList
+          hideHeader
+          templates={templates}
+          accounts={accountsForTemplates}
+        />
       </div>
 
-      {/* 2. Account Settings Section */}
-      <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-2xs rounded-2xl p-5 flex flex-col gap-4">
-        <div className="flex items-center gap-2 pb-2 border-b border-border/20">
-          <IconCreditCard className="size-5 text-primary" />
-          <h2 className="text-sm font-bold text-foreground">Financial Accounts</h2>
-        </div>
-
-        {accountsError && (
-          <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-xl flex items-center gap-2">
-            <IconAlertCircle className="size-4 shrink-0" />
-            <span>{accountsError}</span>
+      {/* ====== 2. Budget Settings (Button → Dialog) ====== */}
+      <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <IconCurrencyYen className="size-4 text-primary" />
+            <div>
+              <h2 className="text-sm font-bold text-foreground">Budget (JPY)</h2>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Monthly: ¥{Number(userSettings.monthlyBudget).toLocaleString()} · Pocket: ¥{Number(userSettings.pocketMoneyLimit).toLocaleString()} · Shopping: ¥{Number(userSettings.shoppingLimit).toLocaleString()}
+              </p>
+            </div>
           </div>
-        )}
-
-        <form onSubmit={handleSaveAccounts} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-4">
-            {accountStates.map((acc) => (
-              <div
-                key={acc.id}
-                className="p-3 bg-background border border-border/40 rounded-xl flex flex-col gap-2.5"
-              >
-                <div className="flex justify-between items-center">
-                  <input
-                    type="text"
-                    value={acc.name}
-                    onChange={(e) => handleAccountChange(acc.id, "name", e.target.value)}
-                    className="h-7 px-2 border-b border-transparent hover:border-border focus:border-primary bg-transparent text-xs font-bold text-foreground focus:outline-none transition-colors"
-                  />
-                  <label className="flex items-center gap-1.5 text-[10px] font-semibold text-muted-foreground select-none cursor-pointer">
-                    <span>Active</span>
-                    <input
-                      type="checkbox"
-                      checked={acc.isActive}
-                      onChange={(e) => handleAccountChange(acc.id, "isActive", e.target.checked)}
-                      className="size-3.5 accent-primary rounded cursor-pointer"
-                    />
-                  </label>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">
-                    Balance ({acc.currency}):
-                  </span>
-                  <div className="flex items-center gap-1 flex-1 max-w-[150px] ml-auto">
-                    <span className="text-xs font-bold text-muted-foreground">
-                      {acc.currency === "JPY" ? "¥" : "Rp"}
-                    </span>
-                    <input
-                      type="number"
-                      step="any"
-                      value={acc.balance}
-                      onChange={(e) =>
-                        handleAccountChange(acc.id, "balance", parseFloat(e.target.value) || 0)
-                      }
-                      className="w-full h-8 px-2 border border-border rounded-lg text-xs font-semibold text-right focus:outline-none focus:border-primary bg-white dark:bg-zinc-800"
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <button
-            type="submit"
-            className="w-full h-10 rounded-xl bg-primary text-primary-foreground hover:bg-primary/95 text-xs font-semibold tracking-wide transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
-            disabled={isSavingAccounts}
+          <Button
+            variant="outline"
+            size="icon-sm"
+            onClick={() => {
+              setBudgetOpen(true);
+              setBudgetError(null);
+              setBudgetSuccess(false);
+            }}
+            aria-label="Edit budget settings"
           >
-            {isSavingAccounts ? (
-              <>
-                <IconLoader className="size-4 animate-spin" />
-                Saving...
-              </>
-            ) : accountsSuccess ? (
-              <>
-                <IconCheck className="size-4" />
-                Saved successfully!
-              </>
-            ) : (
-              "Save Account Settings"
-            )}
-          </button>
-        </form>
+            <IconSettings className="size-4" />
+          </Button>
+        </div>
       </div>
 
-      {/* 3. Profile & Sign Out Section */}
-      <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-2xs rounded-2xl p-5 flex flex-col gap-4">
+      {/* ====== 3. Profile & Sign Out ====== */}
+      <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
         <div className="flex items-center gap-2 pb-2 border-b border-border/20">
-          <IconUser className="size-5 text-primary" />
-          <h2 className="text-sm font-bold text-foreground">Google Account Profile</h2>
+          <IconUser className="size-4 text-primary" />
+          <h2 className="text-sm font-bold text-foreground">Profile</h2>
         </div>
 
-        <div className="flex items-center gap-4 py-2">
+        <div className="flex items-center gap-3">
           {profile.image && (
-            <img src={profile.image} alt="Avatar" className="size-12 rounded-full border shadow-sm" />
+            <img
+              src={profile.image}
+              alt="Avatar"
+              className="size-11 rounded-full border shadow-sm"
+            />
           )}
           <div className="flex flex-col gap-0.5">
             <span className="text-sm font-bold text-foreground leading-tight">
@@ -335,14 +200,107 @@ export default function SettingsForm({
           </div>
         </div>
 
-        <button
+        <Button
+          variant="destructive"
           onClick={handleSignOut}
-          className="w-full h-11 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/15 text-xs font-semibold tracking-wide transition-colors flex items-center justify-center gap-1.5 cursor-pointer mt-2"
+          className="w-full gap-2"
         >
           <IconLogout className="size-4" />
           Sign Out
-        </button>
+        </Button>
       </div>
+
+      {/* ====== Budget Edit Dialog ====== */}
+      <Dialog open={budgetOpen} onOpenChange={(open) => { if (!isSavingBudget) setBudgetOpen(open); }}>
+        <DialogContent className="max-w-[360px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-serif">Budget Settings</DialogTitle>
+            <DialogDescription className="text-xs">
+              Set your monthly spending limits in JPY.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4 py-2">
+            {budgetError && (
+              <Alert variant="destructive" className="py-2">
+                <AlertDescription className="text-xs">{budgetError}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-semibold">Monthly Expected Budget</Label>
+              <div className="relative flex items-center">
+                <span className="absolute left-3 text-sm font-bold text-muted-foreground">¥</span>
+                <Input
+                  type="number"
+                  value={monthlyBudget}
+                  onChange={(e) => setMonthlyBudget(e.target.value)}
+                  className="pl-7 h-10 text-sm font-semibold"
+                  placeholder="150000"
+                />
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Pocket Money Limit</Label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-3 text-sm font-bold text-muted-foreground">¥</span>
+                  <Input
+                    type="number"
+                    value={pocketMoneyLimit}
+                    onChange={(e) => setPocketMoneyLimit(e.target.value)}
+                    className="pl-7 h-10 text-sm font-semibold"
+                    placeholder="40000"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Shopping Limit</Label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-3 text-sm font-bold text-muted-foreground">¥</span>
+                  <Input
+                    type="number"
+                    value={shoppingLimit}
+                    onChange={(e) => setShoppingLimit(e.target.value)}
+                    className="pl-7 h-10 text-sm font-semibold"
+                    placeholder="60000"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setBudgetOpen(false)}
+              disabled={isSavingBudget}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSaveBudget}
+              disabled={isSavingBudget}
+              className="min-w-[72px]"
+            >
+              {isSavingBudget ? (
+                <IconLoader className="size-4 animate-spin" />
+              ) : budgetSuccess ? (
+                <>
+                  <IconCheck className="size-4" /> Saved!
+                </>
+              ) : (
+                "Save"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

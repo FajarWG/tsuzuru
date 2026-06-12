@@ -1,9 +1,39 @@
 "use client";
 
 import { useState } from "react";
-import { updateTemplateAction } from "@/lib/actions/templates";
 import { formatJPY, formatIDR } from "@/lib/format";
-import { IconLoader, IconCheck, IconAlertCircle } from "@tabler/icons-react";
+import { markTemplatePaidAction, updateTemplateAction } from "@/lib/actions/templates";
+import {
+  IconCheck,
+  IconLoader,
+  IconAlertCircle,
+  IconSettings,
+  IconCash,
+  IconCalendarRepeat,
+} from "@tabler/icons-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 interface TemplateItem {
   id: string;
@@ -12,6 +42,7 @@ interface TemplateItem {
   currency: string;
   accountId: string;
   isActive: boolean;
+  intervalMonths: number;
 }
 
 interface AccountItem {
@@ -23,240 +54,383 @@ interface AccountItem {
 interface TemplatesConfigListProps {
   templates: TemplateItem[];
   accounts: AccountItem[];
+  hideHeader?: boolean;
 }
+
+const INTERVAL_OPTIONS = [
+  { value: "1", label: "Every month" },
+  { value: "2", label: "Every 2 months" },
+  { value: "3", label: "Every 3 months (quarterly)" },
+  { value: "4", label: "Every 4 months" },
+  { value: "6", label: "Every 6 months" },
+  { value: "12", label: "Every 12 months (yearly)" },
+];
 
 export default function TemplatesConfigList({
   templates,
   accounts,
+  hideHeader = false,
 }: TemplatesConfigListProps) {
-  // State to track template edits
   const [items, setItems] = useState<TemplateItem[]>(templates);
-  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Edit dialog state
+  const [editingItem, setEditingItem] = useState<TemplateItem | null>(null);
   const [editAmount, setEditAmount] = useState("");
   const [editAccountId, setEditAccountId] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
+  const [editIntervalMonths, setEditIntervalMonths] = useState("1");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccessId, setSaveSuccessId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Pay dialog state
+  const [payingItem, setPayingItem] = useState<TemplateItem | null>(null);
+  const [isPayingId, setIsPayingId] = useState<string | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
+  const [paySuccessId, setPaySuccessId] = useState<string | null>(null);
 
-  const startEditing = (template: TemplateItem) => {
-    setEditingId(template.id);
-    setEditAmount(String(template.amount));
-    setEditAccountId(template.accountId);
-    setEditIsActive(template.isActive);
-    setError(null);
+  // --- Edit dialog handlers ---
+  const openEdit = (item: TemplateItem) => {
+    setEditingItem(item);
+    setEditAmount(String(item.amount));
+    setEditAccountId(item.accountId);
+    setEditIsActive(item.isActive);
+    setEditIntervalMonths(String(item.intervalMonths));
+    setEditError(null);
   };
 
-  const cancelEditing = () => {
-    setEditingId(null);
-    setError(null);
+  const closeEdit = () => {
+    setEditingItem(null);
+    setEditError(null);
   };
 
-  const handleSave = async (id: string) => {
+  const handleSaveEdit = async () => {
+    if (!editingItem) return;
     const parsedAmount = parseFloat(editAmount);
     if (isNaN(parsedAmount) || parsedAmount < 0) {
-      setError("Please enter a valid amount");
+      setEditError("Please enter a valid amount");
       return;
     }
 
-    setIsSaving(true);
-    setError(null);
+    setIsSavingEdit(true);
+    setEditError(null);
 
     try {
-      const res = await updateTemplateAction(id, {
+      const res = await updateTemplateAction(editingItem.id, {
         amount: parsedAmount,
         accountId: editAccountId,
         isActive: editIsActive,
+        intervalMonths: parseInt(editIntervalMonths),
       });
 
       if (res.success) {
-        // Update local state
         setItems((prev) =>
-          prev.map((item) =>
-            item.id === id
+          prev.map((t) =>
+            t.id === editingItem.id
               ? {
-                  ...item,
+                  ...t,
                   amount: parsedAmount,
                   accountId: editAccountId,
                   isActive: editIsActive,
+                  intervalMonths: parseInt(editIntervalMonths),
                 }
-              : item
+              : t
           )
         );
-        setEditingId(null);
-        setSaveSuccessId(id);
-        setTimeout(() => setSaveSuccessId(null), 2000);
+        closeEdit();
       } else {
-        setError(res.error || "Failed to save template");
+        setEditError(res.error || "Failed to save");
       }
-    } catch (err) {
-      setError("An unexpected error occurred");
+    } catch {
+      setEditError("An unexpected error occurred");
     } finally {
-      setIsSaving(false);
+      setIsSavingEdit(false);
     }
   };
 
-  return (
-    <div className="flex flex-col gap-5 flex-1">
-      {/* Header */}
-      <div>
-        <h1 className="font-serif text-2xl font-bold tracking-wide text-primary">
-          Monthly Templates
-        </h1>
-        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-          Configure default recurring bills that auto-deduct at the start of each month (1st).
-        </p>
-      </div>
+  // --- Mark as Paid handlers ---
+  const openPay = (item: TemplateItem) => {
+    setPayingItem(item);
+    setPayError(null);
+  };
 
-      {error && (
-        <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive text-xs rounded-xl flex items-center gap-2">
-          <IconAlertCircle className="size-4 shrink-0" />
-          <span>{error}</span>
-        </div>
+  const closePay = () => {
+    setPayingItem(null);
+    setPayError(null);
+  };
+
+  const handleMarkPaid = async () => {
+    if (!payingItem) return;
+    setIsPayingId(payingItem.id);
+    setPayError(null);
+
+    try {
+      const res = await markTemplatePaidAction(payingItem.id);
+      if (res.success) {
+        setPaySuccessId(payingItem.id);
+        setTimeout(() => setPaySuccessId(null), 2500);
+        closePay();
+      } else {
+        setPayError(res.error || "Failed to record payment");
+      }
+    } catch {
+      setPayError("An unexpected error occurred");
+    } finally {
+      setIsPayingId(null);
+    }
+  };
+
+  if (items.length === 0) {
+    return (
+      <div className="text-center text-xs text-muted-foreground py-6">
+        No monthly templates configured.
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      {!hideHeader && (
+        <>
+          <h2 className="font-serif text-xl font-bold text-primary">Monthly Templates</h2>
+          <p className="text-xs text-muted-foreground mb-3">
+            Recurring bills — tap "Mark as Paid" when you've paid them.
+          </p>
+        </>
       )}
 
-      {/* Templates List */}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col divide-y divide-border/40">
         {items.map((item) => {
-          const isEditing = editingId === item.id;
           const linkedAccount = accounts.find((a) => a.id === item.accountId);
-          const showSuccess = saveSuccessId === item.id;
+          const monthlyEquivalent =
+            item.intervalMonths > 1 ? item.amount / item.intervalMonths : null;
+          const isPaying = isPayingId === item.id;
+          const justPaid = paySuccessId === item.id;
 
           return (
-            <div
-              key={item.id}
-              className={`bg-white dark:bg-zinc-900 border rounded-2xl p-4 transition-all ${
-                isEditing
-                  ? "border-primary/45 ring-1 ring-primary/10 shadow-xs"
-                  : "border-border/40 shadow-2xs"
-              }`}
-            >
-              {isEditing ? (
-                /* Editing Mode Form */
-                <div className="flex flex-col gap-3">
-                  <div className="flex justify-between items-start">
-                    <span className="text-xs font-bold text-foreground leading-tight">
-                      Editing {item.name}
-                    </span>
-                    <label className="flex items-center gap-2 text-xs font-semibold text-muted-foreground select-none cursor-pointer">
-                      <span>Active</span>
-                      <input
-                        type="checkbox"
-                        checked={editIsActive}
-                        onChange={(e) => setEditIsActive(e.target.checked)}
-                        className="size-4 accent-primary rounded-lg border-border focus:ring-transparent cursor-pointer"
-                      />
-                    </label>
-                  </div>
-
-                  {/* Amount Input */}
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-semibold text-muted-foreground">
-                      Default Amount ({item.currency})
-                    </label>
-                    <div className="relative flex items-center bg-background border border-border/80 rounded-xl px-3 h-10">
-                      <span className="text-xs font-bold text-muted-foreground mr-1.5 select-none">
-                        {item.currency === "JPY" ? "¥" : "Rp"}
-                      </span>
-                      <input
-                        type="number"
-                        value={editAmount}
-                        onChange={(e) => setEditAmount(e.target.value)}
-                        className="flex-1 h-full text-xs font-bold font-sans tracking-wide bg-transparent focus:outline-none text-foreground"
-                        placeholder="0"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Account Selector */}
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-semibold text-muted-foreground">
-                      Deduct From Account
-                    </label>
-                    <select
-                      value={editAccountId}
-                      onChange={(e) => setEditAccountId(e.target.value)}
-                      className="w-full h-10 px-3 border border-border/85 rounded-xl bg-background text-xs font-semibold text-foreground focus:outline-none cursor-pointer"
-                    >
-                      {accounts.map((acc) => (
-                        <option key={acc.id} value={acc.id}>
-                          {acc.name} ({acc.currency})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex gap-2 justify-end mt-1.5">
-                    <button
-                      onClick={cancelEditing}
-                      className="h-8 px-3 rounded-lg border border-border text-foreground hover:bg-muted text-xs font-medium cursor-pointer"
-                      disabled={isSaving}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => handleSave(item.id)}
-                      className="h-8 px-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/95 text-xs font-semibold tracking-wide flex items-center justify-center gap-1.5 cursor-pointer"
-                      disabled={isSaving}
-                    >
-                      {isSaving ? (
-                        <>
-                          <IconLoader className="size-3.5 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        "Save"
-                      )}
-                    </button>
-                  </div>
+            <div key={item.id} className="py-3 flex items-center justify-between gap-3">
+              <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold text-foreground truncate">
+                    {item.name}
+                  </span>
+                  {!item.isActive && (
+                    <Badge variant="secondary" className="text-[9px] h-4 px-1.5">
+                      Inactive
+                    </Badge>
+                  )}
+                  {item.intervalMonths > 1 && (
+                    <Badge variant="outline" className="text-[9px] h-4 px-1.5 gap-1">
+                      <IconCalendarRepeat className="size-2.5" />
+                      {INTERVAL_OPTIONS.find((o) => o.value === String(item.intervalMonths))?.label || `Every ${item.intervalMonths}mo`}
+                    </Badge>
+                  )}
                 </div>
-              ) : (
-                /* View Mode */
-                <div className="flex justify-between items-center gap-3">
-                  <div className="flex flex-col gap-0.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-foreground leading-tight">
-                        {item.name}
-                      </span>
-                      {!item.isActive && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground font-semibold uppercase tracking-wide">
-                          Inactive
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[10px] text-muted-foreground leading-none">
-                      Linked to: {linkedAccount?.name || "Unknown"}
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-sm font-bold font-sans text-foreground">
+                    {item.currency === "JPY" ? formatJPY(item.amount) : formatIDR(item.amount)}
+                  </span>
+                  {monthlyEquivalent !== null && (
+                    <span className="text-[10px] text-muted-foreground">
+                      ≈ {item.currency === "JPY" ? formatJPY(monthlyEquivalent) : formatIDR(monthlyEquivalent)}/mo
                     </span>
-                  </div>
+                  )}
+                </div>
+                <span className="text-[10px] text-muted-foreground">
+                  {linkedAccount?.name || "Unknown account"}
+                </span>
+              </div>
 
-                  <div className="flex items-center gap-3">
-                    <div className="text-right flex flex-col items-end">
-                      <span className="text-xs font-sans font-bold text-foreground">
-                        {item.currency === "JPY" ? formatJPY(item.amount) : formatIDR(item.amount)}
-                      </span>
-                    </div>
-
-                    {showSuccess ? (
-                      <div className="p-1 rounded-full bg-brand-green/10 text-brand-green">
-                        <IconCheck className="size-4" />
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => startEditing(item)}
-                        className="h-8 px-3 rounded-xl border border-border hover:bg-muted text-foreground text-xs font-semibold transition-colors cursor-pointer"
-                      >
-                        Edit
-                      </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {/* Mark as Paid */}
+                {item.isActive && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={cn(
+                      "h-8 px-2.5 text-xs gap-1.5",
+                      justPaid && "border-primary/40 text-primary bg-primary/5"
                     )}
-                  </div>
-                </div>
-              )}
+                    onClick={() => openPay(item)}
+                    disabled={isPaying || justPaid}
+                  >
+                    {isPaying ? (
+                      <IconLoader className="size-3.5 animate-spin" />
+                    ) : justPaid ? (
+                      <>
+                        <IconCheck className="size-3.5" />
+                        Paid!
+                      </>
+                    ) : (
+                      <>
+                        <IconCash className="size-3.5" />
+                        Paid
+                      </>
+                    )}
+                  </Button>
+                )}
+
+                {/* Edit */}
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={() => openEdit(item)}
+                  aria-label={`Edit ${item.name}`}
+                >
+                  <IconSettings className="size-4" />
+                </Button>
+              </div>
             </div>
           );
         })}
       </div>
+
+      {/* ===== Edit Dialog ===== */}
+      <Dialog open={!!editingItem} onOpenChange={(open) => !open && closeEdit()}>
+        <DialogContent className="max-w-[360px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-serif">Edit Template</DialogTitle>
+            <DialogDescription className="text-xs">
+              {editingItem?.name}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4 py-1">
+            {editError && (
+              <Alert variant="destructive" className="py-2">
+                <AlertDescription className="text-xs">{editError}</AlertDescription>
+              </Alert>
+            )}
+
+            {/* Amount */}
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-semibold">
+                Amount ({editingItem?.currency})
+              </Label>
+              <div className="relative flex items-center">
+                <span className="absolute left-3 text-sm font-bold text-muted-foreground select-none">
+                  {editingItem?.currency === "JPY" ? "¥" : "Rp"}
+                </span>
+                <Input
+                  type="number"
+                  value={editAmount}
+                  onChange={(e) => setEditAmount(e.target.value)}
+                  className="pl-8 h-10 text-sm font-semibold"
+                  placeholder="0"
+                  min="0"
+                />
+              </div>
+            </div>
+
+            {/* Interval */}
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-semibold">Billing Frequency</Label>
+              <Select value={editIntervalMonths} onValueChange={setEditIntervalMonths}>
+                <SelectTrigger className="h-10 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {INTERVAL_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value} className="text-sm">
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {parseInt(editIntervalMonths) > 1 && parseFloat(editAmount) > 0 && (
+                <p className="text-[10px] text-muted-foreground pl-1">
+                  Monthly equivalent:{" "}
+                  <span className="font-semibold text-foreground">
+                    {editingItem?.currency === "JPY"
+                      ? formatJPY(parseFloat(editAmount) / parseInt(editIntervalMonths))
+                      : formatIDR(parseFloat(editAmount) / parseInt(editIntervalMonths))}
+                    /mo
+                  </span>
+                </p>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Account */}
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-semibold">Deduct From Account</Label>
+              <Select value={editAccountId} onValueChange={setEditAccountId}>
+                <SelectTrigger className="h-10 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((acc) => (
+                    <SelectItem key={acc.id} value={acc.id} className="text-sm">
+                      {acc.name} ({acc.currency})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Active */}
+            <div className="flex items-center justify-between py-1">
+              <Label className="text-xs font-semibold">Active</Label>
+              <Switch checked={editIsActive} onCheckedChange={setEditIsActive} />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={closeEdit} disabled={isSavingEdit}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleSaveEdit} disabled={isSavingEdit} className="min-w-[72px]">
+              {isSavingEdit ? <IconLoader className="size-4 animate-spin" /> : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Mark as Paid Confirm Dialog ===== */}
+      <Dialog open={!!payingItem} onOpenChange={(open) => !open && closePay()}>
+        <DialogContent className="max-w-[340px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-serif">Mark as Paid</DialogTitle>
+            <DialogDescription className="text-sm leading-relaxed">
+              Record payment of{" "}
+              <strong>
+                {payingItem?.currency === "JPY"
+                  ? formatJPY(payingItem?.amount ?? 0)
+                  : formatIDR(payingItem?.amount ?? 0)}
+              </strong>{" "}
+              for <strong>{payingItem?.name}</strong>?
+              <br />
+              <span className="text-xs text-muted-foreground mt-1 block">
+                This will deduct the full amount from the linked account and record it in history.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+
+          {payError && (
+            <Alert variant="destructive" className="py-2">
+              <AlertDescription className="text-xs">{payError}</AlertDescription>
+            </Alert>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={closePay} disabled={!!isPayingId}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleMarkPaid}
+              disabled={!!isPayingId}
+              className="min-w-[100px]"
+            >
+              {isPayingId ? (
+                <IconLoader className="size-4 animate-spin" />
+              ) : (
+                "Confirm Payment"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

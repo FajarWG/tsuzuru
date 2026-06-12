@@ -3,17 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { formatJPY, formatIDR } from "@/lib/format";
-import MonthlyBillsBanner from "@/components/dashboard/MonthlyBillsBanner";
+import BalanceSummaryCard from "@/components/dashboard/BalanceSummaryCard";
 import {
-  IconPlus,
-  IconWallet,
-  IconBuildingBank,
-  IconTrendingUp,
-  IconTrendingDown,
   IconChevronRight,
-  IconCreditCard,
-  IconActivity,
-  IconReceipt,
+  IconWallet,
+  IconTrendingUp,
   IconTools,
   IconDeviceLaptop,
   IconShirt,
@@ -23,14 +17,17 @@ import {
   IconPizza,
   IconGlass,
   IconBus,
-  IconDeviceGamepad
+  IconDeviceGamepad,
+  IconCreditCard,
+  IconAdjustments,
 } from "@tabler/icons-react";
 
 // Helper to determine the category icon
 function getCategoryIcon(category: string, subCategory: string | null) {
-  if (category === "income") return <IconTrendingUp className="size-5 text-brand-green" />;
-  if (category === "template") return <IconTools className="size-5 text-secondary" />;
-  
+  if (category === "income") return <IconTrendingUp className="size-5 text-primary" />;
+  if (category === "template") return <IconTools className="size-5 text-amber-500" />;
+  if (category === "adjustment") return <IconAdjustments className="size-5 text-blue-500" />;
+
   if (category === "pocket_money") {
     switch (subCategory) {
       case "food": return <IconPizza className="size-5 text-amber-600" />;
@@ -56,64 +53,45 @@ function getCategoryIcon(category: string, subCategory: string | null) {
 
 export default async function DashboardPage() {
   const session = await auth();
-
-  if (!session || !session.user) {
-    redirect("/login");
-  }
+  if (!session || !session.user) redirect("/login");
 
   const userId = session.user.id;
 
-  // 1. Fetch User Settings & Accounts
-  const settings = await prisma.userSettings.findUnique({
-    where: { userId },
-  });
+  // Fetch settings & accounts
+  const settings = await prisma.userSettings.findUnique({ where: { userId } });
+  const accounts = await prisma.account.findMany({ where: { userId, isActive: true } });
 
-  const accounts = await prisma.account.findMany({
-    where: { userId, isActive: true },
-  });
+  // Calculate totals
+  const totalJPY = accounts.filter((a) => a.currency === "JPY").reduce((s, a) => s + a.balance, 0);
+  const totalIDR = accounts.filter((a) => a.currency === "IDR").reduce((s, a) => s + a.balance, 0);
 
-  // 2. Calculate Totals
-  const totalJPY = accounts
-    .filter((a) => a.currency === "JPY")
-    .reduce((sum, a) => sum + a.balance, 0);
-
-  const totalIDR = accounts
-    .filter((a) => a.currency === "IDR")
-    .reduce((sum, a) => sum + a.balance, 0);
-
-  // 3. Greeting logic based on time
+  // Greeting
   const hour = new Date().getHours();
-  let greeting = "Good evening";
-  if (hour < 12) greeting = "Good morning";
-  else if (hour < 17) greeting = "Good afternoon";
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
-  // 4. Calculate actual spending this month
+  // Monthly spending calculations (JPY only for budget bars)
   const today = new Date();
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999);
 
-  // Expenses in JPY this month (budget limits are defined in JPY)
   const monthlyExpenses = await prisma.transaction.findMany({
     where: {
       userId,
       type: "expense",
       currency: "JPY",
-      date: {
-        gte: startOfMonth,
-        lte: endOfMonth,
-      },
+      date: { gte: startOfMonth, lte: endOfMonth },
     },
   });
 
-  const actualSpentTotal = monthlyExpenses.reduce((sum, t) => sum + t.amount, 0);
+  const actualSpentTotal = monthlyExpenses.reduce((s, t) => s + t.amount, 0);
   const actualPocketSpent = monthlyExpenses
     .filter((t) => t.category === "pocket_money")
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((s, t) => s + t.amount, 0);
   const actualShoppingSpent = monthlyExpenses
     .filter((t) => t.category === "shopping")
-    .reduce((sum, t) => sum + t.amount, 0);
+    .reduce((s, t) => s + t.amount, 0);
 
-  // 5. Fetch Recent Transactions (last 5)
+  // Recent transactions
   const recentTransactions = await prisma.transaction.findMany({
     where: { userId },
     orderBy: { date: "desc" },
@@ -121,40 +99,18 @@ export default async function DashboardPage() {
     include: { account: true },
   });
 
-  // 6. Check if monthly templates need processing
-  // Check if we already have template deductions for this month
-  const templatesProcessed = await prisma.transaction.findFirst({
-    where: {
-      userId,
-      isTemplate: true,
-      date: {
-        gte: startOfMonth,
-        lte: endOfMonth,
-      },
-    },
-  });
-
-  const templates = await prisma.monthlyTemplate.findMany({
-    where: { userId, isActive: true },
-  });
-
-  const showTemplatesBanner = today.getDate() === 1 && !templatesProcessed && templates.length > 0;
-
-  // Budget progress caps
+  // Budget limits
   const budgetExpectation = settings?.monthlyBudget || 150000;
   const pocketLimit = settings?.pocketMoneyLimit || 40000;
   const shoppingLimit = settings?.shoppingLimit || 60000;
 
-  // Calculate percentages
   const budgetPercent = Math.min((actualSpentTotal / budgetExpectation) * 100, 100);
   const pocketPercent = Math.min((actualPocketSpent / pocketLimit) * 100, 100);
   const shoppingPercent = Math.min((actualShoppingSpent / shoppingLimit) * 100, 100);
-
-  const pocketRemainingPercent = 100 - pocketPercent;
-  const pocketIsLow = pocketRemainingPercent < 20; // Used is > 80%
+  const pocketIsLow = (100 - pocketPercent) < 20;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
@@ -174,54 +130,12 @@ export default async function DashboardPage() {
         )}
       </div>
 
-      {/* Monthly Bills Ready Banner */}
-      {showTemplatesBanner && (
-        <MonthlyBillsBanner userId={userId} templates={templates} />
-      )}
-
-      {/* Balance Summary Card */}
-      <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
-        <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-          Total Balance
-        </h2>
-        <div className="grid grid-cols-2 gap-4 divide-x divide-border/40">
-          <div>
-            <p className="text-[10px] text-muted-foreground tracking-wide font-medium">JPY Balance</p>
-            <p className="text-2xl font-sans font-bold tracking-tight text-foreground mt-1">
-              {formatJPY(totalJPY)}
-            </p>
-          </div>
-          <div className="pl-4">
-            <p className="text-[10px] text-muted-foreground tracking-wide font-medium">IDR Balance</p>
-            <p className="text-xl font-sans font-bold tracking-tight text-foreground mt-1.5">
-              {formatIDR(totalIDR)}
-            </p>
-          </div>
-        </div>
-
-        {/* Sub accounts list */}
-        <div className="flex flex-col gap-2.5 mt-2 pt-3 border-t border-border/30">
-          {accounts.map((acc) => (
-            <div key={acc.id} className="flex justify-between items-center text-xs">
-              <div className="flex items-center gap-2">
-                <span className="p-1.5 rounded-lg bg-muted text-primary/80">
-                  {acc.type === "investment" ? (
-                    <IconActivity className="size-4" />
-                  ) : acc.type === "ewallet" ? (
-                    <IconCreditCard className="size-4" />
-                  ) : (
-                    <IconBuildingBank className="size-4" />
-                  )}
-                </span>
-                <span className="font-medium text-foreground">{acc.name}</span>
-              </div>
-              <span className="font-sans font-semibold text-muted-foreground">
-                {acc.currency === "JPY" ? formatJPY(acc.balance) : formatIDR(acc.balance)}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Balance Summary Card (client — collapsible + edit dialog) */}
+      <BalanceSummaryCard
+        accounts={accounts}
+        totalJPY={totalJPY}
+        totalIDR={totalIDR}
+      />
 
       {/* Budget Progress Card */}
       <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
@@ -237,11 +151,8 @@ export default async function DashboardPage() {
               {formatJPY(actualSpentTotal)} / {formatJPY(budgetExpectation)}
             </span>
           </div>
-          <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary rounded-full transition-all duration-500"
-              style={{ width: `${budgetPercent}%` }}
-            />
+          <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+            <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${budgetPercent}%` }} />
           </div>
         </div>
 
@@ -253,17 +164,15 @@ export default async function DashboardPage() {
               {formatJPY(actualPocketSpent)} / {formatJPY(pocketLimit)}
             </span>
           </div>
-          <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
+          <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all duration-500 ${
-                pocketIsLow ? "bg-destructive" : "bg-secondary"
-              }`}
+              className={`h-full rounded-full transition-all duration-500 ${pocketIsLow ? "bg-destructive" : "bg-primary/60"}`}
               style={{ width: `${pocketPercent}%` }}
             />
           </div>
           {pocketIsLow && (
-            <p className="text-[10px] text-destructive font-medium tracking-wide">
-              ⚠️ Pocket money budget is critically low (&lt; 20% remaining)!
+            <p className="text-[10px] text-destructive font-medium">
+              ⚠️ Pocket money is critically low (&lt; 20% remaining)
             </p>
           )}
         </div>
@@ -276,16 +185,16 @@ export default async function DashboardPage() {
               {formatJPY(actualShoppingSpent)} / {formatJPY(shoppingLimit)}
             </span>
           </div>
-          <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
+          <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
             <div
-              className="h-full bg-stone-500 dark:bg-stone-400 rounded-full transition-all duration-500"
+              className="h-full bg-amber-500/70 rounded-full transition-all duration-500"
               style={{ width: `${shoppingPercent}%` }}
             />
           </div>
         </div>
       </div>
 
-      {/* Recent Transactions Section */}
+      {/* Recent Transactions */}
       <div className="flex flex-col gap-3">
         <div className="flex justify-between items-center px-1">
           <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
@@ -312,15 +221,15 @@ export default async function DashboardPage() {
                 className="bg-white dark:bg-zinc-900 border border-border/40 rounded-2xl p-4 flex justify-between items-center gap-3 shadow-xs hover:border-border/80 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-muted rounded-xl text-primary">
+                  <div className="p-2 bg-muted rounded-xl">
                     {getCategoryIcon(tx.category, tx.subCategory)}
                   </div>
                   <div className="flex flex-col gap-0.5">
                     <span className="text-xs font-semibold text-foreground leading-tight">
-                      {tx.description || tx.category.replace("_", " ")}
+                      {tx.description || tx.category.replace(/_/g, " ")}
                     </span>
                     <span className="text-[10px] text-muted-foreground leading-none">
-                      {tx.account.name} • {tx.subCategory || tx.category}
+                      {tx.account.name} · {tx.subCategory || tx.category}
                     </span>
                   </div>
                 </div>
@@ -328,7 +237,7 @@ export default async function DashboardPage() {
                 <div className="text-right flex flex-col items-end gap-0.5">
                   <span
                     className={`text-xs font-sans font-bold ${
-                      tx.type === "expense" ? "text-destructive" : "text-brand-green"
+                      tx.type === "expense" ? "text-destructive" : "text-primary"
                     }`}
                   >
                     {tx.type === "expense" ? "-" : "+"}

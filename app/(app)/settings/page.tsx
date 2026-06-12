@@ -3,6 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import SettingsForm from "@/components/settings/SettingsForm";
 
+export const metadata = {
+  title: "Settings — Tsuzuru",
+};
+
 export default async function SettingsPage() {
   const session = await auth();
 
@@ -35,12 +39,19 @@ export default async function SettingsPage() {
     orderBy: { name: "asc" },
   });
 
+  // 3. Fetch monthly templates for the templates section
+  const templates = await prisma.monthlyTemplate.findMany({
+    where: { userId },
+    orderBy: { name: "asc" },
+  });
+
   return (
     <div className="flex flex-col flex-1">
       <SettingsForm
         userId={userId}
         userSettings={userSettings}
         accounts={accounts}
+        templates={templates}
         profile={{
           name: session.user.name,
           email: session.user.email,
@@ -50,3 +61,4 @@ export default async function SettingsPage() {
     </div>
   );
 }
+

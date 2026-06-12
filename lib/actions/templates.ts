@@ -1,106 +1,90 @@
 "use server";
 
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
-interface ProcessTemplatesInput {
-  userId: string;
-  templateEdits: Record<string, number>; // Maps templateId -> amount
-}
+// Mark a template as paid — deducts full amount from account and records a transaction
+export async function markTemplatePaidAction(templateId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
-export async function processMonthlyTemplatesAction({
-  userId,
-  templateEdits,
-}: ProcessTemplatesInput) {
+  const userId = session.user.id;
+
   try {
-    const templates = await prisma.monthlyTemplate.findMany({
-      where: { userId, isActive: true },
+    const template = await prisma.monthlyTemplate.findUnique({
+      where: { id: templateId },
     });
 
-    if (templates.length === 0) {
-      return { success: true, message: "No active templates to process" };
+    if (!template || template.userId !== userId) {
+      return { success: false, error: "Template not found" };
+    }
+    if (!template.isActive) {
+      return { success: false, error: "Template is inactive" };
+    }
+    if (template.amount <= 0) {
+      return { success: false, error: "Please set an amount before marking as paid" };
     }
 
-    const today = new Date();
-    // Set transaction date to the 1st of the current month
-    const transactionDate = new Date(today.getFullYear(), today.getMonth(), 1);
-
-    // Run database transactions sequentially to ensure account balances update correctly
-    await prisma.$transaction(async (tx) => {
-      for (const template of templates) {
-        // Use the edited amount if provided, otherwise fallback to template default
-        const amount =
-          templateEdits[template.id] !== undefined
-            ? templateEdits[template.id]
-            : template.amount;
-
-        if (amount <= 0) continue; // Skip items with zero or negative amounts
-
-        // Fetch account
-        const account = await tx.account.findUnique({
-          where: { id: template.accountId },
-        });
-
-        if (!account) {
-          throw new Error(`Account not found for template ${template.name}`);
-        }
-
-        // Deduct from account balance
-        const newBalance = account.balance - amount;
-
-        // Create transaction
-        await tx.transaction.create({
-          data: {
-            userId,
-            accountId: template.accountId,
-            type: "expense",
-            amount,
-            currency: template.currency,
-            category: "template",
-            description: template.name,
-            isTemplate: true,
-            date: transactionDate,
-          },
-        });
-
-        // Update account balance
-        await tx.account.update({
-          where: { id: template.accountId },
-          data: { balance: newBalance },
-        });
-      }
+    const account = await prisma.account.findUnique({
+      where: { id: template.accountId },
     });
+    if (!account) return { success: false, error: "Linked account not found" };
+
+    await prisma.$transaction([
+      prisma.transaction.create({
+        data: {
+          userId,
+          accountId: template.accountId,
+          type: "expense",
+          amount: template.amount,
+          currency: template.currency,
+          category: "template",
+          description: template.name,
+          isTemplate: true,
+          date: new Date(),
+        },
+      }),
+      prisma.account.update({
+        where: { id: template.accountId },
+        data: { balance: account.balance - template.amount },
+      }),
+    ]);
 
     revalidatePath("/");
     revalidatePath("/transactions");
-    revalidatePath("/monthly-templates");
-
+    revalidatePath("/settings");
     return { success: true };
-  } catch (error) {
-    console.error("Failed to process monthly templates:", error);
-    return { success: false, error: (error as Error).message };
+  } catch (err) {
+    console.error("markTemplatePaidAction error:", err);
+    return { success: false, error: "Failed to process payment" };
   }
 }
 
-// Action to update template configuration (amount, isActive)
+// Update template configuration (amount, isActive, accountId, intervalMonths)
 export async function updateTemplateAction(
   templateId: string,
-  data: { amount: number; isActive: boolean; accountId: string }
+  data: { amount: number; isActive: boolean; accountId: string; intervalMonths: number }
 ) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
   try {
     await prisma.monthlyTemplate.update({
-      where: { id: templateId },
+      where: { id: templateId, userId: session.user.id },
       data: {
         amount: data.amount,
         isActive: data.isActive,
         accountId: data.accountId,
+        intervalMonths: data.intervalMonths,
       },
     });
 
-    revalidatePath("/monthly-templates");
+    revalidatePath("/settings");
+    revalidatePath("/");
     return { success: true };
-  } catch (error) {
-    console.error("Failed to update template:", error);
-    return { success: false, error: (error as Error).message };
+  } catch (err) {
+    console.error("updateTemplateAction error:", err);
+    return { success: false, error: "Failed to update template" };
   }
 }

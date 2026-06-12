@@ -4,11 +4,8 @@ import { useState } from "react";
 import { formatJPY, formatIDR } from "@/lib/format";
 import {
   IconSearch,
-  IconDownload,
   IconTrendingUp,
-  IconTrendingDown,
   IconWallet,
-  IconBuildingBank,
   IconTools,
   IconDeviceLaptop,
   IconShirt,
@@ -20,8 +17,15 @@ import {
   IconBus,
   IconDeviceGamepad,
   IconCreditCard,
-  IconActivity
+  IconAdjustments,
 } from "@tabler/icons-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface TransactionItem {
   id: string;
@@ -50,8 +54,9 @@ interface TransactionsListProps {
 }
 
 function getCategoryIcon(category: string, subCategory: string | null) {
-  if (category === "income") return <IconTrendingUp className="size-5 text-brand-green" />;
-  if (category === "template") return <IconTools className="size-5 text-secondary" />;
+  if (category === "income") return <IconTrendingUp className="size-5 text-primary" />;
+  if (category === "template") return <IconTools className="size-5 text-amber-500" />;
+  if (category === "adjustment") return <IconAdjustments className="size-5 text-blue-500" />;
   
   if (category === "pocket_money") {
     switch (subCategory) {
@@ -153,14 +158,6 @@ export default function TransactionsList({
         <h1 className="font-serif text-2xl font-bold tracking-wide text-primary">
           Transactions
         </h1>
-        {/* Export Button (Disabled Placeholder) */}
-        <button
-          disabled
-          className="h-9 px-3 rounded-xl border border-border bg-white text-muted-foreground font-sans text-xs font-semibold flex items-center gap-1.5 opacity-50 cursor-not-allowed select-none"
-        >
-          <IconDownload className="size-4" />
-          Export
-        </button>
       </div>
 
       {/* Search Input */}
@@ -175,62 +172,59 @@ export default function TransactionsList({
         />
       </div>
 
-      {/* Filters Grid */}
       <div className="grid grid-cols-3 gap-2">
-        {/* Month Selector */}
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
-            Month
-          </label>
-          <select
-            value={monthFilter}
-            onChange={(e) => setMonthFilter(e.target.value)}
-            className="h-10 px-2.5 border border-border/50 rounded-xl bg-white dark:bg-zinc-900 text-[10px] font-semibold text-foreground focus:outline-none focus:border-primary cursor-pointer"
-          >
-            <option value="all">All Months</option>
-            {monthOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+        {/* Month */}
+        <div className="flex flex-col gap-1 min-w-0">
+          <label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">Month</label>
+          <Select value={monthFilter} onValueChange={setMonthFilter}>
+            <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
+              <SelectValue className="truncate block max-w-full" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">All Months</SelectItem>
+              {monthOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        {/* Account Selector */}
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
-            Account
-          </label>
-          <select
-            value={accountFilter}
-            onChange={(e) => setAccountFilter(e.target.value)}
-            className="h-10 px-2.5 border border-border/50 rounded-xl bg-white dark:bg-zinc-900 text-[10px] font-semibold text-foreground focus:outline-none focus:border-primary cursor-pointer"
-          >
-            <option value="all">All Accounts</option>
-            {accounts.map((acc) => (
-              <option key={acc.id} value={acc.id}>
-                {acc.name}
-              </option>
-            ))}
-          </select>
+        {/* Account */}
+        <div className="flex flex-col gap-1 min-w-0">
+          <label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">Account</label>
+          <Select value={accountFilter} onValueChange={setAccountFilter}>
+            <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
+              <SelectValue className="truncate block max-w-full" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">All Accounts</SelectItem>
+              {accounts.map((acc) => (
+                <SelectItem key={acc.id} value={acc.id} className="text-xs">
+                  {acc.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        {/* Category Selector */}
-        <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
-            Category
-          </label>
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="h-10 px-2.5 border border-border/50 rounded-xl bg-white dark:bg-zinc-900 text-[10px] font-semibold text-foreground focus:outline-none focus:border-primary cursor-pointer"
-          >
-            <option value="all">All Categories</option>
-            <option value="pocket_money">Pocket Money</option>
-            <option value="shopping">Shopping</option>
-            <option value="income">Income</option>
-            <option value="template">Templates</option>
-          </select>
+        {/* Category */}
+        <div className="flex flex-col gap-1 min-w-0">
+          <label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">Category</label>
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
+              <SelectValue className="truncate block max-w-full" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">All</SelectItem>
+              <SelectItem value="pocket_money" className="text-xs">Pocket Money</SelectItem>
+              <SelectItem value="shopping" className="text-xs">Shopping</SelectItem>
+              <SelectItem value="income" className="text-xs">Income</SelectItem>
+              <SelectItem value="template" className="text-xs">Templates</SelectItem>
+              <SelectItem value="adjustment" className="text-xs">Adjustments</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -272,7 +266,7 @@ export default function TransactionsList({
                     <div className="text-right flex flex-col items-end">
                       <span
                         className={`text-xs font-sans font-bold ${
-                          tx.type === "expense" ? "text-destructive" : "text-brand-green"
+                          tx.type === "expense" ? "text-destructive" : "text-primary"
                         }`}
                       >
                         {tx.type === "expense" ? "-" : "+"}

@@ -14,11 +14,6 @@ export default async function LoginPage() {
     await signIn("google");
   }
 
-  async function handleTestLogin() {
-    "use server";
-    await signIn("credentials");
-  }
-
   return (
     <div className="flex-1 w-full max-w-[430px] mx-auto min-h-screen bg-background shadow-2xl border-x border-border/20 flex flex-col justify-between p-8 relative overflow-hidden">
       {/* Background gradients */}
@@ -71,18 +66,6 @@ export default async function LoginPage() {
             Sign in with Google
           </button>
         </form>
-
-        <form action={handleTestLogin}>
-          <button
-            type="submit"
-            className="w-full h-12 rounded-xl bg-primary text-primary-foreground hover:bg-primary/95 font-sans font-medium text-sm flex items-center justify-center gap-2 transition-all shadow-sm active:translate-y-[1px] duration-150 cursor-pointer"
-          >
-            Sign in with Test Account
-          </button>
-        </form>
-        <p className="text-[10px] text-center text-muted-foreground mt-2 leading-relaxed">
-          * Use the Test Account to test the application locally without configuring Google OAuth secrets.
-        </p>
       </div>
 
       {/* Footer */}
