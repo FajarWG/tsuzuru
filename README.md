@@ -1,36 +1,98 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 綴る — Tsuzuru
 
-## Getting Started
+[![Next.js](https://img.shields.io/badge/Next.js-15%2B-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?style=for-the-badge&logo=typescript)](https://www.typescriptlang.org/)
+[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-4-38B2AC?style=for-the-badge&logo=tailwind-css)](https://tailwindcss.com/)
+[![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?style=for-the-badge&logo=prisma)](https://www.prisma.io/)
+[![PWA](https://img.shields.io/badge/PWA-Offline--First-5A0FC8?style=for-the-badge&logo=progressive-web-apps)](https://web.dev/progressive-web-apps/)
 
-First, run the development server:
+> **Weave your money story — お金の物語を綴ろう**
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+**Tsuzuru (綴る)** is a Zen-inspired, minimalist personal finance manager modeled after the traditional Japanese **Kakeibo (家計簿)** budgeting method. Built with Next.js, Prisma, and Framer Motion, it offers a seamless, offline-first, and highly aesthetic interface to record, analyze, and master your monthly cash flows.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## ✨ Features
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **📓 Zen-inspired Minimalist Design**: Premium aesthetics featuring clean layouts, smooth micro-animations, custom dark mode, and card structures that bring peace of mind to expense tracking.
+- **🌐 Offline-First PWA Capabilities**: Fully installable as a Progressive Web App (PWA) on Mobile and Desktop. Log transactions on-the-go offline, which are automatically synced to the server once your connection is restored.
+- **💵 Smart Multi-Currency Ledger**: Native support for **JPY (¥)** and **IDR (Rp)** tracking. View individual account balances (Cash, Banks, E-Wallets, Investments) and total assets separated clearly.
+- **📊 Kakeibo Budget Limits**: Define monthly expected budgets along with specific categories (Pocket Money and Shopping). Instantly view your remaining limits on the dashboard.
+- **📈 Micro-animated Interactivity**: Fluid number transitions using physics-based spring animations (`Framer Motion`) that roll up/down dynamically as account balances adjust.
+- **🗓️ One-Click Recurring Bills**: Create monthly template schedules (Rent, Utilities, SIM Cards) and record payments with a single tap.
+- **⚡ Advanced Analytics**: Interactive bar charts and category donut charts powered by `Recharts`, complete with custom tooltips and pocket-money meal stats.
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 🛠️ Tech Stack
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Framework**: [Next.js](https://nextjs.org/) (App Router, Server Actions, API Routes)
+- **Database ORM**: [Prisma](https://www.prisma.io/) with **PostgreSQL**
+- **Authentication**: [NextAuth.js v5](https://authjs.dev/) (Google Sign-In)
+- **Styles & Layout**: [TailwindCSS v4](https://tailwindcss.com/) & [Shadcn UI](https://ui.shadcn.com/)
+- **Animation**: [Framer Motion](https://www.framer-motion.dev/) & [Tabler Icons](https://tabler.io/icons)
+- **Charts**: [Recharts](https://recharts.org/)
+- **State & Sync**: Service Workers (PWA) & LocalStorage Sync Queue
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## 🚀 Getting Started
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Prerequisites
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Make sure you have [Node.js](https://nodejs.org/) (v18+) and [npm](https://www.npmjs.com/) (or [Bun](https://bun.sh/)) installed.
+
+### Installation
+
+1. **Clone the Repository**:
+   ```bash
+   git clone https://github.com/your-username/tsuzuru.git
+   cd tsuzuru
+   ```
+
+2. **Install Dependencies**:
+   ```bash
+   npm install
+   # or
+   bun install
+   ```
+
+3. **Set Up Environment Variables**:
+   Create a `.env` file in the root directory:
+   ```env
+   DATABASE_URL="postgresql://user:password@localhost:5432/tsuzuru"
+   NEXTAUTH_SECRET="your-nextauth-secret-key"
+   
+   # Google OAuth Credentials
+   GOOGLE_CLIENT_ID="your-google-client-id"
+   GOOGLE_CLIENT_SECRET="your-google-client-secret"
+   ```
+
+4. **Initialize the Database**:
+   Generate Prisma client and run seed scripts to populate initial mock data:
+   ```bash
+   npx prisma generate
+   npx prisma db push
+   ```
+
+5. **Run the Development Server**:
+   ```bash
+   npm run dev
+   # or
+   bun dev
+   ```
+   Open [http://localhost:3000](http://localhost:3000) on your browser.
+
+---
+
+## ⚙️ Offline Mode & PWA
+
+Tsuzuru registers a custom Service Worker that intercepts network requests, caching static assets and API payloads to enable offline capabilities:
+- **Offline Entry**: If offline, transactions are pushed into a LocalStorage queue named `tsuzuru_offline_transactions`.
+- **Auto-Sync**: The `PwaRegister` component registers a `window.addEventListener("online")` event that flushes the queued transactions to the backend database server as soon as connection recovers.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License.
