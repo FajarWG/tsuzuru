@@ -5,6 +5,7 @@ import Link from "next/link";
 import { formatJPY, formatIDR } from "@/lib/format";
 import BalanceSummaryCard from "@/components/dashboard/BalanceSummaryCard";
 import WelcomeDialog from "@/components/dashboard/WelcomeDialog";
+import MonthlyInsightsCard from "@/components/dashboard/MonthlyInsightsCard";
 import {
   IconChevronRight,
   IconWallet,
@@ -125,6 +126,8 @@ export default async function DashboardPage() {
   const pocketIsLow = (100 - pocketPercent) < 20;
   const budgetRemaining = Math.max(budgetExpectation - actualSpentTotal, 0);
   const pocketRemaining = Math.max(pocketLimit - actualPocketSpent, 0);
+  const shoppingRemaining = Math.max(shoppingLimit - actualShoppingSpent, 0);
+  const shoppingIsLow = (100 - shoppingPercent) < 20;
   const monthDelta = actualSpentTotal - previousSpentTotal;
   const categoryTotals = monthlyExpenses.reduce<Record<string, number>>((totals, tx) => {
     totals[tx.category] = (totals[tx.category] || 0) + tx.amount;
@@ -164,67 +167,10 @@ export default async function DashboardPage() {
 
       <WelcomeDialog />
 
-      {/* Budget Progress Card */}
+      {/* Budget Progress Card (formatted like insights) */}
       <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
         <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-          Budget Progress (JPY)
-        </h2>
-
-        {/* Monthly Budget */}
-        <div className="flex flex-col gap-2">
-          <div className="flex justify-between text-xs font-medium">
-            <span className="text-foreground">Monthly Budget</span>
-            <span className="text-muted-foreground">
-              {formatJPY(actualSpentTotal)} / {formatJPY(budgetExpectation)}
-            </span>
-          </div>
-          <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-            <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${budgetPercent}%` }} />
-          </div>
-        </div>
-
-        {/* Pocket Money */}
-        <div className="flex flex-col gap-2">
-          <div className="flex justify-between text-xs font-medium">
-            <span className="text-foreground">Pocket Money</span>
-            <span className="text-muted-foreground">
-              {formatJPY(actualPocketSpent)} / {formatJPY(pocketLimit)}
-            </span>
-          </div>
-          <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${pocketIsLow ? "bg-destructive" : "bg-primary/60"}`}
-              style={{ width: `${pocketPercent}%` }}
-            />
-          </div>
-          {pocketIsLow && (
-            <p className="text-[10px] text-destructive font-medium">
-              ⚠️ Pocket money is critically low (&lt; 20% remaining)
-            </p>
-          )}
-        </div>
-
-        {/* Shopping */}
-        <div className="flex flex-col gap-2">
-          <div className="flex justify-between text-xs font-medium">
-            <span className="text-foreground">Shopping</span>
-            <span className="text-muted-foreground">
-              {formatJPY(actualShoppingSpent)} / {formatJPY(shoppingLimit)}
-            </span>
-          </div>
-          <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-amber-500/70 rounded-full transition-all duration-500"
-              style={{ width: `${shoppingPercent}%` }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Monthly Insights Card */}
-      <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
-        <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-          Monthly Insights (今月の洞察)
+          Budget Progress (今月の予算状況)
         </h2>
 
         <div className="grid grid-cols-1 gap-3">
@@ -246,50 +192,6 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {/* Spending Trend */}
-          <div className="flex items-start gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
-            <div className={`p-2 rounded-lg shrink-0 ${monthDelta > 0 ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}>
-              <IconTrendingUp className="size-4" />
-            </div>
-            <div className="flex flex-col gap-0.5 min-w-0">
-              <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Spending Trend</span>
-              <span className="text-sm font-bold text-foreground">
-                {monthDelta === 0 
-                  ? "No change" 
-                  : `${monthDelta > 0 ? "+" : ""}${formatJPY(monthDelta)}`}
-                <span className="text-xs font-normal text-muted-foreground"> vs last month</span>
-              </span>
-              <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
-                {monthDelta > 0 
-                  ? `You are spending more than last month's JPY total (¥${previousSpentTotal.toLocaleString()}).` 
-                  : monthDelta < 0 
-                    ? `You've spent less than last month's JPY total (¥${previousSpentTotal.toLocaleString()}) so far.`
-                    : "Your spending matches last month's pattern exactly."}
-              </p>
-            </div>
-          </div>
-
-          {/* Top Category */}
-          <div className="flex items-start gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
-            <div className="p-2 bg-amber-500/10 text-amber-600 dark:text-amber-500 rounded-lg shrink-0">
-              <IconWallet className="size-4" />
-            </div>
-            <div className="flex flex-col gap-0.5 min-w-0">
-              <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Top Category</span>
-              <span className="text-sm font-bold text-foreground capitalize">
-                {topCategory ? topCategory[0].replace(/_/g, " ") : "None"}
-                {topCategory && (
-                  <span className="text-xs font-normal text-muted-foreground"> ({formatJPY(topCategory[1])})</span>
-                )}
-              </span>
-              <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
-                {topCategory 
-                  ? `${Math.round((topCategory[1] / Math.max(actualSpentTotal, 1)) * 100)}% of your JPY expenses went to ${topCategory[0].replace(/_/g, " ")}.`
-                  : "No JPY transactions logged this month yet."}
-              </p>
-            </div>
-          </div>
-
           {/* Pocket Money Remaining */}
           <div className="flex items-start gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
             <div className={`p-2 rounded-lg shrink-0 ${pocketIsLow ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}>
@@ -307,8 +209,34 @@ export default async function DashboardPage() {
               </p>
             </div>
           </div>
+
+          {/* Shopping Remaining */}
+          <div className="flex items-start gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
+            <div className={`p-2 rounded-lg shrink-0 ${shoppingIsLow ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}>
+              <IconShirt className="size-4" />
+            </div>
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Shopping</span>
+              <span className="text-sm font-bold text-foreground">
+                {formatJPY(shoppingRemaining)} <span className="text-xs font-normal text-muted-foreground">left of {formatJPY(shoppingLimit)}</span>
+              </span>
+              <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
+                {shoppingIsLow 
+                  ? "Shopping limit is critically low (under 20% remaining). Consider holding off on shopping purchases." 
+                  : `${Math.round((shoppingRemaining / shoppingLimit) * 100)}% of your shopping budget is still available.`}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Monthly Insights Card (client-side collapsible) */}
+      <MonthlyInsightsCard
+        monthDelta={monthDelta}
+        previousSpentTotal={previousSpentTotal}
+        actualSpentTotal={actualSpentTotal}
+        topCategory={topCategory}
+      />
 
       {/* Recent Transactions */}
       <div className="flex flex-col gap-3">

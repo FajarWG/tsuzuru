@@ -34,13 +34,7 @@ export default function BottomNav({ fab }: BottomNavProps) {
       >
         {/* iPhone-style floating pill — truly transparent blur */}
         <nav
-          className="w-full max-w-[360px] pointer-events-auto flex items-center justify-around px-2 h-[52px] rounded-[22px]"
-          style={{
-            background: "rgba(255,255,255,0.55)",
-            backdropFilter: "blur(20px) saturate(180%)",
-            WebkitBackdropFilter: "blur(20px) saturate(180%)",
-            boxShadow: "0 4px 24px rgba(0,0,0,0.10), 0 0 0 0.5px rgba(0,0,0,0.08)",
-          }}
+          className="w-full max-w-[360px] pointer-events-auto flex items-center justify-around px-2 h-[52px] rounded-[22px] bg-white/55 dark:bg-zinc-900/55 backdrop-blur-xl border border-border/25 shadow-lg"
         >
           {links.map((link) => {
             const Icon = link.icon;
