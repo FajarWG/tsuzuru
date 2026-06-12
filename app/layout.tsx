@@ -4,6 +4,8 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 
+import LoadingProvider from "@/components/layout/LoadingProvider";
+
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-sans",
@@ -31,7 +33,7 @@ export default function RootLayout({
       className={cn("h-full", "antialiased", inter.variable, notoSerifJp.variable, "font-sans")}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        {children}
+        <LoadingProvider>{children}</LoadingProvider>
         <Toaster />
       </body>
     </html>

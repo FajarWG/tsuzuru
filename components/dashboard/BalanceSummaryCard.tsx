@@ -5,6 +5,7 @@ import Link from "next/link";
 import { formatJPY, formatIDR } from "@/lib/format";
 import { updateAccountBalanceWithHistoryAction, updateAccountNameAction } from "@/lib/actions/accounts";
 import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   IconBuildingBank,
   IconCreditCard,
@@ -218,46 +219,56 @@ export default function BalanceSummaryCard({
         </div>
 
         {/* Collapsible account list */}
-        {showDetails && (
-          <div className="flex flex-col gap-2.5 pt-3 border-t border-border/30">
-            {activeAccounts.map((acc) => (
-              <div key={acc.id} className="flex justify-between items-center text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-muted text-primary/80">
-                    <AccountTypeIcon type={acc.type} />
-                  </span>
-                  <span className="font-medium text-foreground">{acc.name}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="font-sans font-semibold text-muted-foreground">
-                    {hideBalances
-                      ? "••••••"
-                      : acc.currency === "JPY"
-                      ? formatJPY(acc.balance)
-                      : formatIDR(acc.balance)}
-                  </span>
-                  <button
-                    onClick={() => openEdit(acc)}
-                    className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                    aria-label={`Edit ${acc.name}`}
+        <AnimatePresence initial={false}>
+          {showDetails && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.3, ease: [0.25, 1, 0.5, 1] }}
+              className="overflow-hidden"
+            >
+              <div className="flex flex-col gap-2.5 pt-3 border-t border-border/30">
+                {activeAccounts.map((acc) => (
+                  <div key={acc.id} className="flex justify-between items-center text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="p-1.5 rounded-lg bg-muted text-primary/80">
+                        <AccountTypeIcon type={acc.type} />
+                      </span>
+                      <span className="font-medium text-foreground">{acc.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-sans font-semibold text-muted-foreground">
+                        {hideBalances
+                          ? "••••••"
+                          : acc.currency === "JPY"
+                          ? formatJPY(acc.balance)
+                          : formatIDR(acc.balance)}
+                      </span>
+                      <button
+                        onClick={() => openEdit(acc)}
+                        className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                        aria-label={`Edit ${acc.name}`}
+                      >
+                        <IconSettings className="size-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                <Link href="/settings?tab=profile" className="mt-1">
+                  <Button
+                    variant="outline"
+                    className="w-full text-[10px] font-semibold tracking-wide gap-1.5 h-9 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/50 text-muted-foreground hover:text-foreground cursor-pointer transition-all active:scale-[0.99] flex items-center justify-center"
                   >
                     <IconSettings className="size-3.5" />
-                  </button>
-                </div>
+                    Manage Profile & Accounts
+                  </Button>
+                </Link>
               </div>
-            ))}
-
-            <Link href="/settings?tab=profile" className="mt-1">
-              <Button
-                variant="outline"
-                className="w-full text-[10px] font-semibold tracking-wide gap-1.5 h-9 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/50 text-muted-foreground hover:text-foreground cursor-pointer transition-all active:scale-[0.99] flex items-center justify-center"
-              >
-                <IconSettings className="size-3.5" />
-                Manage Profile & Accounts
-              </Button>
-            </Link>
-          </div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Edit Account Dialog */}
