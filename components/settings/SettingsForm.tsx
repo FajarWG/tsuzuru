@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 import { signOut } from "next-auth/react";
-import { updateUserSettingsAction } from "@/lib/actions/settings";
+import {
+  updateUserSettingsAction,
+  resetUserSettingsAndDataAction,
+} from "@/lib/actions/settings";
 import {
   createAccountAction,
   updateAccountAction,
@@ -120,6 +123,11 @@ export default function SettingsForm({
   const [mainCurrency, setMainCurrency] = useState(userSettings.budgetCurrency || "JPY");
   const [isSavingCurrency, setIsSavingCurrency] = useState(false);
   const [currencySuccess, setCurrencySuccess] = useState(false);
+
+  // Reset Account Data state
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState("");
+  const [isResetting, setIsResetting] = useState(false);
 
   const handleSaveCurrency = async () => {
     setIsSavingCurrency(true);
@@ -330,6 +338,28 @@ export default function SettingsForm({
     }
   };
 
+  // --- Reset Account Data Handler ---
+  const handleResetAccountData = async () => {
+    if (resetConfirmText !== "RESET") return;
+
+    setIsResetting(true);
+    try {
+      const res = await resetUserSettingsAndDataAction();
+      if (res.success) {
+        toast.success("Account data reset successfully");
+        setResetDialogOpen(false);
+        setResetConfirmText("");
+        window.location.reload();
+      } else {
+        toast.error(res.error || "Failed to reset account data");
+      }
+    } catch {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   const accountsForTemplates = accounts.map((a) => ({
     id: a.id,
     name: a.name,
@@ -339,7 +369,7 @@ export default function SettingsForm({
   return (
     <div className="flex flex-col gap-5 flex-1 pb-10">
       <div>
-        <h1 className="font-serif text-2xl font-bold tracking-wide text-primary">
+        <h1 className="font-sans text-2xl font-bold tracking-wide text-primary">
           Settings
         </h1>
         <p className="text-xs text-muted-foreground mt-1">
@@ -601,6 +631,23 @@ export default function SettingsForm({
               </p>
             </div>
 
+            {/* Danger Zone */}
+            <div className="flex flex-col gap-2 pt-4 border-t border-border/20">
+              <Label className="text-xs font-semibold text-destructive">Danger Zone</Label>
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                Permanently delete all accounts, transactions, bills, and reset settings.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setResetDialogOpen(true)}
+                className="w-full gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/80 transition-colors cursor-pointer"
+              >
+                <IconTrash className="size-4" />
+                Reset Account Data
+              </Button>
+            </div>
+
             <Button
               variant="destructive"
               onClick={() => signOut({ callbackUrl: "/login" })}
@@ -623,7 +670,7 @@ export default function SettingsForm({
         <DialogContent className="max-w-[360px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-serif">Budget Settings</DialogTitle>
+              <DialogTitle className="font-sans">Budget Settings</DialogTitle>
               <DialogDescription className="text-xs">
                 Set your monthly spending limits in {userSettings.budgetCurrency}.
               </DialogDescription>
@@ -738,7 +785,7 @@ export default function SettingsForm({
         <DialogContent className="max-w-[360px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-serif">Add Account</DialogTitle>
+              <DialogTitle className="font-sans">Add Account</DialogTitle>
               <DialogDescription className="text-xs">
                 Create a new financial account.
               </DialogDescription>
@@ -863,7 +910,7 @@ export default function SettingsForm({
         <DialogContent className="max-w-[360px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-serif">Edit Account</DialogTitle>
+              <DialogTitle className="font-sans">Edit Account</DialogTitle>
               <DialogDescription className="text-xs">
                 Update financial account details.
               </DialogDescription>
@@ -1017,13 +1064,13 @@ export default function SettingsForm({
         <DialogContent className="max-w-[360px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-serif text-destructive">
+              <DialogTitle className="font-sans text-destructive">
                 Delete Account
               </DialogTitle>
               <DialogDescription className="text-xs leading-relaxed">
                 Are you sure you want to delete{" "}
                 <strong className="text-foreground font-bold">
-                  "{deletingAccount?.name}"
+                  &ldquo;{deletingAccount?.name}&rdquo;
                 </strong>
                 ?
                 <span className="block mt-1 text-destructive font-semibold">
@@ -1065,6 +1112,73 @@ export default function SettingsForm({
                   <IconLoader className="size-4 animate-spin" />
                 ) : (
                   "Delete"
+                )}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Account Data Confirmation Dialog */}
+      <Dialog
+        open={resetDialogOpen}
+        onOpenChange={(open) => {
+          if (!isResetting && !open) {
+            setResetDialogOpen(false);
+            setResetConfirmText("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-[360px] rounded-2xl p-0">
+          <div className="flex flex-col max-h-[85vh] p-5">
+            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
+              <DialogTitle className="font-sans text-destructive flex items-center gap-2">
+                Reset Account Data
+              </DialogTitle>
+              <DialogDescription className="text-xs leading-relaxed">
+                This action is <strong className="text-destructive font-bold">permanent</strong> and <strong className="text-destructive font-bold">cannot be undone</strong>.
+                <span className="block mt-2 text-muted-foreground">
+                  All transactions, bank/e-wallet accounts, recurring bills, and ledger records will be deleted. Your budget limits will be reset to 0.
+                </span>
+                <span className="block mt-2 font-medium text-foreground">
+                  Please type <code className="bg-muted px-1.5 py-0.5 rounded text-destructive font-mono font-bold">RESET</code> to confirm.
+                </span>
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex-1 py-4 flex flex-col gap-4 min-h-0">
+              <Input
+                value={resetConfirmText}
+                onChange={(e) => setResetConfirmText(e.target.value)}
+                placeholder="RESET"
+                className="h-10 text-center font-mono font-bold uppercase tracking-widest text-destructive"
+              />
+            </div>
+
+            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setResetDialogOpen(false);
+                  setResetConfirmText("");
+                }}
+                disabled={isResetting}
+                className="cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleResetAccountData}
+                disabled={isResetting || resetConfirmText !== "RESET"}
+                className="min-w-[72px] cursor-pointer"
+              >
+                {isResetting ? (
+                  <IconLoader className="size-4 animate-spin" />
+                ) : (
+                  "Reset All Data"
                 )}
               </Button>
             </DialogFooter>

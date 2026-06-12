@@ -41,10 +41,10 @@ export default function WelcomeDialog() {
       <DialogContent className="max-w-[400px] rounded-3xl p-0">
         <div className="flex flex-col max-h-[85vh] p-6">
           <DialogHeader className="gap-1.5 pb-4 shrink-0 border-b border-border/20">
-            <DialogTitle className="font-serif text-lg text-primary text-center">
+            <DialogTitle className="font-sans text-lg text-primary text-center">
               ようこそ
             </DialogTitle>
-            <div className="text-center font-serif text-[10px] text-muted-foreground tracking-widest uppercase -mt-1">
+            <div className="text-center font-sans text-[10px] text-muted-foreground tracking-widest uppercase -mt-1">
               Welcome to Tsuzuru
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed text-center mt-2">

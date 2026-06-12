@@ -22,14 +22,14 @@ export default async function LoginPage() {
 
       {/* Branding Section */}
       <div className="flex-1 flex flex-col justify-center items-center text-center mt-12">
-        <h1 className="font-serif text-6xl font-bold tracking-widest text-primary mb-4">
+        <h1 className="font-sans text-6xl font-bold tracking-widest text-primary mb-4">
           綴る
         </h1>
-        <p className="font-serif text-sm text-muted-foreground tracking-widest uppercase mb-1">
+        <p className="font-sans text-sm text-muted-foreground tracking-widest uppercase mb-1">
           Tsuzuru
         </p>
         <div className="w-12 h-[1px] bg-secondary my-6" />
-        <p className="font-serif text-xl text-foreground tracking-wider leading-relaxed">
+        <p className="font-sans text-xl text-foreground tracking-wider leading-relaxed">
           お金の物語を綴ろう
         </p>
         <p className="text-xs text-muted-foreground font-sans tracking-wide mt-2">

@@ -21,7 +21,7 @@ export default function OfflinePage() {
         <IconWifiOff className="size-8" />
       </div>
 
-      <h1 className="font-serif text-3xl font-bold text-primary mb-3">
+      <h1 className="font-sans text-3xl font-bold text-primary mb-3">
         Koneksi Terputus
       </h1>
       

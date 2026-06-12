@@ -162,7 +162,7 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="font-serif text-2xl font-bold tracking-wide text-primary">Bill Friends</h1>
+          <h1 className="font-sans text-2xl font-bold tracking-wide text-primary">Bill Friends</h1>
           <p className="text-xs text-muted-foreground mt-1">Track what you owe and what&apos;s owed to you.</p>
         </div>
         <Button size="sm" onClick={() => { setAddOpen(true); resetAddForm(); }}>
@@ -332,7 +332,7 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
         <DialogContent className="max-w-[380px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-serif">Add Bill</DialogTitle>
+              <DialogTitle className="font-sans">Add Bill</DialogTitle>
               <DialogDescription className="text-xs">Track a debt between you and a friend.</DialogDescription>
             </DialogHeader>
 
@@ -446,7 +446,7 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
         <DialogContent className="max-w-[360px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-serif">Delete Bill</DialogTitle>
+              <DialogTitle className="font-sans">Delete Bill</DialogTitle>
               <DialogDescription className="text-xs">
                 Are you sure you want to delete this bill? This action cannot be undone.
               </DialogDescription>

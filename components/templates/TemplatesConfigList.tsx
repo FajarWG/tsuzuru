@@ -292,7 +292,7 @@ export default function TemplatesConfigList({
       <div className="flex justify-between items-start mb-3 pb-2 border-b border-border/10">
         {!hideHeader ? (
           <div>
-            <h2 className="font-serif text-base font-bold text-primary">Recurring Bills</h2>
+            <h2 className="font-sans text-base font-bold text-primary">Recurring Bills</h2>
             <p className="text-[10px] text-muted-foreground">
               Recurring bills — tap &quot;Paid&quot; when paid.
             </p>
@@ -416,7 +416,7 @@ export default function TemplatesConfigList({
         <DialogContent className="max-w-[360px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-serif">Create Recurring Bill</DialogTitle>
+              <DialogTitle className="font-sans">Create Recurring Bill</DialogTitle>
               <DialogDescription className="text-xs">
                 Add a recurring bill like rent or utilities.
               </DialogDescription>
@@ -507,7 +507,7 @@ export default function TemplatesConfigList({
         <DialogContent className="max-w-[360px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-serif">Edit Bill</DialogTitle>
+              <DialogTitle className="font-sans">Edit Bill</DialogTitle>
               <DialogDescription className="text-xs">
                 {editingItem?.name}
               </DialogDescription>
@@ -638,7 +638,7 @@ export default function TemplatesConfigList({
         <DialogContent className="max-w-[340px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-serif">Delete Recurring Bill</DialogTitle>
+              <DialogTitle className="font-sans">Delete Recurring Bill</DialogTitle>
               <DialogDescription className="text-sm leading-relaxed">
                 Are you sure you want to delete the recurring bill for <strong>{deletingItem?.name}</strong>?
                 <br />
@@ -683,7 +683,7 @@ export default function TemplatesConfigList({
         <DialogContent className="max-w-[340px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-serif">Mark as Paid</DialogTitle>
+              <DialogTitle className="font-sans">Mark as Paid</DialogTitle>
               <DialogDescription className="text-sm leading-relaxed">
                 Record payment of{" "}
                 <strong>
