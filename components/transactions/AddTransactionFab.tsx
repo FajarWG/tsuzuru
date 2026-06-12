@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createTransactionAction } from "@/lib/actions/transactions";
 import { IconPlus, IconLoader, IconCalendar } from "@tabler/icons-react";
+import { formatInputAmount, parseInputAmount } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
@@ -66,7 +67,7 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
   const [amount, setAmount] = useState("");
   const [accountId, setAccountId] = useState(accounts[0]?.id || "");
   const [category, setCategory] = useState<"pocket_money" | "shopping">("pocket_money");
-  const [subCategory, setSubCategory] = useState("food");
+  const [subCategory, setSubCategory] = useState("");
   const [mealNumber, setMealNumber] = useState<number | null>(null);
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(() => new Date());
@@ -82,7 +83,7 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
     setAmount("");
     setAccountId(accounts[0]?.id || "");
     setCategory("pocket_money");
-    setSubCategory("food");
+    setSubCategory("");
     setMealNumber(null);
     setDescription("");
     setDate(new Date());
@@ -96,7 +97,7 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
 
   const handleCategoryChange = (cat: "pocket_money" | "shopping") => {
     setCategory(cat);
-    setSubCategory(cat === "pocket_money" ? "food" : "electronics");
+    setSubCategory("");
     setMealNumber(null);
   };
 
@@ -107,8 +108,13 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!amount || parseFloat(amount) <= 0) {
+    const parsedAmount = parseInputAmount(amount);
+    if (!amount || parsedAmount <= 0) {
       setError("Please enter a valid amount");
+      return;
+    }
+    if (type === "expense" && !subCategory) {
+      setError("Please select a sub-category");
       return;
     }
 
@@ -122,7 +128,7 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
           userId,
           accountId,
           type,
-          amount: parseFloat(amount),
+          amount: parsedAmount,
           category: type === "income" ? "income" : category,
           subCategory: type === "income" ? null : subCategory,
           mealNumber: type === "expense" && subCategory === "food" ? mealNumber : null,
@@ -151,7 +157,7 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
         userId,
         accountId,
         type,
-        amount: parseFloat(amount),
+        amount: parsedAmount,
         category: type === "income" ? "income" : category,
         subCategory: type === "income" ? null : subCategory,
         mealNumber: type === "expense" && subCategory === "food" ? mealNumber : null,
@@ -187,20 +193,21 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
 
       {/* Dialog */}
       <Dialog open={open} onOpenChange={(v) => { if (!isSubmitting) setOpen(v); }}>
-        <DialogContent className="max-w-[400px] rounded-2xl max-h-[90dvh] overflow-y-auto p-0">
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4 p-5">
-            <DialogHeader className="pb-0">
+        <DialogContent className="max-w-[400px] rounded-2xl p-0">
+          <form onSubmit={handleSubmit} className="flex flex-col max-h-[85vh] p-5">
+            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
               <DialogTitle className="font-serif text-xl">Add Transaction</DialogTitle>
             </DialogHeader>
 
-            {error && (
-              <Alert variant="destructive" className="py-2">
-                <AlertDescription className="text-xs">{error}</AlertDescription>
-              </Alert>
-            )}
+            <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-4 py-3">
+              {error && (
+                <Alert variant="destructive" className="py-2">
+                  <AlertDescription className="text-xs">{error}</AlertDescription>
+                </Alert>
+              )}
 
-            {/* Expense / Income toggle */}
-            <div className="flex bg-muted p-1 rounded-lg border border-border/20">
+              {/* Expense / Income toggle */}
+              <div className="flex bg-muted p-1 rounded-lg border border-border/20">
               {(["expense", "income"] as const).map((t) => (
                 <button
                   key={t}
@@ -226,11 +233,10 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
                   {currencySymbol}
                 </span>
                 <input
-                  type="number"
-                  step="any"
-                  inputMode="decimal"
+                  type="text"
+                  inputMode="numeric"
                   value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+                  onChange={(e) => setAmount(formatInputAmount(e.target.value))}
                   className="flex-1 h-full text-xl font-bold font-sans bg-transparent focus:outline-none text-foreground"
                   placeholder="0"
                   required
@@ -284,7 +290,7 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
                   <Label className="text-xs font-semibold text-muted-foreground">Sub-category</Label>
                   <Select value={subCategory} onValueChange={handleSubCategoryChange}>
                     <SelectTrigger className="h-11 rounded-xl text-sm font-semibold">
-                      <SelectValue />
+                      <SelectValue placeholder="Select sub-category" />
                     </SelectTrigger>
                     <SelectContent>
                       {subcatOptions.map((opt) => (
@@ -368,18 +374,22 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
               </Popover>
             </div>
 
+            </div>
+
             {/* Submit */}
-            <Button
-              type="submit"
-              className="w-full h-11 rounded-xl text-sm font-semibold mt-1"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <><IconLoader className="size-4 animate-spin" /> Saving...</>
-              ) : (
-                "Save Transaction"
-              )}
-            </Button>
+            <div className="shrink-0 pt-4 mt-auto border-t border-border/20">
+              <Button
+                type="submit"
+                className="w-full h-11 rounded-xl text-sm font-semibold"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <><IconLoader className="size-4 animate-spin" /> Saving...</>
+                ) : (
+                  "Save Transaction"
+                )}
+              </Button>
+            </div>
           </form>
         </DialogContent>
       </Dialog>

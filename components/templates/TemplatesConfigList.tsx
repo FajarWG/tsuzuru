@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { formatJPY, formatIDR } from "@/lib/format";
+import { formatJPY, formatIDR, formatInputAmount, parseInputAmount } from "@/lib/format";
 import {
   markTemplatePaidAction,
   updateTemplateAction,
@@ -116,8 +116,8 @@ export default function TemplatesConfigList({
       setCreateError("Please enter a bill name");
       return;
     }
-    const parsedAmount = parseFloat(createAmount);
-    if (isNaN(parsedAmount) || parsedAmount < 0) {
+    const parsedAmount = parseInputAmount(createAmount);
+    if (!createAmount || parsedAmount < 0) {
       setCreateError("Please enter a valid amount");
       return;
     }
@@ -162,7 +162,7 @@ export default function TemplatesConfigList({
   const openEdit = (item: TemplateItem) => {
     setEditingItem(item);
     setEditName(item.name);
-    setEditAmount(String(item.amount));
+    setEditAmount(formatInputAmount(item.amount));
     setEditAccountId(item.accountId);
     setEditIsActive(item.isActive);
     setEditIntervalMonths(String(item.intervalMonths));
@@ -180,8 +180,8 @@ export default function TemplatesConfigList({
       setEditError("Please enter a bill name");
       return;
     }
-    const parsedAmount = parseFloat(editAmount);
-    if (isNaN(parsedAmount) || parsedAmount < 0) {
+    const parsedAmount = parseInputAmount(editAmount);
+    if (!editAmount || parsedAmount < 0) {
       setEditError("Please enter a valid amount");
       return;
     }
@@ -413,306 +413,318 @@ export default function TemplatesConfigList({
 
       {/* ===== Create Dialog ===== */}
       <Dialog open={createOpen} onOpenChange={(open) => !open && setCreateOpen(false)}>
-        <DialogContent className="max-w-[360px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="font-serif">Create Monthly Bill</DialogTitle>
-            <DialogDescription className="text-xs">
-              Add a recurring bill like rent or utilities.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-[360px] rounded-2xl p-0">
+          <div className="flex flex-col max-h-[85vh] p-5">
+            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
+              <DialogTitle className="font-serif">Create Monthly Bill</DialogTitle>
+              <DialogDescription className="text-xs">
+                Add a recurring bill like rent or utilities.
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="flex flex-col gap-4 py-1">
-            {createError && (
-              <Alert variant="destructive" className="py-2">
-                <AlertDescription className="text-xs">{createError}</AlertDescription>
-              </Alert>
-            )}
+            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+              {createError && (
+                <Alert variant="destructive" className="py-2">
+                  <AlertDescription className="text-xs">{createError}</AlertDescription>
+                </Alert>
+              )}
 
-            {/* Bill Name */}
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold">Bill Name</Label>
-              <Input
-                value={createName}
-                onChange={(e) => setCreateName(e.target.value)}
-                className="h-10"
-                placeholder="e.g. Apato, Electricity, Gas"
-              />
+              {/* Bill Name */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Bill Name</Label>
+                <Input
+                  value={createName}
+                  onChange={(e) => setCreateName(e.target.value)}
+                  className="h-10"
+                  placeholder="e.g. Apato, Electricity, Gas"
+                />
+              </div>
+
+              {/* Amount */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Amount</Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={createAmount}
+                  onChange={(e) => setCreateAmount(formatInputAmount(e.target.value))}
+                  className="h-10 font-semibold"
+                  placeholder="0"
+                />
+              </div>
+
+              {/* Interval */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Billing Frequency</Label>
+                <Select value={createIntervalMonths} onValueChange={setCreateIntervalMonths}>
+                  <SelectTrigger className="h-10 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INTERVAL_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value} className="text-sm">
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Separator />
+
+              {/* Account */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Deduct From Account</Label>
+                <Select value={createAccountId} onValueChange={setCreateAccountId}>
+                  <SelectTrigger className="h-10 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map((acc) => (
+                      <SelectItem key={acc.id} value={acc.id} className="text-sm">
+                        {acc.name} ({acc.currency})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            {/* Amount */}
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold">Amount</Label>
-              <Input
-                type="number"
-                value={createAmount}
-                onChange={(e) => setCreateAmount(e.target.value)}
-                className="h-10 font-semibold"
-                placeholder="0"
-                min="0"
-              />
-            </div>
-
-            {/* Interval */}
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold">Billing Frequency</Label>
-              <Select value={createIntervalMonths} onValueChange={setCreateIntervalMonths}>
-                <SelectTrigger className="h-10 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {INTERVAL_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value} className="text-sm">
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Separator />
-
-            {/* Account */}
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold">Deduct From Account</Label>
-              <Select value={createAccountId} onValueChange={setCreateAccountId}>
-                <SelectTrigger className="h-10 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.map((acc) => (
-                    <SelectItem key={acc.id} value={acc.id} className="text-sm">
-                      {acc.name} ({acc.currency})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
+              <Button variant="outline" size="sm" onClick={() => setCreateOpen(false)} disabled={isCreating} className="cursor-pointer">
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleCreateBill} disabled={isCreating} className="min-w-[72px] cursor-pointer">
+                {isCreating ? <IconLoader className="size-4 animate-spin" /> : "Create"}
+              </Button>
+            </DialogFooter>
           </div>
-
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => setCreateOpen(false)} disabled={isCreating} className="cursor-pointer">
-              Cancel
-            </Button>
-            <Button size="sm" onClick={handleCreateBill} disabled={isCreating} className="min-w-[72px] cursor-pointer">
-              {isCreating ? <IconLoader className="size-4 animate-spin" /> : "Create"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* ===== Edit Dialog ===== */}
       <Dialog open={!!editingItem} onOpenChange={(open) => !open && closeEdit()}>
-        <DialogContent className="max-w-[360px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="font-serif">Edit Bill</DialogTitle>
-            <DialogDescription className="text-xs">
-              {editingItem?.name}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-[360px] rounded-2xl p-0">
+          <div className="flex flex-col max-h-[85vh] p-5">
+            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
+              <DialogTitle className="font-serif">Edit Bill</DialogTitle>
+              <DialogDescription className="text-xs">
+                {editingItem?.name}
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="flex flex-col gap-4 py-1">
-            {editError && (
-              <Alert variant="destructive" className="py-2">
-                <AlertDescription className="text-xs">{editError}</AlertDescription>
-              </Alert>
-            )}
+            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+              {editError && (
+                <Alert variant="destructive" className="py-2">
+                  <AlertDescription className="text-xs">{editError}</AlertDescription>
+                </Alert>
+              )}
 
-            {/* Bill Name */}
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold">Bill Name</Label>
-              <Input
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                className="h-10"
-                placeholder="e.g. Apato, Gas, Electric"
-              />
-            </div>
-
-            {/* Amount */}
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold">
-                Amount ({editingItem?.currency})
-              </Label>
-              <div className="relative flex items-center">
-                <span className="absolute left-3 text-sm font-bold text-muted-foreground select-none">
-                  {editingItem?.currency === "JPY" ? "¥" : "Rp"}
-                </span>
+              {/* Bill Name */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Bill Name</Label>
                 <Input
-                  type="number"
-                  value={editAmount}
-                  onChange={(e) => setEditAmount(e.target.value)}
-                  className="pl-8 h-10 font-semibold"
-                  placeholder="0"
-                  min="0"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="h-10"
+                  placeholder="e.g. Apato, Gas, Electric"
                 />
+              </div>
+
+              {/* Amount */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">
+                  Amount ({editingItem?.currency})
+                </Label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-3 text-sm font-bold text-muted-foreground select-none">
+                    {editingItem?.currency === "JPY" ? "¥" : "Rp"}
+                  </span>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={editAmount}
+                    onChange={(e) => setEditAmount(formatInputAmount(e.target.value))}
+                    className="pl-8 h-10 font-semibold"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              {/* Interval */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Billing Frequency</Label>
+                <Select value={editIntervalMonths} onValueChange={setEditIntervalMonths}>
+                  <SelectTrigger className="h-10 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {INTERVAL_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value} className="text-sm">
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {parseInt(editIntervalMonths) > 1 && parseFloat(editAmount) > 0 && (
+                  <p className="text-[10px] text-muted-foreground pl-1">
+                    Monthly equivalent:{" "}
+                    <span className="font-semibold text-foreground">
+                      {editingItem?.currency === "JPY"
+                        ? formatJPY(parseFloat(editAmount) / parseInt(editIntervalMonths))
+                        : formatIDR(parseFloat(editAmount) / parseInt(editIntervalMonths))}
+                      /mo
+                    </span>
+                  </p>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* Account */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Deduct From Account</Label>
+                <Select value={editAccountId} onValueChange={setEditAccountId}>
+                  <SelectTrigger className="h-10 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map((acc) => (
+                      <SelectItem key={acc.id} value={acc.id} className="text-sm">
+                        {acc.name} ({acc.currency})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Active */}
+              <div className="flex items-center justify-between py-1">
+                <Label className="text-xs font-semibold">Active</Label>
+                <Switch checked={editIsActive} onCheckedChange={setEditIsActive} />
               </div>
             </div>
 
-            {/* Interval */}
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold">Billing Frequency</Label>
-              <Select value={editIntervalMonths} onValueChange={setEditIntervalMonths}>
-                <SelectTrigger className="h-10 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {INTERVAL_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value} className="text-sm">
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {parseInt(editIntervalMonths) > 1 && parseFloat(editAmount) > 0 && (
-                <p className="text-[10px] text-muted-foreground pl-1">
-                  Monthly equivalent:{" "}
-                  <span className="font-semibold text-foreground">
-                    {editingItem?.currency === "JPY"
-                      ? formatJPY(parseFloat(editAmount) / parseInt(editIntervalMonths))
-                      : formatIDR(parseFloat(editAmount) / parseInt(editIntervalMonths))}
-                    /mo
-                  </span>
-                </p>
-              )}
-            </div>
-
-            <Separator />
-
-            {/* Account */}
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold">Deduct From Account</Label>
-              <Select value={editAccountId} onValueChange={setEditAccountId}>
-                <SelectTrigger className="h-10 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.map((acc) => (
-                    <SelectItem key={acc.id} value={acc.id} className="text-sm">
-                      {acc.name} ({acc.currency})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Active */}
-            <div className="flex items-center justify-between py-1">
-              <Label className="text-xs font-semibold">Active</Label>
-              <Switch checked={editIsActive} onCheckedChange={setEditIsActive} />
-            </div>
+            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 flex-row justify-between items-center gap-2 sm:justify-between">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:bg-destructive/10 cursor-pointer"
+                onClick={() => {
+                  if (editingItem) {
+                    openDelete(editingItem);
+                    closeEdit();
+                  }
+                }}
+                disabled={isSavingEdit}
+              >
+                <IconTrash className="size-4 mr-1" /> Delete
+              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={closeEdit} disabled={isSavingEdit} className="cursor-pointer">
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={handleSaveEdit} disabled={isSavingEdit} className="min-w-[72px] cursor-pointer">
+                  {isSavingEdit ? <IconLoader className="size-4 animate-spin" /> : "Save"}
+                </Button>
+              </div>
+            </DialogFooter>
           </div>
-
-          <DialogFooter className="flex-row justify-between items-center gap-2 sm:justify-between">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:bg-destructive/10 cursor-pointer"
-              onClick={() => {
-                if (editingItem) {
-                  openDelete(editingItem);
-                  closeEdit();
-                }
-              }}
-              disabled={isSavingEdit}
-            >
-              <IconTrash className="size-4 mr-1" /> Delete
-            </Button>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={closeEdit} disabled={isSavingEdit} className="cursor-pointer">
-                Cancel
-              </Button>
-              <Button size="sm" onClick={handleSaveEdit} disabled={isSavingEdit} className="min-w-[72px] cursor-pointer">
-                {isSavingEdit ? <IconLoader className="size-4 animate-spin" /> : "Save"}
-              </Button>
-            </div>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* ===== Delete Confirm Dialog ===== */}
       <Dialog open={!!deletingItem} onOpenChange={(open) => !open && setDeletingItem(null)}>
-        <DialogContent className="max-w-[340px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="font-serif">Delete Monthly Bill</DialogTitle>
-            <DialogDescription className="text-sm leading-relaxed">
-              Are you sure you want to delete the recurring bill for <strong>{deletingItem?.name}</strong>?
-              <br />
-              <span className="text-xs text-muted-foreground mt-1 block">
-                This template will be permanently removed. History of past paid transactions will not be deleted.
-              </span>
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-[340px] rounded-2xl p-0">
+          <div className="flex flex-col max-h-[85vh] p-5">
+            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
+              <DialogTitle className="font-serif">Delete Monthly Bill</DialogTitle>
+              <DialogDescription className="text-sm leading-relaxed">
+                Are you sure you want to delete the recurring bill for <strong>{deletingItem?.name}</strong>?
+                <br />
+                <span className="text-xs text-muted-foreground mt-1 block">
+                  This template will be permanently removed. History of past paid transactions will not be deleted.
+                </span>
+              </DialogDescription>
+            </DialogHeader>
 
-          {deleteError && (
-            <Alert variant="destructive" className="py-2">
-              <AlertDescription className="text-xs">{deleteError}</AlertDescription>
-            </Alert>
-          )}
-
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => setDeletingItem(null)} disabled={isDeleting} className="cursor-pointer">
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleDeleteBill}
-              disabled={isDeleting}
-              className="min-w-[80px] cursor-pointer"
-            >
-              {isDeleting ? (
-                <IconLoader className="size-4 animate-spin" />
-              ) : (
-                "Delete"
+            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+              {deleteError && (
+                <Alert variant="destructive" className="py-2">
+                  <AlertDescription className="text-xs">{deleteError}</AlertDescription>
+                </Alert>
               )}
-            </Button>
-          </DialogFooter>
+            </div>
+
+            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
+              <Button variant="outline" size="sm" onClick={() => setDeletingItem(null)} disabled={isDeleting} className="cursor-pointer">
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleDeleteBill}
+                disabled={isDeleting}
+                className="min-w-[80px] cursor-pointer"
+              >
+                {isDeleting ? (
+                  <IconLoader className="size-4 animate-spin" />
+                ) : (
+                  "Delete"
+                )}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* ===== Mark as Paid Confirm Dialog ===== */}
       <Dialog open={!!payingItem} onOpenChange={(open) => !open && closePay()}>
-        <DialogContent className="max-w-[340px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="font-serif">Mark as Paid</DialogTitle>
-            <DialogDescription className="text-sm leading-relaxed">
-              Record payment of{" "}
-              <strong>
-                {payingItem?.currency === "JPY"
-                  ? formatJPY(payingItem?.amount ?? 0)
-                  : formatIDR(payingItem?.amount ?? 0)}
-              </strong>{" "}
-              for <strong>{payingItem?.name}</strong>?
-              <br />
-              <span className="text-xs text-muted-foreground mt-1 block">
-                This will deduct the full amount from the linked account and record it in history.
-              </span>
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-[340px] rounded-2xl p-0">
+          <div className="flex flex-col max-h-[85vh] p-5">
+            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
+              <DialogTitle className="font-serif">Mark as Paid</DialogTitle>
+              <DialogDescription className="text-sm leading-relaxed">
+                Record payment of{" "}
+                <strong>
+                  {payingItem?.currency === "JPY"
+                    ? formatJPY(payingItem?.amount ?? 0)
+                    : formatIDR(payingItem?.amount ?? 0)}
+                </strong>{" "}
+                for <strong>{payingItem?.name}</strong>?
+                <br />
+                <span className="text-xs text-muted-foreground mt-1 block">
+                  This will deduct the full amount from the linked account and record it in history.
+                </span>
+              </DialogDescription>
+            </DialogHeader>
 
-          {payError && (
-            <Alert variant="destructive" className="py-2">
-              <AlertDescription className="text-xs">{payError}</AlertDescription>
-            </Alert>
-          )}
-
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={closePay} disabled={!!isPayingId} className="cursor-pointer">
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleMarkPaid}
-              disabled={!!isPayingId}
-              className="min-w-[100px] cursor-pointer"
-            >
-              {isPayingId ? (
-                <IconLoader className="size-4 animate-spin" />
-              ) : (
-                "Confirm"
+            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+              {payError && (
+                <Alert variant="destructive" className="py-2">
+                  <AlertDescription className="text-xs">{payError}</AlertDescription>
+                </Alert>
               )}
-            </Button>
-          </DialogFooter>
+            </div>
+
+            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
+              <Button variant="outline" size="sm" onClick={closePay} disabled={!!isPayingId} className="cursor-pointer">
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleMarkPaid}
+                disabled={!!isPayingId}
+                className="min-w-[100px] cursor-pointer"
+              >
+                {isPayingId ? (
+                  <IconLoader className="size-4 animate-spin" />
+                ) : (
+                  "Confirm"
+                )}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

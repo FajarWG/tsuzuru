@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createBillAction, settleBillAction, deleteBillAction } from "@/lib/actions/bill-friends";
 import { toast } from "sonner";
-import { formatJPY, formatIDR } from "@/lib/format";
+import { formatJPY, formatIDR, formatInputAmount, parseInputAmount } from "@/lib/format";
 import {
   IconPlus,
   IconCheck,
@@ -102,8 +102,8 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
   };
 
   const handleAdd = async () => {
-    const parsedAmount = parseFloat(amount);
-    if (!personName.trim() || isNaN(parsedAmount) || parsedAmount <= 0) {
+    const parsedAmount = parseInputAmount(amount);
+    if (!personName.trim() || !amount || parsedAmount <= 0) {
       setAddError("Please fill in all required fields with valid values.");
       return;
     }
@@ -327,155 +327,161 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
 
       {/* Add Bill Dialog */}
       <Dialog open={addOpen} onOpenChange={(open) => { if (!isAdding) { setAddOpen(open); if (!open) resetAddForm(); } }}>
-        <DialogContent className="max-w-[380px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="font-serif">Add Bill</DialogTitle>
-            <DialogDescription className="text-xs">Track a debt between you and a friend.</DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-[380px] rounded-2xl p-0">
+          <div className="flex flex-col max-h-[85vh] p-5">
+            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
+              <DialogTitle className="font-serif">Add Bill</DialogTitle>
+              <DialogDescription className="text-xs">Track a debt between you and a friend.</DialogDescription>
+            </DialogHeader>
 
-          <div className="flex flex-col gap-4 py-1">
-            {addError && (
-              <Alert variant="destructive" className="py-2">
-                <AlertDescription className="text-xs">{addError}</AlertDescription>
-              </Alert>
-            )}
+            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+              {addError && (
+                <Alert variant="destructive" className="py-2">
+                  <AlertDescription className="text-xs">{addError}</AlertDescription>
+                </Alert>
+              )}
 
-            {/* Direction */}
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold">Who owes whom?</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDirection("they_owe")}
-                  className={cn(
-                    "flex items-center justify-center gap-2 h-10 rounded-xl border text-xs font-semibold transition-all",
-                    direction === "they_owe" ? "bg-primary/10 border-primary/40 text-primary" : "border-border/60 text-muted-foreground hover:border-border"
-                  )}
-                >
-                  <IconArrowDownLeft className="size-4 stroke-[2]" />
-                  They owe me
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDirection("i_owe")}
-                  className={cn(
-                    "flex items-center justify-center gap-2 h-10 rounded-xl border text-xs font-semibold transition-all",
-                    direction === "i_owe" ? "bg-destructive/10 border-destructive/40 text-destructive" : "border-border/60 text-muted-foreground hover:border-border"
-                  )}
-                >
-                  <IconArrowUpRight className="size-4 stroke-[2]" />
-                  I owe them
-                </button>
-              </div>
-            </div>
-
-            {/* Person name */}
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold">Friend&apos;s Name *</Label>
-              <Input
-                value={personName}
-                onChange={(e) => setPersonName(e.target.value)}
-                placeholder="e.g. Aiko, Budi"
-                className="h-10"
-              />
-            </div>
-
-            {/* Amount + Currency */}
-            <div className="flex gap-2">
-              <div className="flex flex-col gap-1.5 flex-1">
-                <Label className="text-xs font-semibold">Amount *</Label>
-                <div className="relative flex items-center">
-                  <span className="absolute left-3 text-sm font-bold text-muted-foreground select-none">
-                    {currency === "JPY" ? "¥" : "Rp"}
-                  </span>
-                  <Input
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    placeholder="0"
-                    className="pl-8 h-10 font-semibold"
-                    min="1"
-                  />
+              {/* Direction */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Who owes whom?</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDirection("they_owe")}
+                    className={cn(
+                      "flex items-center justify-center gap-2 h-10 rounded-xl border text-xs font-semibold transition-all",
+                      direction === "they_owe" ? "bg-primary/10 border-primary/40 text-primary" : "border-border/60 text-muted-foreground hover:border-border"
+                    )}
+                  >
+                    <IconArrowDownLeft className="size-4 stroke-[2]" />
+                    They owe me
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDirection("i_owe")}
+                    className={cn(
+                      "flex items-center justify-center gap-2 h-10 rounded-xl border text-xs font-semibold transition-all",
+                      direction === "i_owe" ? "bg-destructive/10 border-destructive/40 text-destructive" : "border-border/60 text-muted-foreground hover:border-border"
+                    )}
+                  >
+                    <IconArrowUpRight className="size-4 stroke-[2]" />
+                    I owe them
+                  </button>
                 </div>
               </div>
-              <div className="flex flex-col gap-1.5 w-28">
-                <Label className="text-xs font-semibold">Currency</Label>
-                <Select value={currency} onValueChange={setCurrency}>
-                  <SelectTrigger className="h-10">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="JPY">JPY ¥</SelectItem>
-                    <SelectItem value="IDR">IDR Rp</SelectItem>
-                  </SelectContent>
-                </Select>
+
+              {/* Person name */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Friend&apos;s Name *</Label>
+                <Input
+                  value={personName}
+                  onChange={(e) => setPersonName(e.target.value)}
+                  placeholder="e.g. Aiko, Budi"
+                  className="h-10"
+                />
+              </div>
+
+              {/* Amount + Currency */}
+              <div className="flex gap-2">
+                <div className="flex flex-col gap-1.5 flex-1">
+                  <Label className="text-xs font-semibold">Amount *</Label>
+                  <div className="relative flex items-center">
+                    <span className="absolute left-3 text-sm font-bold text-muted-foreground select-none">
+                      {currency === "JPY" ? "¥" : "Rp"}
+                    </span>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={amount}
+                      onChange={(e) => setAmount(formatInputAmount(e.target.value))}
+                      placeholder="0"
+                      className="pl-8 h-10 font-semibold"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5 w-28">
+                  <Label className="text-xs font-semibold">Currency</Label>
+                  <Select value={currency} onValueChange={setCurrency}>
+                    <SelectTrigger className="h-10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="JPY">JPY ¥</SelectItem>
+                      <SelectItem value="IDR">IDR Rp</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">
+                  Description <span className="font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <Input
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="e.g. Dinner, Taxi fare"
+                  className="h-10"
+                />
               </div>
             </div>
 
-            {/* Description */}
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold">
-                Description <span className="font-normal text-muted-foreground">(optional)</span>
-              </Label>
-              <Input
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="e.g. Dinner, Taxi fare"
-                className="h-10"
-              />
-            </div>
+            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
+              <Button variant="outline" size="sm" onClick={() => setAddOpen(false)} disabled={isAdding}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleAdd} disabled={isAdding} className="min-w-[80px]">
+                {isAdding ? <IconLoader className="size-4 animate-spin" /> : "Save Bill"}
+              </Button>
+            </DialogFooter>
           </div>
-
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => setAddOpen(false)} disabled={isAdding}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={handleAdd} disabled={isAdding} className="min-w-[80px]">
-              {isAdding ? <IconLoader className="size-4 animate-spin" /> : "Save Bill"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!deletingBill} onOpenChange={(open) => { if (!isDeleting && !open) setDeletingBill(null); }}>
-        <DialogContent className="max-w-[360px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="font-serif">Delete Bill</DialogTitle>
-            <DialogDescription className="text-xs">
-              Are you sure you want to delete this bill? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-[360px] rounded-2xl p-0">
+          <div className="flex flex-col max-h-[85vh] p-5">
+            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
+              <DialogTitle className="font-serif">Delete Bill</DialogTitle>
+              <DialogDescription className="text-xs">
+                Are you sure you want to delete this bill? This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
 
-          {deletingBill && (
-            <div className="rounded-2xl border border-border/40 bg-muted/40 p-3 text-xs flex flex-col gap-1">
-              <p className="font-semibold text-foreground">{deletingBill.description || (deletingBill.direction === "they_owe" ? "They owe me" : "I owe them")}</p>
-              <p className="text-muted-foreground">
-                Friend: {deletingBill.personName} · Amount: {formatAmount(deletingBill.amount, deletingBill.currency)}
-              </p>
+            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+              {deletingBill && (
+                <div className="rounded-2xl border border-border/40 bg-muted/40 p-3 text-xs flex flex-col gap-1">
+                  <p className="font-semibold text-foreground">{deletingBill.description || (deletingBill.direction === "they_owe" ? "They owe me" : "I owe them")}</p>
+                  <p className="text-muted-foreground">
+                    Friend: {deletingBill.personName} · Amount: {formatAmount(deletingBill.amount, deletingBill.currency)}
+                  </p>
+                </div>
+              )}
             </div>
-          )}
 
-          <DialogFooter className="gap-2">
-            <Button variant="outline" size="sm" onClick={() => setDeletingBill(null)} disabled={isDeleting}>
-              Cancel
-            </Button>
-            <Button variant="destructive" size="sm" onClick={async () => {
-              if (!deletingBill) return;
-              setIsDeleting(true);
-              const res = await deleteBillAction(deletingBill.id);
-              if (res.success) {
-                toast.success("Bill deleted successfully");
-                setBills((prev) => prev.filter((b) => b.id !== deletingBill.id));
-                setDeletingBill(null);
-              } else {
-                toast.error(res.error || "Failed to delete");
-              }
-              setIsDeleting(false);
-            }} disabled={isDeleting} className="min-w-[80px]">
-              {isDeleting ? <IconLoader className="size-4 animate-spin" /> : "Delete"}
-            </Button>
-          </DialogFooter>
+            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
+              <Button variant="outline" size="sm" onClick={() => setDeletingBill(null)} disabled={isDeleting}>
+                Cancel
+              </Button>
+              <Button variant="destructive" size="sm" onClick={async () => {
+                if (!deletingBill) return;
+                setIsDeleting(true);
+                const res = await deleteBillAction(deletingBill.id);
+                if (res.success) {
+                  toast.success("Bill deleted successfully");
+                  setBills((prev) => prev.filter((b) => b.id !== deletingBill.id));
+                  setDeletingBill(null);
+                } else {
+                  toast.error(res.error || "Failed to delete");
+                }
+                setIsDeleting(false);
+              }} disabled={isDeleting} className="min-w-[80px]">
+                {isDeleting ? <IconLoader className="size-4 animate-spin" /> : "Delete"}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

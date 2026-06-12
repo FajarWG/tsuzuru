@@ -15,3 +15,15 @@ export function formatIDR(amount: number): string {
   // Ensure a space between the symbol "Rp" and the digits: "Rp 1.234.567"
   return formatted.replace(/^Rp/, "Rp ");
 }
+
+export function formatInputAmount(value: string | number): string {
+  const clean = String(value).replace(/\D/g, "");
+  if (!clean) return "";
+  return Number(clean).toLocaleString("en-US");
+}
+
+export function parseInputAmount(value: string | number): number {
+  if (typeof value === "number") return value;
+  const clean = value.replace(/\D/g, "");
+  return clean ? parseInt(clean, 10) : 0;
+}

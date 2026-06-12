@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { formatJPY, formatIDR } from "@/lib/format";
+import { formatJPY, formatIDR, formatInputAmount, parseInputAmount } from "@/lib/format";
 import {
   IconAdjustments,
   IconBus,
@@ -316,12 +316,10 @@ export default function TransactionsList({
 
     setEditing(tx);
     setEditType(nextType);
-    setEditAmount(String(tx.amount));
+    setEditAmount(formatInputAmount(tx.amount));
     setEditAccountId(tx.account.id);
     setEditCategory(nextCategory);
-    setEditSubCategory(
-      tx.subCategory || (tx.category === "shopping" ? "electronics" : "food"),
-    );
+    setEditSubCategory(tx.subCategory || "");
     setEditMealNumber(tx.mealNumber);
     setEditDescription(tx.description || "");
     setEditDate(new Date(tx.date));
@@ -336,29 +334,31 @@ export default function TransactionsList({
       setEditMealNumber(null);
     } else {
       setEditCategory("pocket_money");
-      setEditSubCategory("food");
+      setEditSubCategory("");
       setEditMealNumber(null);
     }
   };
 
   const handleEditCategoryChange = (nextCategory: TransactionCategory) => {
     setEditCategory(nextCategory);
-    if (nextCategory === "pocket_money") {
-      setEditSubCategory("food");
-    } else if (nextCategory === "shopping") {
-      setEditSubCategory("electronics");
-    } else {
-      setEditSubCategory("");
-    }
+    setEditSubCategory("");
     setEditMealNumber(null);
   };
 
   const handleSaveEdit = async () => {
     if (!editing) return;
 
-    const parsedAmount = parseFloat(editAmount);
-    if (!parsedAmount || parsedAmount <= 0) {
+    const parsedAmount = parseInputAmount(editAmount);
+    if (!editAmount || parsedAmount <= 0) {
       setError("Please enter a valid amount");
+      return;
+    }
+    if (
+      editType === "expense" &&
+      ["pocket_money", "shopping"].includes(editCategory) &&
+      !editSubCategory
+    ) {
+      setError("Please select a sub-category");
       return;
     }
 
@@ -428,159 +428,181 @@ export default function TransactionsList({
 
   return (
     <div className="flex flex-col gap-5 flex-1">
-      <div className="flex justify-between items-center">
-        <h1 className="font-serif text-2xl font-bold tracking-wide text-primary">
-          Transactions
-        </h1>
-      </div>
-
-      {/* Search Input & Reset Button */}
-      <div className="flex gap-2">
-        <div className="flex-1 relative flex items-center bg-white dark:bg-zinc-900 border border-border/50 rounded-2xl px-4 h-12 shadow-2xs">
-          <IconSearch className="size-4 text-muted-foreground mr-2" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search descriptions, categories, accounts..."
-            className="flex-1 h-full bg-transparent text-base md:text-xs font-medium focus:outline-none text-foreground"
-          />
+      {/* Header & Search */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.05 }}
+        className="flex flex-col gap-4"
+      >
+        <div className="flex justify-between items-center">
+          <h1 className="font-serif text-2xl font-bold tracking-wide text-primary">
+            Transactions
+          </h1>
         </div>
-        <Button
-          variant={showFilters ? "secondary" : "outline"}
-          className="h-12 px-4 rounded-2xl shrink-0 bg-white dark:bg-zinc-900 cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
-          onClick={() => setShowFilters(!showFilters)}
-          aria-label="Toggle filters"
-        >
-          <IconFilter className="size-4" />
-          Filter
-        </Button>
-      </div>
 
-      {/* Type Filter Segmented Control */}
-      <div className="flex rounded-lg bg-muted p-1 border border-border/10">
-        {(["all", "expense", "income"] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTypeFilter(t)}
-            className={cn(
-              "flex-1 rounded-md py-1.5 text-center text-xs font-semibold capitalize transition-all cursor-pointer",
-              typeFilter === t
-                ? "bg-white text-foreground shadow-xs dark:bg-zinc-800"
-                : "text-muted-foreground hover:text-foreground",
-            )}
+        {/* Search Input & Reset Button */}
+        <div className="flex gap-2">
+          <div className="flex-1 relative flex items-center bg-white dark:bg-zinc-900 border border-border/50 rounded-2xl px-4 h-12 shadow-2xs">
+            <IconSearch className="size-4 text-muted-foreground mr-2" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search descriptions, categories, accounts..."
+              className="flex-1 h-full bg-transparent text-base md:text-xs font-medium focus:outline-none text-foreground"
+            />
+          </div>
+          <Button
+            variant={showFilters ? "secondary" : "outline"}
+            className="h-12 px-4 rounded-2xl shrink-0 bg-white dark:bg-zinc-900 cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
+            onClick={() => setShowFilters(!showFilters)}
+            aria-label="Toggle filters"
           >
-            {t === "all" ? "All Types" : t}
-          </button>
-        ))}
-      </div>
+            <IconFilter className="size-4" />
+            Filter
+          </Button>
+        </div>
+      </motion.div>
 
-      {/* Dropdown Filters (Month, Account, Category) */}
-      <AnimatePresence initial={false}>
-        {showFilters && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: "easeInOut" }}
-            className="overflow-hidden flex flex-col gap-3"
-          >
-            <div className="grid grid-cols-3 gap-2 pt-1">
-              <div className="flex flex-col gap-1 min-w-0">
-                <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
-                  Month
-                </Label>
-                <Select value={monthFilter} onValueChange={setMonthFilter}>
-                  <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
-                    <SelectValue className="truncate block max-w-full text-left" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all" className="text-xs">
-                      All Months
-                    </SelectItem>
-                    {monthOptions.map((opt) => (
-                      <SelectItem
-                        key={opt.value}
-                        value={opt.value}
-                        className="text-xs"
-                      >
-                        {opt.label}
+      {/* Segmented Controls & Dropdown Filters */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.1 }}
+        className="flex flex-col gap-3"
+      >
+        {/* Type Filter Segmented Control */}
+        <div className="flex rounded-lg bg-muted p-1 border border-border/10">
+          {(["all", "expense", "income"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTypeFilter(t)}
+              className={cn(
+                "flex-1 rounded-md py-1.5 text-center text-xs font-semibold capitalize transition-all cursor-pointer",
+                typeFilter === t
+                  ? "bg-white text-foreground shadow-xs dark:bg-zinc-800"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t === "all" ? "All Types" : t}
+            </button>
+          ))}
+        </div>
+
+        {/* Dropdown Filters (Month, Account, Category) */}
+        <AnimatePresence initial={false}>
+          {showFilters && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
+              className="overflow-hidden flex flex-col gap-3"
+            >
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                <div className="flex flex-col gap-1 min-w-0">
+                  <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
+                    Month
+                  </Label>
+                  <Select value={monthFilter} onValueChange={setMonthFilter}>
+                    <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
+                      <SelectValue className="truncate block max-w-full text-left" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="text-xs">
+                        All Months
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                      {monthOptions.map((opt) => (
+                        <SelectItem
+                          key={opt.value}
+                          value={opt.value}
+                          className="text-xs"
+                        >
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div className="flex flex-col gap-1 min-w-0">
-                <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
-                  Account
-                </Label>
-                <Select value={accountFilter} onValueChange={setAccountFilter}>
-                  <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
-                    <SelectValue className="truncate block max-w-full text-left" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all" className="text-xs">
-                      All Accounts
-                    </SelectItem>
-                    {accounts.map((acc) => (
-                      <SelectItem key={acc.id} value={acc.id} className="text-xs">
-                        {acc.name}
+                <div className="flex flex-col gap-1 min-w-0">
+                  <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
+                    Account
+                  </Label>
+                  <Select value={accountFilter} onValueChange={setAccountFilter}>
+                    <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
+                      <SelectValue className="truncate block max-w-full text-left" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="text-xs">
+                        All Accounts
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      {accounts.map((acc) => (
+                        <SelectItem key={acc.id} value={acc.id} className="text-xs">
+                          {acc.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-col gap-1 min-w-0">
+                  <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
+                    Category
+                  </Label>
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
+                      <SelectValue className="truncate block max-w-full text-left" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all" className="text-xs">
+                        All Categories
+                      </SelectItem>
+                      <SelectItem value="pocket_money" className="text-xs">
+                        Pocket Money
+                      </SelectItem>
+                      <SelectItem value="shopping" className="text-xs">
+                        Shopping
+                      </SelectItem>
+                      <SelectItem value="income" className="text-xs">
+                        Income
+                      </SelectItem>
+                      <SelectItem value="template" className="text-xs">
+                        Templates
+                      </SelectItem>
+                      <SelectItem value="adjustment" className="text-xs">
+                        Adjustments
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
-              <div className="flex flex-col gap-1 min-w-0">
-                <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
-                  Category
-                </Label>
-                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                  <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
-                    <SelectValue className="truncate block max-w-full text-left" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all" className="text-xs">
-                      All Categories
-                    </SelectItem>
-                    <SelectItem value="pocket_money" className="text-xs">
-                      Pocket Money
-                    </SelectItem>
-                    <SelectItem value="shopping" className="text-xs">
-                      Shopping
-                    </SelectItem>
-                    <SelectItem value="income" className="text-xs">
-                      Income
-                    </SelectItem>
-                    <SelectItem value="template" className="text-xs">
-                      Templates
-                    </SelectItem>
-                    <SelectItem value="adjustment" className="text-xs">
-                      Adjustments
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+              {/* Reset Filters Option */}
+              <div className="flex justify-end px-1 pb-1">
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="text-[10px] font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <IconRefresh className="size-3" />
+                  Reset Filters
+                </button>
               </div>
-            </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
 
-            {/* Reset Filters Option */}
-            <div className="flex justify-end px-1 pb-1">
-              <button
-                type="button"
-                onClick={resetFilters}
-                className="text-[10px] font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
-              >
-                <IconRefresh className="size-3" />
-                Reset Filters
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className="grid grid-cols-2 gap-2">
+      {/* Summary Cards */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.15 }}
+        className="grid grid-cols-2 gap-2"
+      >
         <div className="rounded-xl border border-border/40 bg-white p-3 dark:bg-zinc-900">
           <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
             Expense
@@ -607,9 +629,15 @@ export default function TransactionsList({
             </p>
           )}
         </div>
-      </div>
+      </motion.div>
 
-      <div className="flex flex-col gap-5 mt-2">
+      {/* Transactions List */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.2 }}
+        className="flex flex-col gap-5 mt-2"
+      >
         {Object.keys(groupedTransactions).length === 0 ? (
           <div className="bg-white dark:bg-zinc-900 border border-border/40 rounded-2xl p-8 text-center">
             <p className="text-sm font-semibold text-foreground">
@@ -685,7 +713,7 @@ export default function TransactionsList({
             </div>
           ))
         )}
-      </div>
+      </motion.div>
 
       <Dialog
         open={!!editing}
@@ -693,9 +721,9 @@ export default function TransactionsList({
           if (!isSaving && !open) setEditing(null);
         }}
       >
-        <DialogContent className="max-w-[400px] rounded-2xl max-h-[90dvh] overflow-y-auto p-0">
-          <div className="flex flex-col gap-4 p-5">
-            <DialogHeader>
+        <DialogContent className="max-w-[400px] rounded-2xl p-0">
+          <div className="flex flex-col max-h-[85vh] p-5">
+            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
               <DialogTitle className="font-serif text-xl">
                 Edit Transaction
               </DialogTitle>
@@ -704,196 +732,197 @@ export default function TransactionsList({
               </DialogDescription>
             </DialogHeader>
 
-            {error && (
-              <Alert variant="destructive" className="py-2">
-                <AlertDescription className="text-xs">{error}</AlertDescription>
-              </Alert>
-            )}
+            <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-4 py-3 min-h-0">
+              {error && (
+                <Alert variant="destructive" className="py-2">
+                  <AlertDescription className="text-xs">{error}</AlertDescription>
+                </Alert>
+              )}
 
-            <div className="flex bg-muted p-1 rounded-lg border border-border/20">
-              {(["expense", "income"] as const).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => handleEditTypeChange(type)}
-                  className={cn(
-                    "flex-1 h-9 rounded-md text-xs font-semibold tracking-wide transition-all capitalize cursor-pointer",
-                    editType === type
-                      ? "bg-white dark:bg-zinc-800 text-foreground shadow-xs"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {type}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold text-muted-foreground">
-                Amount
-              </Label>
-              <Input
-                type="number"
-                step="any"
-                inputMode="decimal"
-                value={editAmount}
-                onChange={(e) => setEditAmount(e.target.value)}
-                className="h-11 rounded-xl font-semibold"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold text-muted-foreground">
-                Account
-              </Label>
-              <Select value={editAccountId} onValueChange={setEditAccountId}>
-                <SelectTrigger className="h-11 rounded-xl text-sm font-semibold">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {accounts.map((acc) => (
-                    <SelectItem key={acc.id} value={acc.id} className="text-sm">
-                      {acc.name}{" "}
-                      <span className="text-muted-foreground">
-                        ({acc.currency})
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {editType === "expense" && (
-              <>
-                <div className="flex flex-col gap-1.5">
-                  <Label className="text-xs font-semibold text-muted-foreground">
-                    Category
-                  </Label>
-                  <Select
-                    value={editCategory}
-                    onValueChange={(value) =>
-                      handleEditCategoryChange(value as TransactionCategory)
-                    }
+              <div className="flex bg-muted p-1 rounded-lg border border-border/20">
+                {(["expense", "income"] as const).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => handleEditTypeChange(type)}
+                    className={cn(
+                      "flex-1 h-9 rounded-md text-xs font-semibold tracking-wide transition-all capitalize cursor-pointer",
+                      editType === type
+                        ? "bg-white dark:bg-zinc-800 text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
                   >
-                    <SelectTrigger className="h-11 rounded-xl text-sm font-semibold">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pocket_money" className="text-sm">
-                        Pocket Money
-                      </SelectItem>
-                      <SelectItem value="shopping" className="text-sm">
-                        Shopping
-                      </SelectItem>
-                      <SelectItem value="template" className="text-sm">
-                        Template
-                      </SelectItem>
-                      <SelectItem value="adjustment" className="text-sm">
-                        Adjustment
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                    {type}
+                  </button>
+                ))}
+              </div>
 
-                {["pocket_money", "shopping"].includes(editCategory) && (
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground">
+                  Amount
+                </Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={editAmount}
+                  onChange={(e) => setEditAmount(formatInputAmount(e.target.value))}
+                  className="h-11 rounded-xl font-semibold"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground">
+                  Account
+                </Label>
+                <Select value={editAccountId} onValueChange={setEditAccountId}>
+                  <SelectTrigger className="h-11 rounded-xl text-sm font-semibold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map((acc) => (
+                      <SelectItem key={acc.id} value={acc.id} className="text-sm">
+                        {acc.name}{" "}
+                        <span className="text-muted-foreground">
+                          ({acc.currency})
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {editType === "expense" && (
+                <>
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-xs font-semibold text-muted-foreground">
-                      Sub-category
+                      Category
                     </Label>
                     <Select
-                      value={editSubCategory}
-                      onValueChange={(value) => {
-                        setEditSubCategory(value);
-                        setEditMealNumber(value === "food" ? 1 : null);
-                      }}
+                      value={editCategory}
+                      onValueChange={(value) =>
+                        handleEditCategoryChange(value as TransactionCategory)
+                      }
                     >
                       <SelectTrigger className="h-11 rounded-xl text-sm font-semibold">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {editSubcatOptions.map((opt) => (
-                          <SelectItem
-                            key={opt.value}
-                            value={opt.value}
-                            className="text-sm"
-                          >
-                            {opt.label}
-                          </SelectItem>
-                        ))}
+                        <SelectItem value="pocket_money" className="text-sm">
+                          Pocket Money
+                        </SelectItem>
+                        <SelectItem value="shopping" className="text-sm">
+                          Shopping
+                        </SelectItem>
+                        <SelectItem value="template" className="text-sm">
+                          Template
+                        </SelectItem>
+                        <SelectItem value="adjustment" className="text-sm">
+                          Adjustment
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                )}
 
-                {editCategory === "pocket_money" &&
-                  editSubCategory === "food" && (
-                    <div className="flex flex-col gap-2 p-3 bg-primary/5 border border-primary/10 rounded-xl">
-                      <Label className="text-[10px] font-bold tracking-wide text-primary uppercase">
-                        Which meal?
+                  {["pocket_money", "shopping"].includes(editCategory) && (
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs font-semibold text-muted-foreground">
+                        Sub-category
                       </Label>
-                      <div className="flex gap-2">
-                        {[1, 2, 3, 4].map((meal) => (
-                          <button
-                            key={meal}
-                            type="button"
-                            onClick={() => setEditMealNumber(meal)}
-                            className={cn(
-                              "flex-1 h-8 rounded-lg border text-xs font-semibold transition-all",
-                              editMealNumber === meal
-                                ? "bg-primary text-primary-foreground border-transparent"
-                                : "bg-white dark:bg-zinc-900 border-border text-foreground hover:bg-muted",
-                            )}
-                          >
-                            {meal}
-                          </button>
-                        ))}
-                      </div>
+                      <Select
+                        value={editSubCategory}
+                        onValueChange={(value) => {
+                          setEditSubCategory(value);
+                          setEditMealNumber(value === "food" ? 1 : null);
+                        }}
+                      >
+                        <SelectTrigger className="h-11 rounded-xl text-sm font-semibold">
+                          <SelectValue placeholder="Select sub-category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {editSubcatOptions.map((opt) => (
+                            <SelectItem
+                              key={opt.value}
+                              value={opt.value}
+                              className="text-sm"
+                            >
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   )}
-              </>
-            )}
 
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold text-muted-foreground">
-                Description
-              </Label>
-              <Input
-                value={editDescription}
-                onChange={(e) => setEditDescription(e.target.value)}
-                className="h-11 rounded-xl"
-                placeholder="Optional"
-              />
+                  {editCategory === "pocket_money" &&
+                    editSubCategory === "food" && (
+                      <div className="flex flex-col gap-2 p-3 bg-primary/5 border border-primary/10 rounded-xl">
+                        <Label className="text-[10px] font-bold tracking-wide text-primary uppercase">
+                          Which meal?
+                        </Label>
+                        <div className="flex gap-2">
+                          {[1, 2, 3, 4].map((meal) => (
+                            <button
+                              key={meal}
+                              type="button"
+                              onClick={() => setEditMealNumber(meal)}
+                              className={cn(
+                                "flex-1 h-8 rounded-lg border text-xs font-semibold transition-all",
+                                editMealNumber === meal
+                                  ? "bg-primary text-primary-foreground border-transparent"
+                                  : "bg-white dark:bg-zinc-900 border-border text-foreground hover:bg-muted",
+                              )}
+                            >
+                              {meal}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                </>
+              )}
+
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground">
+                  Description
+                </Label>
+                <Input
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="h-11 rounded-xl"
+                  placeholder="Optional"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground">
+                  Date
+                </Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 justify-start rounded-xl bg-white px-3 text-sm font-semibold dark:bg-zinc-900"
+                    >
+                      <IconCalendar className="size-4 text-muted-foreground" />
+                      {formatDisplayDate(editDate)}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={editDate}
+                      onSelect={(selectedDate) => {
+                        if (selectedDate) setEditDate(selectedDate);
+                      }}
+                      autoFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold text-muted-foreground">
-                Date
-              </Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-11 justify-start rounded-xl bg-white px-3 text-sm font-semibold dark:bg-zinc-900"
-                  >
-                    <IconCalendar className="size-4 text-muted-foreground" />
-                    {formatDisplayDate(editDate)}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={editDate}
-                    onSelect={(selectedDate) => {
-                      if (selectedDate) setEditDate(selectedDate);
-                    }}
-                    autoFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <DialogFooter className="gap-2">
+            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
               <Button
                 variant="outline"
                 size="sm"
