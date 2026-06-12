@@ -196,7 +196,7 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
         <DialogContent className="max-w-[400px] rounded-2xl p-0">
           <form onSubmit={handleSubmit} className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-serif text-xl">Add Transaction</DialogTitle>
+              <DialogTitle className="font-sans text-xl">Add Transaction</DialogTitle>
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-4 py-3">

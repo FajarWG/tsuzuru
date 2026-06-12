@@ -1,5 +1,6 @@
 "use server";
 
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
@@ -66,6 +67,49 @@ export async function updateAccountsAction(
     return { success: true };
   } catch (error) {
     console.error("Failed to update accounts:", error);
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+export async function resetUserSettingsAndDataAction() {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+  const userId = session.user.id;
+
+  try {
+    // Delete user's related data and reset settings in a transaction
+    await prisma.$transaction([
+      prisma.transaction.deleteMany({
+        where: { userId },
+      }),
+      prisma.monthlyTemplate.deleteMany({
+        where: { userId },
+      }),
+      prisma.billFriend.deleteMany({
+        where: { userId },
+      }),
+      prisma.account.deleteMany({
+        where: { userId },
+      }),
+      prisma.userSettings.update({
+        where: { userId },
+        data: {
+          monthlyBudget: 0,
+          pocketMoneyLimit: 0,
+          shoppingLimit: 0,
+          budgetCurrency: "JPY", // reset to default currency
+        },
+      }),
+    ]);
+
+    revalidatePath("/");
+    revalidatePath("/settings");
+    revalidatePath("/transactions");
+    revalidatePath("/monthly-templates");
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to reset user settings and data:", error);
     return { success: false, error: (error as Error).message };
   }
 }

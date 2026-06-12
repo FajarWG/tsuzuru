@@ -166,7 +166,7 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
           >
             <IconArrowLeft className="size-5" />
           </button>
-          <h1 className="font-serif text-2xl font-bold tracking-wide text-primary">
+          <h1 className="font-sans text-2xl font-bold tracking-wide text-primary">
             Add Transaction
           </h1>
         </div>

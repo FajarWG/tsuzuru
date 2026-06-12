@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { formatJPY, formatIDR } from "@/lib/format";
 import { motion, AnimatePresence } from "framer-motion";
+import AnimatedNumber from "@/components/ui/AnimatedNumber";
 import {
   IconBuildingBank,
   IconCreditCard,
@@ -106,7 +107,11 @@ export default function BalanceSummaryCard({
           <div>
             <p className="text-[10px] text-muted-foreground tracking-wide font-medium">JPY Balance</p>
             <p className="text-2xl font-sans font-bold tracking-tight text-foreground mt-1">
-              {hideBalances ? "••••••" : formatJPY(totalJPY)}
+              {hideBalances ? (
+                "••••••"
+              ) : (
+                <AnimatedNumber value={totalJPY} formatFn={formatJPY} />
+              )}
             </p>
           </div>
         )}
@@ -117,7 +122,11 @@ export default function BalanceSummaryCard({
               "font-sans font-bold tracking-tight text-foreground",
               hasJPY ? "text-xl mt-1.5" : "text-2xl mt-1"
             )}>
-              {hideBalances ? "••••••" : formatIDR(totalIDR)}
+              {hideBalances ? (
+                "••••••"
+              ) : (
+                <AnimatedNumber value={totalIDR} formatFn={formatIDR} />
+              )}
             </p>
           </div>
         )}
@@ -144,11 +153,14 @@ export default function BalanceSummaryCard({
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="font-sans font-semibold text-muted-foreground">
-                      {hideBalances
-                        ? "••••••"
-                        : acc.currency === "JPY"
-                        ? formatJPY(acc.balance)
-                        : formatIDR(acc.balance)}
+                      {hideBalances ? (
+                        "••••••"
+                      ) : (
+                        <AnimatedNumber
+                          value={acc.balance}
+                          formatFn={acc.currency === "JPY" ? formatJPY : formatIDR}
+                        />
+                      )}
                     </span>
                   </div>
                 </div>

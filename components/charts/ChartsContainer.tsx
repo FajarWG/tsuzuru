@@ -78,7 +78,7 @@ export default function ChartsContainer({
     <div className="flex flex-col gap-6 pb-10">
       {/* Header */}
       <div>
-        <h1 className="font-serif text-2xl font-bold tracking-wide text-primary">
+        <h1 className="font-sans text-2xl font-bold tracking-wide text-primary">
           Spending Analytics
         </h1>
         <p className="text-xs text-muted-foreground mt-1">

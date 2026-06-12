@@ -9,6 +9,7 @@ import WelcomeDialog from "@/components/dashboard/WelcomeDialog";
 import MonthlyInsightsCard from "@/components/dashboard/MonthlyInsightsCard";
 import AnimatedCard from "@/components/ui/AnimatedCard";
 import Skeleton from "@/components/ui/skeleton";
+import AnimatedNumber from "@/components/ui/AnimatedNumber";
 import {
   IconCurrencyYen,
   IconPizza,
@@ -188,7 +189,10 @@ async function BudgetProgressSection({
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Remaining Budget</span>
               <span className="text-sm font-bold text-foreground">
-                {formatFn(budgetRemaining)} <span className="text-xs font-normal text-muted-foreground">left of {formatFn(budgetExpectation)}</span>
+                <AnimatedNumber value={budgetRemaining} formatFn={formatFn} />{" "}
+                <span className="text-xs font-normal text-muted-foreground">
+                  left of <AnimatedNumber value={budgetExpectation} formatFn={formatFn} />
+                </span>
               </span>
               <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
                 {budgetRemaining > 0 
@@ -206,7 +210,10 @@ async function BudgetProgressSection({
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Pocket Money</span>
               <span className="text-sm font-bold text-foreground">
-                {formatFn(pocketRemaining)} <span className="text-xs font-normal text-muted-foreground">left of {formatFn(pocketLimit)}</span>
+                <AnimatedNumber value={pocketRemaining} formatFn={formatFn} />{" "}
+                <span className="text-xs font-normal text-muted-foreground">
+                  left of <AnimatedNumber value={pocketLimit} formatFn={formatFn} />
+                </span>
               </span>
               <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
                 {pocketIsLow 
@@ -224,7 +231,10 @@ async function BudgetProgressSection({
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Shopping</span>
               <span className="text-sm font-bold text-foreground">
-                {formatFn(shoppingRemaining)} <span className="text-xs font-normal text-muted-foreground">left of {formatFn(shoppingLimit)}</span>
+                <AnimatedNumber value={shoppingRemaining} formatFn={formatFn} />{" "}
+                <span className="text-xs font-normal text-muted-foreground">
+                  left of <AnimatedNumber value={shoppingLimit} formatFn={formatFn} />
+                </span>
               </span>
               <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
                 {shoppingIsLow 
@@ -337,7 +347,7 @@ export default async function DashboardPage() {
           <p className="text-xs text-muted-foreground tracking-wide font-sans">
             {greeting}, {session.user.name?.split(" ")[0]}
           </p>
-          <h1 className="font-serif text-3xl font-bold tracking-wide text-primary mt-0.5">
+          <h1 className="font-sans text-3xl font-bold tracking-wide text-primary mt-0.5">
             綴る
           </h1>
         </div>

@@ -436,31 +436,30 @@ export default function TransactionsList({
         className="flex flex-col gap-4"
       >
         <div className="flex justify-between items-center">
-          <h1 className="font-serif text-2xl font-bold tracking-wide text-primary">
+          <h1 className="font-sans text-2xl font-bold tracking-wide text-primary">
             Transactions
           </h1>
         </div>
 
         {/* Search Input & Reset Button */}
-        <div className="flex gap-2">
-          <div className="flex-1 relative flex items-center bg-white dark:bg-zinc-900 border border-border/50 rounded-2xl px-4 h-12 shadow-2xs">
-            <IconSearch className="size-4 text-muted-foreground mr-2" />
+        <div className="flex gap-2 w-full min-w-0">
+          <div className="flex-1 min-w-0 relative flex items-center bg-white dark:bg-zinc-900 border border-border/50 rounded-2xl px-4 h-12 shadow-2xs">
+            <IconSearch className="size-4 text-muted-foreground shrink-0 mr-2" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search descriptions, categories, accounts..."
-              className="flex-1 h-full bg-transparent text-base md:text-xs font-medium focus:outline-none text-foreground"
+              placeholder="Search transactions..."
+              className="w-full min-w-0 h-full bg-transparent text-base md:text-xs font-medium focus:outline-none text-foreground"
             />
           </div>
           <Button
             variant={showFilters ? "secondary" : "outline"}
-            className="h-12 px-4 rounded-2xl shrink-0 bg-white dark:bg-zinc-900 cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
+            className="h-12 w-12 rounded-2xl shrink-0 bg-white dark:bg-zinc-900 cursor-pointer flex items-center justify-center"
             onClick={() => setShowFilters(!showFilters)}
             aria-label="Toggle filters"
           >
             <IconFilter className="size-4" />
-            Filter
           </Button>
         </div>
       </motion.div>
@@ -724,7 +723,7 @@ export default function TransactionsList({
         <DialogContent className="max-w-[400px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-serif text-xl">
+              <DialogTitle className="font-sans text-xl">
                 Edit Transaction
               </DialogTitle>
               <DialogDescription className="text-xs">
@@ -956,7 +955,7 @@ export default function TransactionsList({
       >
         <DialogContent className="max-w-[360px] rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="font-serif">Delete Transaction</DialogTitle>
+            <DialogTitle className="font-sans">Delete Transaction</DialogTitle>
             <DialogDescription className="text-xs">
               This will remove the transaction and reverse its balance effect.
             </DialogDescription>
