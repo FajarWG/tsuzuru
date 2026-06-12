@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { formatInputAmount, parseInputAmount } from "@/lib/format";
 
 interface UserSettingsData {
   monthlyBudget: number;
@@ -102,13 +103,13 @@ export default function SettingsForm({
 }: SettingsFormProps) {
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [monthlyBudget, setMonthlyBudget] = useState(
-    String(userSettings.monthlyBudget),
+    formatInputAmount(userSettings.monthlyBudget),
   );
   const [pocketMoneyLimit, setPocketMoneyLimit] = useState(
-    String(userSettings.pocketMoneyLimit),
+    formatInputAmount(userSettings.pocketMoneyLimit),
   );
   const [shoppingLimit, setShoppingLimit] = useState(
-    String(userSettings.shoppingLimit),
+    formatInputAmount(userSettings.shoppingLimit),
   );
   const [isSavingBudget, setIsSavingBudget] = useState(false);
   const [budgetSuccess, setBudgetSuccess] = useState(false);
@@ -146,14 +147,9 @@ export default function SettingsForm({
   const [deleteAccError, setDeleteAccError] = useState<string | null>(null);
 
   const handleSaveBudget = async () => {
-    const budgetVal = parseFloat(monthlyBudget);
-    const pocketVal = parseFloat(pocketMoneyLimit);
-    const shoppingVal = parseFloat(shoppingLimit);
-
-    if (isNaN(budgetVal) || isNaN(pocketVal) || isNaN(shoppingVal)) {
-      setBudgetError("Please enter valid numbers");
-      return;
-    }
+    const budgetVal = parseInputAmount(monthlyBudget);
+    const pocketVal = parseInputAmount(pocketMoneyLimit);
+    const shoppingVal = parseInputAmount(shoppingLimit);
 
     setIsSavingBudget(true);
     setBudgetError(null);
@@ -188,11 +184,7 @@ export default function SettingsForm({
       setAddAccError("Please enter account name");
       return;
     }
-    const parsedBalance = parseFloat(addAccBalance);
-    if (isNaN(parsedBalance)) {
-      setAddAccError("Please enter a valid balance");
-      return;
-    }
+    const parsedBalance = parseInputAmount(addAccBalance);
 
     setIsAddingAcc(true);
     setAddAccError(null);
@@ -233,7 +225,7 @@ export default function SettingsForm({
     setEditAccName(acc.name);
     setEditAccCurrency(acc.currency);
     setEditAccType(acc.type);
-    setEditAccBalance(String(acc.balance));
+    setEditAccBalance(formatInputAmount(acc.balance));
     setEditAccIsActive(acc.isActive);
     setEditAccError(null);
   };
@@ -244,11 +236,7 @@ export default function SettingsForm({
       setEditAccError("Please enter account name");
       return;
     }
-    const parsedBalance = parseFloat(editAccBalance);
-    if (isNaN(parsedBalance)) {
-      setEditAccError("Please enter a valid balance");
-      return;
-    }
+    const parsedBalance = parseInputAmount(editAccBalance);
 
     setIsSavingAcc(true);
     setEditAccError(null);
@@ -370,6 +358,9 @@ export default function SettingsForm({
                 variant="outline"
                 size="icon-xs"
                 onClick={() => {
+                  setMonthlyBudget(formatInputAmount(userSettings.monthlyBudget));
+                  setPocketMoneyLimit(formatInputAmount(userSettings.pocketMoneyLimit));
+                  setShoppingLimit(formatInputAmount(userSettings.shoppingLimit));
                   setBudgetOpen(true);
                   setBudgetError(null);
                   setBudgetSuccess(false);
@@ -558,106 +549,111 @@ export default function SettingsForm({
           if (!isSavingBudget) setBudgetOpen(open);
         }}
       >
-        <DialogContent className="max-w-[360px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="font-serif">Budget Settings</DialogTitle>
-            <DialogDescription className="text-xs">
-              Set your monthly spending limits in JPY.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-[360px] rounded-2xl p-0">
+          <div className="flex flex-col max-h-[85vh] p-5">
+            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
+              <DialogTitle className="font-serif">Budget Settings</DialogTitle>
+              <DialogDescription className="text-xs">
+                Set your monthly spending limits in JPY.
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="flex flex-col gap-4 py-2">
-            {budgetError && (
-              <Alert variant="destructive" className="py-2">
-                <AlertDescription className="text-xs">
-                  {budgetError}
-                </AlertDescription>
-              </Alert>
-            )}
+            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+              {budgetError && (
+                <Alert variant="destructive" className="py-2">
+                  <AlertDescription className="text-xs">
+                    {budgetError}
+                  </AlertDescription>
+                </Alert>
+              )}
 
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold">
-                Monthly Expected Budget
-              </Label>
-              <div className="relative flex items-center">
-                <span className="absolute left-3 text-sm font-bold text-muted-foreground">
-                  ¥
-                </span>
-                <Input
-                  type="number"
-                  value={monthlyBudget}
-                  onChange={(e) => setMonthlyBudget(e.target.value)}
-                  className="pl-7 h-10 font-semibold"
-                  placeholder="150000"
-                />
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs font-semibold">
-                  Pocket Money Limit
+                  Monthly Expected Budget
                 </Label>
                 <div className="relative flex items-center">
                   <span className="absolute left-3 text-sm font-bold text-muted-foreground">
                     ¥
                   </span>
                   <Input
-                    type="number"
-                    value={pocketMoneyLimit}
-                    onChange={(e) => setPocketMoneyLimit(e.target.value)}
+                    type="text"
+                    inputMode="numeric"
+                    value={monthlyBudget}
+                    onChange={(e) => setMonthlyBudget(formatInputAmount(e.target.value))}
                     className="pl-7 h-10 font-semibold"
-                    placeholder="40000"
+                    placeholder="150,000"
                   />
                 </div>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold">Shopping Limit</Label>
-                <div className="relative flex items-center">
-                  <span className="absolute left-3 text-sm font-bold text-muted-foreground">
-                    ¥
-                  </span>
-                  <Input
-                    type="number"
-                    value={shoppingLimit}
-                    onChange={(e) => setShoppingLimit(e.target.value)}
-                    className="pl-7 h-10 font-semibold"
-                    placeholder="60000"
-                  />
+
+              <Separator />
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-xs font-semibold">
+                    Pocket Money Limit
+                  </Label>
+                  <div className="relative flex items-center">
+                    <span className="absolute left-3 text-sm font-bold text-muted-foreground">
+                      ¥
+                    </span>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={pocketMoneyLimit}
+                      onChange={(e) => setPocketMoneyLimit(formatInputAmount(e.target.value))}
+                      className="pl-7 h-10 font-semibold"
+                      placeholder="40,000"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-xs font-semibold">Shopping Limit</Label>
+                  <div className="relative flex items-center">
+                    <span className="absolute left-3 text-sm font-bold text-muted-foreground">
+                      ¥
+                    </span>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={shoppingLimit}
+                      onChange={(e) => setShoppingLimit(formatInputAmount(e.target.value))}
+                      className="pl-7 h-10 font-semibold"
+                      placeholder="60,000"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setBudgetOpen(false)}
-              disabled={isSavingBudget}
-              className="cursor-pointer"
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleSaveBudget}
-              disabled={isSavingBudget}
-              className="min-w-[72px] cursor-pointer"
-            >
-              {isSavingBudget ? (
-                <IconLoader className="size-4 animate-spin" />
-              ) : budgetSuccess ? (
-                <>
-                  <IconCheck className="size-4" /> Saved
-                </>
-              ) : (
-                "Save"
-              )}
-            </Button>
-          </DialogFooter>
+            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setBudgetOpen(false)}
+                disabled={isSavingBudget}
+                className="cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSaveBudget}
+                disabled={isSavingBudget}
+                className="min-w-[72px] cursor-pointer"
+              >
+                {isSavingBudget ? (
+                  <IconLoader className="size-4 animate-spin" />
+                ) : budgetSuccess ? (
+                  <>
+                    <IconCheck className="size-4" /> Saved
+                  </>
+                ) : (
+                  "Save"
+                )}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -668,119 +664,121 @@ export default function SettingsForm({
           if (!isAddingAcc) setAddAccountOpen(open);
         }}
       >
-        <DialogContent className="max-w-[360px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="font-serif">Add Account</DialogTitle>
-            <DialogDescription className="text-xs">
-              Create a new financial account.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-[360px] rounded-2xl p-0">
+          <div className="flex flex-col max-h-[85vh] p-5">
+            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
+              <DialogTitle className="font-serif">Add Account</DialogTitle>
+              <DialogDescription className="text-xs">
+                Create a new financial account.
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="flex flex-col gap-4 py-2">
-            {addAccError && (
-              <Alert variant="destructive" className="py-2">
-                <AlertDescription className="text-xs">
-                  {addAccError}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold">Account Name</Label>
-              <Input
-                value={addAccName}
-                onChange={(e) => setAddAccName(e.target.value)}
-                className="h-10 font-semibold"
-                placeholder="e.g. Yucho Bank"
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold">Currency</Label>
-                <Select
-                  value={addAccCurrency}
-                  onValueChange={setAddAccCurrency}
-                >
-                  <SelectTrigger className="h-10 text-xs font-semibold">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="JPY" className="text-xs">
-                      JPY (¥)
-                    </SelectItem>
-                    <SelectItem value="IDR" className="text-xs">
-                      IDR (Rp)
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold">Account Type</Label>
-                <Select value={addAccType} onValueChange={setAddAccType}>
-                  <SelectTrigger className="h-10 text-xs font-semibold capitalize">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bank" className="text-xs font-medium">
-                      Bank
-                    </SelectItem>
-                    <SelectItem
-                      value="ewallet"
-                      className="text-xs font-medium font-sans"
-                    >
-                      E-Wallet
-                    </SelectItem>
-                    <SelectItem
-                      value="investment"
-                      className="text-xs font-medium"
-                    >
-                      Investment
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold">Initial Balance</Label>
-              <Input
-                type="number"
-                step="any"
-                value={addAccBalance}
-                onChange={(e) => setAddAccBalance(e.target.value)}
-                className="h-10 font-semibold"
-                placeholder="0"
-                required
-              />
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setAddAccountOpen(false)}
-              disabled={isAddingAcc}
-              className="cursor-pointer"
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleAddAccount}
-              disabled={isAddingAcc}
-              className="min-w-[72px] cursor-pointer"
-            >
-              {isAddingAcc ? (
-                <IconLoader className="size-4 animate-spin" />
-              ) : (
-                "Add"
+            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+              {addAccError && (
+                <Alert variant="destructive" className="py-2">
+                  <AlertDescription className="text-xs">
+                    {addAccError}
+                  </AlertDescription>
+                </Alert>
               )}
-            </Button>
-          </DialogFooter>
+
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Account Name</Label>
+                <Input
+                  value={addAccName}
+                  onChange={(e) => setAddAccName(e.target.value)}
+                  className="h-10 font-semibold"
+                  placeholder="e.g. Yucho Bank"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-xs font-semibold">Currency</Label>
+                  <Select
+                    value={addAccCurrency}
+                    onValueChange={setAddAccCurrency}
+                  >
+                    <SelectTrigger className="h-10 text-xs font-semibold">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="JPY" className="text-xs">
+                        JPY (¥)
+                      </SelectItem>
+                      <SelectItem value="IDR" className="text-xs">
+                        IDR (Rp)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-xs font-semibold">Account Type</Label>
+                  <Select value={addAccType} onValueChange={setAddAccType}>
+                    <SelectTrigger className="h-10 text-xs font-semibold capitalize">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bank" className="text-xs font-medium">
+                        Bank
+                      </SelectItem>
+                      <SelectItem
+                        value="ewallet"
+                        className="text-xs font-medium font-sans"
+                      >
+                        E-Wallet
+                      </SelectItem>
+                      <SelectItem
+                        value="investment"
+                        className="text-xs font-medium"
+                      >
+                        Investment
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Initial Balance</Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={addAccBalance}
+                  onChange={(e) => setAddAccBalance(formatInputAmount(e.target.value))}
+                  className="h-10 font-semibold"
+                  placeholder="0"
+                  required
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAddAccountOpen(false)}
+                disabled={isAddingAcc}
+                className="cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleAddAccount}
+                disabled={isAddingAcc}
+                className="min-w-[72px] cursor-pointer"
+              >
+                {isAddingAcc ? (
+                  <IconLoader className="size-4 animate-spin" />
+                ) : (
+                  "Add"
+                )}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -791,148 +789,150 @@ export default function SettingsForm({
           if (!isSavingAcc && !open) setEditingAccount(null);
         }}
       >
-        <DialogContent className="max-w-[360px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="font-serif">Edit Account</DialogTitle>
-            <DialogDescription className="text-xs">
-              Update financial account details.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-[360px] rounded-2xl p-0">
+          <div className="flex flex-col max-h-[85vh] p-5">
+            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
+              <DialogTitle className="font-serif">Edit Account</DialogTitle>
+              <DialogDescription className="text-xs">
+                Update financial account details.
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="flex flex-col gap-4 py-2">
-            {editAccError && (
-              <Alert variant="destructive" className="py-2">
-                <AlertDescription className="text-xs">
-                  {editAccError}
-                </AlertDescription>
-              </Alert>
-            )}
+            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+              {editAccError && (
+                <Alert variant="destructive" className="py-2">
+                  <AlertDescription className="text-xs">
+                    {editAccError}
+                  </AlertDescription>
+                </Alert>
+              )}
 
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold">Account Name</Label>
-              <Input
-                value={editAccName}
-                onChange={(e) => setEditAccName(e.target.value)}
-                className="h-10 font-semibold"
-                placeholder="e.g. Yucho Bank"
-                required
-              />
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Account Name</Label>
+                <Input
+                  value={editAccName}
+                  onChange={(e) => setEditAccName(e.target.value)}
+                  className="h-10 font-semibold"
+                  placeholder="e.g. Yucho Bank"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-xs font-semibold">Currency</Label>
+                  <Select
+                    value={editAccCurrency}
+                    onValueChange={setEditAccCurrency}
+                  >
+                    <SelectTrigger className="h-10 text-xs font-semibold">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="JPY" className="text-xs">
+                        JPY (¥)
+                      </SelectItem>
+                      <SelectItem value="IDR" className="text-xs">
+                        IDR (Rp)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-xs font-semibold">Account Type</Label>
+                  <Select value={editAccType} onValueChange={setEditAccType}>
+                    <SelectTrigger className="h-10 text-xs font-semibold capitalize">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bank" className="text-xs font-medium">
+                        Bank
+                      </SelectItem>
+                      <SelectItem
+                        value="ewallet"
+                        className="text-xs font-medium font-sans"
+                      >
+                        E-Wallet
+                      </SelectItem>
+                      <SelectItem
+                        value="investment"
+                        className="text-xs font-medium"
+                      >
+                        Investment
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Balance</Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={editAccBalance}
+                  onChange={(e) => setEditAccBalance(formatInputAmount(e.target.value))}
+                  className="h-10 font-semibold"
+                  placeholder="0"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center justify-between rounded-xl bg-muted/40 p-3 border border-border/10">
+                <div className="flex flex-col gap-0.5">
+                  <Label className="text-xs font-semibold">Active Status</Label>
+                  <span className="text-[10px] text-muted-foreground">
+                    Inactive accounts are hidden from transaction entry fields.
+                  </span>
+                </div>
+                <Switch
+                  checked={editAccIsActive}
+                  onCheckedChange={setEditAccIsActive}
+                />
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold">Currency</Label>
-                <Select
-                  value={editAccCurrency}
-                  onValueChange={setEditAccCurrency}
+            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 flex-row justify-between items-center gap-2 sm:justify-between">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:bg-destructive/10 cursor-pointer"
+                onClick={() => {
+                  if (editingAccount) {
+                    setDeletingAccount(editingAccount);
+                    setEditingAccount(null);
+                  }
+                }}
+                disabled={isSavingAcc}
+              >
+                <IconTrash className="size-4 mr-1" /> Delete
+              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditingAccount(null)}
+                  disabled={isSavingAcc}
+                  className="cursor-pointer"
                 >
-                  <SelectTrigger className="h-10 text-xs font-semibold">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="JPY" className="text-xs">
-                      JPY (¥)
-                    </SelectItem>
-                    <SelectItem value="IDR" className="text-xs">
-                      IDR (Rp)
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveAccount}
+                  disabled={isSavingAcc}
+                  className="min-w-[72px] cursor-pointer"
+                >
+                  {isSavingAcc ? (
+                    <IconLoader className="size-4 animate-spin" />
+                  ) : (
+                    "Save"
+                  )}
+                </Button>
               </div>
-
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold">Account Type</Label>
-                <Select value={editAccType} onValueChange={setEditAccType}>
-                  <SelectTrigger className="h-10 text-xs font-semibold capitalize">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bank" className="text-xs font-medium">
-                      Bank
-                    </SelectItem>
-                    <SelectItem
-                      value="ewallet"
-                      className="text-xs font-medium font-sans"
-                    >
-                      E-Wallet
-                    </SelectItem>
-                    <SelectItem
-                      value="investment"
-                      className="text-xs font-medium"
-                    >
-                      Investment
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold">Balance</Label>
-              <Input
-                type="number"
-                step="any"
-                value={editAccBalance}
-                onChange={(e) => setEditAccBalance(e.target.value)}
-                className="h-10 font-semibold"
-                placeholder="0"
-                required
-              />
-            </div>
-
-            <div className="flex items-center justify-between rounded-xl bg-muted/40 p-3 border border-border/10">
-              <div className="flex flex-col gap-0.5">
-                <Label className="text-xs font-semibold">Active Status</Label>
-                <span className="text-[10px] text-muted-foreground">
-                  Inactive accounts are hidden from transaction entry fields.
-                </span>
-              </div>
-              <Switch
-                checked={editAccIsActive}
-                onCheckedChange={setEditAccIsActive}
-              />
-            </div>
+            </DialogFooter>
           </div>
-
-          <DialogFooter className="flex-row justify-between items-center gap-2 sm:justify-between">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:bg-destructive/10 cursor-pointer"
-              onClick={() => {
-                if (editingAccount) {
-                  setDeletingAccount(editingAccount);
-                  setEditingAccount(null);
-                }
-              }}
-              disabled={isSavingAcc}
-            >
-              <IconTrash className="size-4 mr-1" /> Delete
-            </Button>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setEditingAccount(null)}
-                disabled={isSavingAcc}
-                className="cursor-pointer"
-              >
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleSaveAccount}
-                disabled={isSavingAcc}
-                className="min-w-[72px] cursor-pointer"
-              >
-                {isSavingAcc ? (
-                  <IconLoader className="size-4 animate-spin" />
-                ) : (
-                  "Save"
-                )}
-              </Button>
-            </div>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -943,57 +943,61 @@ export default function SettingsForm({
           if (!isDeletingAcc && !open) setDeletingAccount(null);
         }}
       >
-        <DialogContent className="max-w-[360px] rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="font-serif text-destructive">
-              Delete Account
-            </DialogTitle>
-            <DialogDescription className="text-xs leading-relaxed">
-              Are you sure you want to delete{" "}
-              <strong className="text-foreground font-bold">
-                "{deletingAccount?.name}"
-              </strong>
-              ?
-              <span className="block mt-1 text-destructive font-semibold">
-                ⚠️ WARNING: All transactions and monthly bill templates linked
-                to this account will be permanently deleted! This action cannot
-                be undone.
-              </span>
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-[360px] rounded-2xl p-0">
+          <div className="flex flex-col max-h-[85vh] p-5">
+            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
+              <DialogTitle className="font-serif text-destructive">
+                Delete Account
+              </DialogTitle>
+              <DialogDescription className="text-xs leading-relaxed">
+                Are you sure you want to delete{" "}
+                <strong className="text-foreground font-bold">
+                  "{deletingAccount?.name}"
+                </strong>
+                ?
+                <span className="block mt-1 text-destructive font-semibold">
+                  ⚠️ WARNING: All transactions and monthly bill templates linked
+                  to this account will be permanently deleted! This action cannot
+                  be undone.
+                </span>
+              </DialogDescription>
+            </DialogHeader>
 
-          {deleteAccError && (
-            <Alert variant="destructive" className="py-2">
-              <AlertDescription className="text-xs">
-                {deleteAccError}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <DialogFooter className="gap-2 mt-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDeletingAccount(null)}
-              disabled={isDeletingAcc}
-              className="cursor-pointer"
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleDeleteAccount}
-              disabled={isDeletingAcc}
-              className="min-w-[72px] cursor-pointer"
-            >
-              {isDeletingAcc ? (
-                <IconLoader className="size-4 animate-spin" />
-              ) : (
-                "Delete"
+            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+              {deleteAccError && (
+                <Alert variant="destructive" className="py-2">
+                  <AlertDescription className="text-xs">
+                    {deleteAccError}
+                  </AlertDescription>
+                </Alert>
               )}
-            </Button>
-          </DialogFooter>
+            </div>
+
+            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2 mt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDeletingAccount(null)}
+                disabled={isDeletingAcc}
+                className="cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleDeleteAccount}
+                disabled={isDeletingAcc}
+                className="min-w-[72px] cursor-pointer"
+              >
+                {isDeletingAcc ? (
+                  <IconLoader className="size-4 animate-spin" />
+                ) : (
+                  "Delete"
+                )}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -8,23 +8,22 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme="system"
       position="top-center"
-      richColors
       className="toaster group"
       icons={{
         success: (
-          <IconCircleCheck className="size-4" />
+          <IconCircleCheck className="size-4 text-primary" />
         ),
         info: (
-          <IconInfoCircle className="size-4" />
+          <IconInfoCircle className="size-4 text-blue-500" />
         ),
         warning: (
-          <IconAlertTriangle className="size-4" />
+          <IconAlertTriangle className="size-4 text-amber-500" />
         ),
         error: (
-          <IconAlertOctagon className="size-4" />
+          <IconAlertOctagon className="size-4 text-destructive" />
         ),
         loading: (
-          <IconLoader className="size-4 animate-spin" />
+          <IconLoader className="size-4 animate-spin text-muted-foreground" />
         ),
       }}
       style={
@@ -37,7 +36,16 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }
       toastOptions={{
         classNames: {
-          toast: "cn-toast",
+          toast: "group toast group-[.toaster]:bg-popover group-[.toaster]:text-popover-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg border-l-4 rounded-xl px-4 py-3 flex items-center gap-3",
+          success: "group-[.toast]:border-l-primary! group-[.toast]:text-foreground!",
+          error: "group-[.toast]:border-l-destructive! group-[.toast]:text-foreground!",
+          warning: "group-[.toast]:border-l-amber-500! group-[.toast]:text-foreground!",
+          info: "group-[.toast]:border-l-blue-500! group-[.toast]:text-foreground!",
+          description: "group-[.toast]:text-muted-foreground",
+          actionButton:
+            "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
+          cancelButton:
+            "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
         },
       }}
       {...props}

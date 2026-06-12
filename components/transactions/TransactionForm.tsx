@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createTransactionAction } from "@/lib/actions/transactions";
 import { toast } from "sonner";
 import { IconArrowLeft, IconCalendar, IconLoader } from "@tabler/icons-react";
+import { formatInputAmount, parseInputAmount } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
@@ -58,7 +59,7 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
   const [amount, setAmount] = useState("");
   const [accountId, setAccountId] = useState(accounts[0]?.id || "");
   const [category, setCategory] = useState<"pocket_money" | "shopping">("pocket_money");
-  const [subCategory, setSubCategory] = useState("food");
+  const [subCategory, setSubCategory] = useState("");
   const [mealNumber, setMealNumber] = useState<number | null>(null);
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(() => new Date());
@@ -71,7 +72,7 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
 
   const handleCategoryChange = (cat: "pocket_money" | "shopping") => {
     setCategory(cat);
-    setSubCategory(cat === "pocket_money" ? "food" : "electronics");
+    setSubCategory("");
     setMealNumber(null);
   };
 
@@ -82,8 +83,13 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!amount || parseFloat(amount) <= 0) {
+    const parsedAmount = parseInputAmount(amount);
+    if (!amount || parsedAmount <= 0) {
       setError("Please enter a valid amount");
+      return;
+    }
+    if (type === "expense" && !subCategory) {
+      setError("Please select a sub-category");
       return;
     }
 
@@ -97,7 +103,7 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
           userId,
           accountId,
           type,
-          amount: parseFloat(amount),
+          amount: parsedAmount,
           category: type === "income" ? "income" : category,
           subCategory: type === "income" ? null : subCategory,
           mealNumber: type === "expense" && subCategory === "food" ? mealNumber : null,
@@ -126,7 +132,7 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
         userId,
         accountId,
         type,
-        amount: parseFloat(amount),
+        amount: parsedAmount,
         category: type === "income" ? "income" : category,
         subCategory: type === "income" ? null : subCategory,
         mealNumber: type === "expense" && subCategory === "food" ? mealNumber : null,
@@ -200,11 +206,10 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
               {currencySymbol}
             </span>
             <input
-              type="number"
-              step="any"
-              inputMode="decimal"
+              type="text"
+              inputMode="numeric"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => setAmount(formatInputAmount(e.target.value))}
               className="flex-1 h-full text-lg font-bold font-sans tracking-wide bg-transparent focus:outline-none text-foreground"
               placeholder="0"
               required
@@ -266,7 +271,7 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
               </Label>
               <Select value={subCategory} onValueChange={handleSubCategoryChange}>
                 <SelectTrigger className="h-12 rounded-2xl text-sm font-semibold px-4">
-                  <SelectValue />
+                  <SelectValue placeholder="Select sub-category" />
                 </SelectTrigger>
                 <SelectContent>
                   {subcatOptions.map((opt) => (

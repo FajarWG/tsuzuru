@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Noto_Serif_JP } from "next/font/google";
+import { Poppins, Noto_Serif_JP } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
@@ -7,7 +7,8 @@ import { Toaster } from "@/components/ui/sonner";
 import LoadingProvider from "@/components/layout/LoadingProvider";
 import PwaRegister from "@/components/layout/PwaRegister";
 
-const inter = Inter({
+const poppins = Poppins({
+  weight: ["300", "400", "500", "600", "700"],
   subsets: ["latin"],
   variable: "--font-sans",
 });
@@ -36,7 +37,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={cn("h-full", "antialiased", inter.variable, notoSerifJp.variable, "font-sans")}
+      className={cn("h-full", "antialiased", poppins.variable, notoSerifJp.variable, "font-sans")}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground animate-in fade-in duration-300">
         <LoadingProvider>{children}</LoadingProvider>
