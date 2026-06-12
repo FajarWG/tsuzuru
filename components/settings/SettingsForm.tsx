@@ -53,6 +53,7 @@ interface UserSettingsData {
   monthlyBudget: number;
   pocketMoneyLimit: number;
   shoppingLimit: number;
+  budgetCurrency: string;
 }
 
 interface AccountItem {
@@ -114,6 +115,39 @@ export default function SettingsForm({
   const [isSavingBudget, setIsSavingBudget] = useState(false);
   const [budgetSuccess, setBudgetSuccess] = useState(false);
   const [budgetError, setBudgetError] = useState<string | null>(null);
+
+  // Main Currency state
+  const [mainCurrency, setMainCurrency] = useState(userSettings.budgetCurrency || "JPY");
+  const [isSavingCurrency, setIsSavingCurrency] = useState(false);
+  const [currencySuccess, setCurrencySuccess] = useState(false);
+
+  const handleSaveCurrency = async () => {
+    setIsSavingCurrency(true);
+    try {
+      const res = await updateUserSettingsAction({
+        userId,
+        monthlyBudget: parseInputAmount(monthlyBudget),
+        pocketMoneyLimit: parseInputAmount(pocketMoneyLimit),
+        shoppingLimit: parseInputAmount(shoppingLimit),
+        budgetCurrency: mainCurrency,
+      });
+
+      if (res.success) {
+        toast.success("Main currency updated successfully");
+        setCurrencySuccess(true);
+        setTimeout(() => setCurrencySuccess(false), 2000);
+      } else {
+        toast.error(res.error || "Failed to update main currency");
+      }
+    } catch {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsSavingCurrency(false);
+    }
+  };
+
+  const budgetCurrencySymbol = userSettings.budgetCurrency === "JPY" ? "¥" : "Rp";
+  const budgetCurrencyPadding = userSettings.budgetCurrency === "JPY" ? "pl-7" : "pl-9";
 
   // Accounts CRUD state
   const [accountList, setAccountList] = useState<AccountItem[]>(accounts);
@@ -334,7 +368,7 @@ export default function SettingsForm({
             <div className="flex items-center gap-2 mb-4">
               <IconCalendarRepeat className="size-4 text-primary" />
               <h2 className="text-sm font-bold text-foreground">
-                Monthly Bills
+                Recurring Bills
               </h2>
             </div>
             <TemplatesConfigList
@@ -382,7 +416,7 @@ export default function SettingsForm({
                     Monthly Expected Budget
                   </span>
                   <span className="text-sm font-bold text-foreground mt-0.5">
-                    ¥{Number(userSettings.monthlyBudget).toLocaleString()}
+                    {formatCurrency(userSettings.monthlyBudget, userSettings.budgetCurrency)}
                   </span>
                   <p className="text-[10px] text-muted-foreground leading-relaxed mt-1">
                     Main spending limit for the entire month across all
@@ -401,7 +435,7 @@ export default function SettingsForm({
                     Pocket Money Limit
                   </span>
                   <span className="text-sm font-bold text-foreground mt-0.5">
-                    ¥{Number(userSettings.pocketMoneyLimit).toLocaleString()}
+                    {formatCurrency(userSettings.pocketMoneyLimit, userSettings.budgetCurrency)}
                   </span>
                   <p className="text-[10px] text-muted-foreground leading-relaxed mt-1">
                     Allowance allocated for daily items, snacks, transport, and
@@ -419,7 +453,7 @@ export default function SettingsForm({
                     Shopping Limit
                   </span>
                   <span className="text-sm font-bold text-foreground mt-0.5">
-                    ¥{Number(userSettings.shoppingLimit).toLocaleString()}
+                    {formatCurrency(userSettings.shoppingLimit, userSettings.budgetCurrency)}
                   </span>
                   <p className="text-[10px] text-muted-foreground leading-relaxed mt-1">
                     Allocation designated for non-daily purchases like buying
@@ -530,10 +564,47 @@ export default function SettingsForm({
               </div>
             </div>
 
+            {/* Main Currency Setting */}
+            <div className="flex flex-col gap-2 pt-4 border-t border-border/20">
+              <Label className="text-xs font-semibold">Main Currency</Label>
+              <div className="flex gap-2">
+                <Select value={mainCurrency} onValueChange={setMainCurrency}>
+                  <SelectTrigger className="h-10 text-xs font-semibold flex-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="JPY" className="text-xs">
+                      JPY (¥)
+                    </SelectItem>
+                    <SelectItem value="IDR" className="text-xs">
+                      IDR (Rp)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  size="sm"
+                  onClick={handleSaveCurrency}
+                  disabled={isSavingCurrency}
+                  className="h-10 min-w-[72px] text-xs font-medium cursor-pointer"
+                >
+                  {isSavingCurrency ? (
+                    <IconLoader className="size-3.5 animate-spin" />
+                  ) : currencySuccess ? (
+                    <IconCheck className="size-3.5" />
+                  ) : (
+                    "Save"
+                  )}
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
+                This sets your base budget currency. Dashboard widgets will format and track limits in this currency.
+              </p>
+            </div>
+
             <Button
               variant="destructive"
               onClick={() => signOut({ callbackUrl: "/login" })}
-              className="w-full gap-2 cursor-pointer"
+              className="w-full gap-2 cursor-pointer mt-2"
             >
               <IconLogout className="size-4" />
               Sign Out
@@ -554,7 +625,7 @@ export default function SettingsForm({
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
               <DialogTitle className="font-serif">Budget Settings</DialogTitle>
               <DialogDescription className="text-xs">
-                Set your monthly spending limits in JPY.
+                Set your monthly spending limits in {userSettings.budgetCurrency}.
               </DialogDescription>
             </DialogHeader>
 
@@ -573,14 +644,14 @@ export default function SettingsForm({
                 </Label>
                 <div className="relative flex items-center">
                   <span className="absolute left-3 text-sm font-bold text-muted-foreground">
-                    ¥
+                    {budgetCurrencySymbol}
                   </span>
                   <Input
                     type="text"
                     inputMode="numeric"
                     value={monthlyBudget}
                     onChange={(e) => setMonthlyBudget(formatInputAmount(e.target.value))}
-                    className="pl-7 h-10 font-semibold"
+                    className={cn(budgetCurrencyPadding, "h-10 font-semibold")}
                     placeholder="150,000"
                   />
                 </div>
@@ -595,14 +666,14 @@ export default function SettingsForm({
                   </Label>
                   <div className="relative flex items-center">
                     <span className="absolute left-3 text-sm font-bold text-muted-foreground">
-                      ¥
+                      {budgetCurrencySymbol}
                     </span>
                     <Input
                       type="text"
                       inputMode="numeric"
                       value={pocketMoneyLimit}
                       onChange={(e) => setPocketMoneyLimit(formatInputAmount(e.target.value))}
-                      className="pl-7 h-10 font-semibold"
+                      className={cn(budgetCurrencyPadding, "h-10 font-semibold")}
                       placeholder="40,000"
                     />
                   </div>
@@ -611,14 +682,14 @@ export default function SettingsForm({
                   <Label className="text-xs font-semibold">Shopping Limit</Label>
                   <div className="relative flex items-center">
                     <span className="absolute left-3 text-sm font-bold text-muted-foreground">
-                      ¥
+                      {budgetCurrencySymbol}
                     </span>
                     <Input
                       type="text"
                       inputMode="numeric"
                       value={shoppingLimit}
                       onChange={(e) => setShoppingLimit(formatInputAmount(e.target.value))}
-                      className="pl-7 h-10 font-semibold"
+                      className={cn(budgetCurrencyPadding, "h-10 font-semibold")}
                       placeholder="60,000"
                     />
                   </div>
@@ -956,7 +1027,7 @@ export default function SettingsForm({
                 </strong>
                 ?
                 <span className="block mt-1 text-destructive font-semibold">
-                  ⚠️ WARNING: All transactions and monthly bill templates linked
+                  ⚠️ WARNING: All transactions and recurring bill templates linked
                   to this account will be permanently deleted! This action cannot
                   be undone.
                 </span>

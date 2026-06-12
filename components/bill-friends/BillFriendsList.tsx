@@ -171,33 +171,35 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
         </Button>
       </div>
 
-      {/* Summary cards */}
-      {activeBills.length > 0 && (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white dark:bg-zinc-900 border border-border/40 rounded-2xl p-4 flex flex-col gap-2">
-            <div className="flex items-center gap-1.5">
-              <div className="p-1 rounded-lg bg-primary/10">
-                <IconArrowDownLeft className="size-3.5 text-primary stroke-[2.5]" />
-              </div>
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">They owe me</span>
-            </div>
-            {theyOweJPY > 0 && <p className="text-sm font-bold text-primary font-sans">{formatJPY(theyOweJPY)}</p>}
-            {theyOweIDR > 0 && <p className="text-sm font-bold text-primary font-sans">{formatIDR(theyOweIDR)}</p>}
-            {theyOweJPY === 0 && theyOweIDR === 0 && <p className="text-xs text-muted-foreground">—</p>}
-          </div>
-          <div className="bg-white dark:bg-zinc-900 border border-border/40 rounded-2xl p-4 flex flex-col gap-2">
-            <div className="flex items-center gap-1.5">
-              <div className="p-1 rounded-lg bg-destructive/10">
-                <IconArrowUpRight className="size-3.5 text-destructive stroke-[2.5]" />
-              </div>
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">I owe</span>
-            </div>
-            {iOweJPY > 0 && <p className="text-sm font-bold text-destructive font-sans">{formatJPY(iOweJPY)}</p>}
-            {iOweIDR > 0 && <p className="text-sm font-bold text-destructive font-sans">{formatIDR(iOweIDR)}</p>}
-            {iOweJPY === 0 && iOweIDR === 0 && <p className="text-xs text-muted-foreground">—</p>}
-          </div>
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-xl border border-border/40 bg-white p-3 dark:bg-zinc-900">
+          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+            They Owe
+          </p>
+          <p className="text-sm font-sans font-bold text-primary mt-1">
+            {formatJPY(theyOweJPY)}
+          </p>
+          {theyOweIDR > 0 && (
+            <p className="text-xs font-sans font-bold text-primary mt-0.5">
+              {formatIDR(theyOweIDR)}
+            </p>
+          )}
         </div>
-      )}
+        <div className="rounded-xl border border-border/40 bg-white p-3 dark:bg-zinc-900">
+          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+            I Owe
+          </p>
+          <p className="text-sm font-sans font-bold text-destructive mt-1">
+            {formatJPY(iOweJPY)}
+          </p>
+          {iOweIDR > 0 && (
+            <p className="text-xs font-sans font-bold text-destructive mt-0.5">
+              {formatIDR(iOweIDR)}
+            </p>
+          )}
+        </div>
+      </div>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "active" | "settled")}>

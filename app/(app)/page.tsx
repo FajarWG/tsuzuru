@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Suspense } from "react";
-import { formatJPY } from "@/lib/format";
+import { formatJPY, formatIDR } from "@/lib/format";
 import BalanceSummaryCard from "@/components/dashboard/BalanceSummaryCard";
 import WelcomeDialog from "@/components/dashboard/WelcomeDialog";
 import MonthlyInsightsCard from "@/components/dashboard/MonthlyInsightsCard";
@@ -152,6 +152,8 @@ async function BudgetProgressSection({
   const budgetExpectation = settings?.monthlyBudget || 150000;
   const pocketLimit = settings?.pocketMoneyLimit || 40000;
   const shoppingLimit = settings?.shoppingLimit || 60000;
+  const currency = settings?.budgetCurrency || "JPY";
+  const formatFn = currency === "JPY" ? formatJPY : formatIDR;
 
   const actualSpentTotal = monthlyExpenses.reduce((s, t) => s + t.amount, 0);
   const actualPocketSpent = monthlyExpenses
@@ -186,7 +188,7 @@ async function BudgetProgressSection({
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Remaining Budget</span>
               <span className="text-sm font-bold text-foreground">
-                {formatJPY(budgetRemaining)} <span className="text-xs font-normal text-muted-foreground">left of {formatJPY(budgetExpectation)}</span>
+                {formatFn(budgetRemaining)} <span className="text-xs font-normal text-muted-foreground">left of {formatFn(budgetExpectation)}</span>
               </span>
               <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
                 {budgetRemaining > 0 
@@ -204,7 +206,7 @@ async function BudgetProgressSection({
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Pocket Money</span>
               <span className="text-sm font-bold text-foreground">
-                {formatJPY(pocketRemaining)} <span className="text-xs font-normal text-muted-foreground">left of {formatJPY(pocketLimit)}</span>
+                {formatFn(pocketRemaining)} <span className="text-xs font-normal text-muted-foreground">left of {formatFn(pocketLimit)}</span>
               </span>
               <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
                 {pocketIsLow 
@@ -222,7 +224,7 @@ async function BudgetProgressSection({
             <div className="flex flex-col gap-0.5 min-w-0">
               <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Shopping</span>
               <span className="text-sm font-bold text-foreground">
-                {formatJPY(shoppingRemaining)} <span className="text-xs font-normal text-muted-foreground">left of {formatJPY(shoppingLimit)}</span>
+                {formatFn(shoppingRemaining)} <span className="text-xs font-normal text-muted-foreground">left of {formatFn(shoppingLimit)}</span>
               </span>
               <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
                 {shoppingIsLow 
@@ -240,9 +242,11 @@ async function BudgetProgressSection({
 async function MonthlyInsightsSection({
   monthlyExpensesPromise,
   previousMonthlyExpensesPromise,
+  currency,
 }: {
   monthlyExpensesPromise: Promise<any[]>;
   previousMonthlyExpensesPromise: Promise<any[]>;
+  currency: string;
 }) {
   const [monthlyExpenses, previousMonthlyExpenses] = await Promise.all([
     monthlyExpensesPromise,
@@ -266,6 +270,7 @@ async function MonthlyInsightsSection({
         previousSpentTotal={previousSpentTotal}
         actualSpentTotal={actualSpentTotal}
         topCategory={topCategory}
+        currency={currency}
       />
     </AnimatedCard>
   );
@@ -281,10 +286,24 @@ export default async function DashboardPage() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
+  // Fetch settings first to determine main currency
+  let userSettings = await prisma.userSettings.findUnique({ where: { userId } });
+  if (!userSettings) {
+    userSettings = await prisma.userSettings.create({
+      data: {
+        userId,
+        monthlyBudget: 150000,
+        pocketMoneyLimit: 40000,
+        shoppingLimit: 60000,
+        budgetCurrency: "JPY",
+      },
+    });
+  }
+  const currency = userSettings.budgetCurrency || "JPY";
+
   // Parallel promises for lazy streaming
   const accountsPromise = prisma.account.findMany({ where: { userId, isActive: true } });
-  
-  const settingsPromise = prisma.userSettings.findUnique({ where: { userId } });
+  const settingsPromise = Promise.resolve(userSettings);
 
   const today = new Date();
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -296,7 +315,7 @@ export default async function DashboardPage() {
     where: {
       userId,
       type: "expense",
-      currency: "JPY",
+      currency: currency,
       date: { gte: startOfMonth, lte: endOfMonth },
     },
   });
@@ -305,7 +324,7 @@ export default async function DashboardPage() {
     where: {
       userId,
       type: "expense",
-      currency: "JPY",
+      currency: currency,
       date: { gte: startOfPreviousMonth, lte: endOfPreviousMonth },
     },
   });
@@ -348,11 +367,12 @@ export default async function DashboardPage() {
         />
       </Suspense>
 
-      {/* Monthly Insights Card (client-side collapsible) */}
+      {/* Monthly Insights Card (client-side collapsible/dialog) */}
       <Suspense fallback={<MonthlyInsightsSkeleton />}>
         <MonthlyInsightsSection
           monthlyExpensesPromise={monthlyExpensesPromise}
           previousMonthlyExpensesPromise={previousMonthlyExpensesPromise}
+          currency={currency}
         />
       </Suspense>
     </div>
