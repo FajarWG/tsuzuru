@@ -1,41 +1,20 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 interface LoadingScreenProps {
   onFinished: () => void;
 }
 
 export default function LoadingScreen({ onFinished }: LoadingScreenProps) {
-  const [progress, setProgress] = useState(0);
-
   useEffect(() => {
-    // Smoothly animate the progress bar over 2.5 seconds
-    const duration = 2500;
-    const intervalTime = 30;
-    const steps = duration / intervalTime;
-    const increment = 100 / steps;
-
-    const timer = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(timer);
-          return 100;
-        }
-        return Math.min(prev + increment, 100);
-      });
-    }, intervalTime);
-
-    // Give an extra 700ms after reaching 100% for the user to see full completion before fading out
+    // Keep loading screen for 3.2 seconds
     const finishedTimeout = setTimeout(() => {
       onFinished();
-    }, duration + 700);
+    }, 3200);
 
-    return () => {
-      clearInterval(timer);
-      clearTimeout(finishedTimeout);
-    };
+    return () => clearTimeout(finishedTimeout);
   }, [onFinished]);
 
   return (
@@ -99,27 +78,9 @@ export default function LoadingScreen({ onFinished }: LoadingScreenProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 0.5 }}
           transition={{ delay: 1.2, duration: 1.2, ease: "easeOut" }}
-          className="text-[10px] tracking-[0.15em] text-muted-foreground font-light mb-8 font-serif"
+          className="text-[10px] tracking-[0.15em] text-muted-foreground font-light font-serif"
         >
           お金の物語を綴ろう
-        </motion.div>
-
-        {/* Minimal Progress Bar */}
-        <div className="w-full h-[2px] bg-muted relative rounded-full overflow-hidden">
-          <div
-            className="absolute left-0 top-0 h-full bg-secondary transition-all duration-30 ease-out"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-        
-        {/* Progress Percentage */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 0.4 }}
-          transition={{ delay: 0.2 }}
-          className="text-[9px] font-mono tracking-wider text-muted-foreground mt-2"
-        >
-          {Math.min(Math.round(progress), 100)}%
         </motion.div>
       </div>
     </motion.div>

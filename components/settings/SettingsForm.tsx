@@ -587,7 +587,7 @@ export default function SettingsForm({
                   type="number"
                   value={monthlyBudget}
                   onChange={(e) => setMonthlyBudget(e.target.value)}
-                  className="pl-7 h-10 text-sm font-semibold"
+                  className="pl-7 h-10 font-semibold"
                   placeholder="150000"
                 />
               </div>
@@ -608,7 +608,7 @@ export default function SettingsForm({
                     type="number"
                     value={pocketMoneyLimit}
                     onChange={(e) => setPocketMoneyLimit(e.target.value)}
-                    className="pl-7 h-10 text-sm font-semibold"
+                    className="pl-7 h-10 font-semibold"
                     placeholder="40000"
                   />
                 </div>
@@ -623,7 +623,7 @@ export default function SettingsForm({
                     type="number"
                     value={shoppingLimit}
                     onChange={(e) => setShoppingLimit(e.target.value)}
-                    className="pl-7 h-10 text-sm font-semibold"
+                    className="pl-7 h-10 font-semibold"
                     placeholder="60000"
                   />
                 </div>
@@ -690,7 +690,7 @@ export default function SettingsForm({
               <Input
                 value={addAccName}
                 onChange={(e) => setAddAccName(e.target.value)}
-                className="h-10 text-sm font-semibold"
+                className="h-10 font-semibold"
                 placeholder="e.g. Yucho Bank"
                 required
               />
@@ -751,7 +751,7 @@ export default function SettingsForm({
                 step="any"
                 value={addAccBalance}
                 onChange={(e) => setAddAccBalance(e.target.value)}
-                className="h-10 text-sm font-semibold"
+                className="h-10 font-semibold"
                 placeholder="0"
                 required
               />
@@ -813,7 +813,7 @@ export default function SettingsForm({
               <Input
                 value={editAccName}
                 onChange={(e) => setEditAccName(e.target.value)}
-                className="h-10 text-sm font-semibold"
+                className="h-10 font-semibold"
                 placeholder="e.g. Yucho Bank"
                 required
               />
@@ -874,7 +874,7 @@ export default function SettingsForm({
                 step="any"
                 value={editAccBalance}
                 onChange={(e) => setEditAccBalance(e.target.value)}
-                className="h-10 text-sm font-semibold"
+                className="h-10 font-semibold"
                 placeholder="0"
                 required
               />
