@@ -8,6 +8,7 @@ interface UpdateUserSettingsInput {
   monthlyBudget: number;
   pocketMoneyLimit: number;
   shoppingLimit: number;
+  budgetCurrency?: string;
 }
 
 export async function updateUserSettingsAction(data: UpdateUserSettingsInput) {
@@ -18,6 +19,7 @@ export async function updateUserSettingsAction(data: UpdateUserSettingsInput) {
         monthlyBudget: data.monthlyBudget,
         pocketMoneyLimit: data.pocketMoneyLimit,
         shoppingLimit: data.shoppingLimit,
+        budgetCurrency: data.budgetCurrency,
       },
     });
 
