@@ -115,6 +115,37 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
     setIsSubmitting(true);
     setError(null);
 
+    // If offline, save the transaction payload locally in localStorage queue
+    if (typeof window !== "undefined" && !navigator.onLine) {
+      try {
+        const payload = {
+          userId,
+          accountId,
+          type,
+          amount: parseFloat(amount),
+          category: type === "income" ? "income" : category,
+          subCategory: type === "income" ? null : subCategory,
+          mealNumber: type === "expense" && subCategory === "food" ? mealNumber : null,
+          description: description.trim() || null,
+          date: date.toISOString(),
+        };
+
+        const stored = localStorage.getItem("tsuzuru_offline_transactions") || "[]";
+        const transactions = JSON.parse(stored);
+        transactions.push(payload);
+        localStorage.setItem("tsuzuru_offline_transactions", JSON.stringify(transactions));
+
+        toast.success("Offline: Transaksi disimpan secara lokal dan akan disinkronkan saat online.");
+        setOpen(false);
+        return;
+      } catch (err) {
+        console.error("[Offline] Failed to save transaction locally:", err);
+        setError("Failed to save transaction locally when offline");
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
     try {
       const res = await createTransactionAction({
         userId,

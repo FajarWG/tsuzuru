@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import BottomNav from "@/components/layout/BottomNav";
 import AddTransactionFab from "@/components/transactions/AddTransactionFab";
+import OfflineStatusIndicator from "@/components/layout/OfflineStatusIndicator";
 
 export default async function AppLayout({
   children,
@@ -37,6 +38,7 @@ export default async function AppLayout({
 
   return (
     <div className="flex-1 w-full max-w-[430px] mx-auto min-h-screen bg-background shadow-2xl border-x border-border/20 relative flex flex-col">
+      <OfflineStatusIndicator />
       <main className="flex-1 flex flex-col p-5">
         {children}
       </main>
