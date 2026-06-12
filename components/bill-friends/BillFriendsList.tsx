@@ -13,7 +13,6 @@ import {
   IconArrowDownLeft,
   IconUsersGroup,
   IconCoin,
-  IconX,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,7 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
@@ -83,8 +82,9 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
 
   // Action states
   const [settlingId, setSettlingId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [deletingBill, setDeletingBill] = useState<BillItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const activeBills = bills.filter((b) => !b.isSettled);
   const settledBills = bills.filter((b) => b.isSettled);
@@ -153,22 +153,7 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
     }
   };
 
-  const handleDelete = async (id: string) => {
-    setDeletingId(id); setActionError(null);
-    try {
-      const res = await deleteBillAction(id);
-      if (res.success) {
-        toast.success("Bill deleted successfully");
-        setBills((prev) => prev.filter((b) => b.id !== id));
-      } else {
-        setActionError(res.error || "Failed to delete");
-      }
-    } catch {
-      setActionError("Unexpected error");
-    } finally {
-      setDeletingId(null);
-    }
-  };
+
 
   const grouped = groupByPerson(displayBills);
 
@@ -178,7 +163,7 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
       <div className="flex justify-between items-center">
         <div>
           <h1 className="font-serif text-2xl font-bold tracking-wide text-primary">Bill Friends</h1>
-          <p className="text-xs text-muted-foreground mt-1">Track what you owe and what's owed to you.</p>
+          <p className="text-xs text-muted-foreground mt-1">Track what you owe and what&apos;s owed to you.</p>
         </div>
         <Button size="sm" onClick={() => { setAddOpen(true); resetAddForm(); }}>
           <IconPlus className="size-4" />
@@ -269,7 +254,7 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
               {personBills.map((bill) => {
                 const isOwed = bill.direction === "they_owe";
                 const isSettlingThis = settlingId === bill.id;
-                const isDeletingThis = deletingId === bill.id;
+                const isDeletingThis = deletingBill?.id === bill.id && isDeleting;
 
                 return (
                   <div
@@ -324,7 +309,7 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
                       <Button
                         size="icon-xs"
                         variant="ghost"
-                        onClick={() => handleDelete(bill.id)}
+                        onClick={() => setDeletingBill(bill)}
                         disabled={isSettlingThis || isDeletingThis}
                         title="Delete"
                         className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
@@ -386,7 +371,7 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
 
             {/* Person name */}
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs font-semibold">Friend's Name *</Label>
+              <Label className="text-xs font-semibold">Friend&apos;s Name *</Label>
               <Input
                 value={personName}
                 onChange={(e) => setPersonName(e.target.value)}
@@ -447,6 +432,48 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
             </Button>
             <Button size="sm" onClick={handleAdd} disabled={isAdding} className="min-w-[80px]">
               {isAdding ? <IconLoader className="size-4 animate-spin" /> : "Save Bill"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deletingBill} onOpenChange={(open) => { if (!isDeleting && !open) setDeletingBill(null); }}>
+        <DialogContent className="max-w-[360px] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-serif">Delete Bill</DialogTitle>
+            <DialogDescription className="text-xs">
+              Are you sure you want to delete this bill? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          {deletingBill && (
+            <div className="rounded-2xl border border-border/40 bg-muted/40 p-3 text-xs flex flex-col gap-1">
+              <p className="font-semibold text-foreground">{deletingBill.description || (deletingBill.direction === "they_owe" ? "They owe me" : "I owe them")}</p>
+              <p className="text-muted-foreground">
+                Friend: {deletingBill.personName} · Amount: {formatAmount(deletingBill.amount, deletingBill.currency)}
+              </p>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setDeletingBill(null)} disabled={isDeleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" size="sm" onClick={async () => {
+              if (!deletingBill) return;
+              setIsDeleting(true);
+              const res = await deleteBillAction(deletingBill.id);
+              if (res.success) {
+                toast.success("Bill deleted successfully");
+                setBills((prev) => prev.filter((b) => b.id !== deletingBill.id));
+                setDeletingBill(null);
+              } else {
+                toast.error(res.error || "Failed to delete");
+              }
+              setIsDeleting(false);
+            }} disabled={isDeleting} className="min-w-[80px]">
+              {isDeleting ? <IconLoader className="size-4 animate-spin" /> : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>

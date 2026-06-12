@@ -33,6 +33,10 @@ export async function createTransactionAction(data: CreateTransactionInput) {
       throw new Error("Account not found");
     }
 
+    if (!account.isActive) {
+      throw new Error("Selected account is inactive");
+    }
+
     const transactionDate = data.date || new Date();
 
     const newBalance = account.balance + getBalanceDelta(data.type, data.amount);
@@ -90,6 +94,10 @@ export async function updateTransactionAction(data: UpdateTransactionInput) {
 
     if (!account) {
       throw new Error("Account not found");
+    }
+
+    if (!account.isActive) {
+      throw new Error("Selected account is inactive");
     }
 
     const oldDelta = getBalanceDelta(existing.type as "expense" | "income", existing.amount);

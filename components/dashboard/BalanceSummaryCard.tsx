@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { formatJPY, formatIDR } from "@/lib/format";
 import { updateAccountBalanceWithHistoryAction, updateAccountNameAction } from "@/lib/actions/accounts";
 import { toast } from "sonner";
@@ -13,6 +14,8 @@ import {
   IconChevronUp,
   IconLoader,
   IconCheck,
+  IconEye,
+  IconEyeOff,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -57,6 +60,18 @@ export default function BalanceSummaryCard({
 }: BalanceSummaryCardProps) {
   const [showDetails, setShowDetails] = useState(false);
   const [localAccounts, setLocalAccounts] = useState<Account[]>(accounts);
+  const [hideBalances, setHideBalances] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("tsuzuru_hide_balances") === "true";
+    }
+    return false;
+  });
+
+  const toggleHideBalances = () => {
+    const nextState = !hideBalances;
+    setHideBalances(nextState);
+    localStorage.setItem("tsuzuru_hide_balances", String(nextState));
+  };
 
   // Edit dialog state
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
@@ -154,12 +169,25 @@ export default function BalanceSummaryCard({
       <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-            Total Balance
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+              Total Balance
+            </h2>
+            <button
+              onClick={toggleHideBalances}
+              className="text-muted-foreground hover:text-foreground transition-colors p-1 cursor-pointer"
+              title={hideBalances ? "Show balance" : "Hide balance"}
+            >
+              {hideBalances ? (
+                <IconEye className="size-3.5" />
+              ) : (
+                <IconEyeOff className="size-3.5" />
+              )}
+            </button>
+          </div>
           <button
             onClick={() => setShowDetails((v) => !v)}
-            className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+            className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
           >
             {showDetails ? (
               <>
@@ -178,13 +206,13 @@ export default function BalanceSummaryCard({
           <div>
             <p className="text-[10px] text-muted-foreground tracking-wide font-medium">JPY Balance</p>
             <p className="text-2xl font-sans font-bold tracking-tight text-foreground mt-1">
-              {formatJPY(totalJPY)}
+              {hideBalances ? "••••••" : formatJPY(totalJPY)}
             </p>
           </div>
           <div className="pl-4">
             <p className="text-[10px] text-muted-foreground tracking-wide font-medium">IDR Balance</p>
             <p className="text-xl font-sans font-bold tracking-tight text-foreground mt-1.5">
-              {formatIDR(totalIDR)}
+              {hideBalances ? "••••••" : formatIDR(totalIDR)}
             </p>
           </div>
         </div>
@@ -202,11 +230,15 @@ export default function BalanceSummaryCard({
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="font-sans font-semibold text-muted-foreground">
-                    {acc.currency === "JPY" ? formatJPY(acc.balance) : formatIDR(acc.balance)}
+                    {hideBalances
+                      ? "••••••"
+                      : acc.currency === "JPY"
+                      ? formatJPY(acc.balance)
+                      : formatIDR(acc.balance)}
                   </span>
                   <button
                     onClick={() => openEdit(acc)}
-                    className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                     aria-label={`Edit ${acc.name}`}
                   >
                     <IconSettings className="size-3.5" />
@@ -214,6 +246,16 @@ export default function BalanceSummaryCard({
                 </div>
               </div>
             ))}
+
+            <Link href="/settings?tab=profile" className="mt-1">
+              <Button
+                variant="outline"
+                className="w-full text-[10px] font-semibold tracking-wide gap-1.5 h-9 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/50 text-muted-foreground hover:text-foreground cursor-pointer transition-all active:scale-[0.99] flex items-center justify-center"
+              >
+                <IconSettings className="size-3.5" />
+                Manage Profile & Accounts
+              </Button>
+            </Link>
           </div>
         )}
       </div>

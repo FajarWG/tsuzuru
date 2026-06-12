@@ -73,6 +73,102 @@ export async function updateAccountNameAction(accountId: string, name: string, i
     revalidatePath("/settings");
     return { success: true };
   } catch (err) {
+    console.error("updateAccountNameAction error:", err);
     return { success: false, error: "Failed to update account" };
+  }
+}
+
+export async function createAccountAction(data: {
+  name: string;
+  currency: string;
+  balance: number;
+  type: string;
+}) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+  const userId = session.user.id;
+
+  try {
+    const account = await prisma.account.create({
+      data: {
+        userId,
+        name: data.name.trim(),
+        currency: data.currency,
+        balance: data.balance,
+        type: data.type,
+        isActive: true,
+      },
+    });
+
+    revalidatePath("/");
+    revalidatePath("/settings");
+    revalidatePath("/transactions");
+    return { success: true, account };
+  } catch (err) {
+    console.error("createAccountAction error:", err);
+    return { success: false, error: "Failed to create account" };
+  }
+}
+
+export async function updateAccountAction(
+  accountId: string,
+  data: {
+    name: string;
+    currency: string;
+    balance: number;
+    type: string;
+    isActive: boolean;
+  }
+) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+  const userId = session.user.id;
+
+  try {
+    const account = await prisma.account.update({
+      where: { id: accountId, userId },
+      data: {
+        name: data.name.trim(),
+        currency: data.currency,
+        balance: data.balance,
+        type: data.type,
+        isActive: data.isActive,
+      },
+    });
+
+    revalidatePath("/");
+    revalidatePath("/settings");
+    revalidatePath("/transactions");
+    return { success: true, account };
+  } catch (err) {
+    console.error("updateAccountAction error:", err);
+    return { success: false, error: "Failed to update account" };
+  }
+}
+
+export async function deleteAccountAction(accountId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+  const userId = session.user.id;
+
+  try {
+    // Delete linked monthly templates (bills) first to prevent orphans,
+    // and rely on PostgreSQL cascade delete for transactions
+    await prisma.$transaction([
+      prisma.monthlyTemplate.deleteMany({
+        where: { accountId, userId },
+      }),
+      prisma.account.delete({
+        where: { id: accountId, userId },
+      }),
+    ]);
+
+    revalidatePath("/");
+    revalidatePath("/settings");
+    revalidatePath("/transactions");
+    return { success: true };
+  } catch (err) {
+    console.error("deleteAccountAction error:", err);
+    return { success: false, error: "Failed to delete account" };
   }
 }

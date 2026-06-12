@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { formatJPY, formatIDR } from "@/lib/format";
 import BalanceSummaryCard from "@/components/dashboard/BalanceSummaryCard";
+import WelcomeDialog from "@/components/dashboard/WelcomeDialog";
 import {
   IconChevronRight,
   IconWallet,
@@ -21,6 +22,7 @@ import {
   IconCreditCard,
   IconAdjustments,
   IconCurrencyYen,
+  IconSettings,
 } from "@tabler/icons-react";
 
 // Helper to determine the category icon
@@ -122,6 +124,7 @@ export default async function DashboardPage() {
   const shoppingPercent = Math.min((actualShoppingSpent / shoppingLimit) * 100, 100);
   const pocketIsLow = (100 - pocketPercent) < 20;
   const budgetRemaining = Math.max(budgetExpectation - actualSpentTotal, 0);
+  const pocketRemaining = Math.max(pocketLimit - actualPocketSpent, 0);
   const monthDelta = actualSpentTotal - previousSpentTotal;
   const categoryTotals = monthlyExpenses.reduce<Record<string, number>>((totals, tx) => {
     totals[tx.category] = (totals[tx.category] || 0) + tx.amount;
@@ -142,11 +145,13 @@ export default async function DashboardPage() {
           </h1>
         </div>
         {session.user.image && (
-          <img
-            src={session.user.image}
-            alt="Profile"
-            className="size-10 rounded-full border border-border/80 shadow-sm"
-          />
+          <Link href="/settings" className="cursor-pointer shrink-0">
+            <img
+              src={session.user.image}
+              alt="Profile"
+              className="size-10 rounded-full border border-border/80 shadow-sm hover:opacity-85 transition-opacity"
+            />
+          </Link>
         )}
       </div>
 
@@ -157,60 +162,7 @@ export default async function DashboardPage() {
         totalIDR={totalIDR}
       />
 
-      {recentTransactions.length === 0 && (
-        <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-6 flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <h2 className="font-serif text-base font-bold text-primary">ようこそ (Welcome to Tsuzuru)</h2>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              We have set up a default Kakeibo (家計簿) workspace with standard accounts, budgets, and bill templates to help you start tracking right away.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 border-t border-border/10 pt-4">
-            <div className="flex gap-3">
-              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <span className="text-[10px] font-bold">1</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-foreground">4 Financial Accounts Configured</span>
-                <span className="text-[10px] text-muted-foreground leading-relaxed">
-                  Includes JPY accounts (Yucho Bank ¥100k, PayPay ¥20k, PayPay Investasi ¥50k) and an IDR account (Jago Rp5M).
-                </span>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <span className="text-[10px] font-bold">2</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-foreground">Monthly Budget Limits Set</span>
-                <span className="text-[10px] text-muted-foreground leading-relaxed">
-                  A monthly budget of ¥150,000 JPY is set, allocating ¥40,000 for Pocket Money and ¥60,000 for Shopping.
-                </span>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <span className="text-[10px] font-bold">3</span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-foreground">5 Recurring Bill Templates Ready</span>
-                <span className="text-[10px] text-muted-foreground leading-relaxed">
-                  Rent, Electricity, Water, Gas, and SIM Card templates are ready. Pay them with one click in settings!
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-muted/45 border border-border/20 rounded-xl p-3 text-center mt-1">
-            <p className="text-[10px] font-medium text-muted-foreground leading-relaxed">
-              💡 Tip: Click the <strong className="text-primary font-bold">+</strong> button in the bottom navigation to log a new expense, or adjust your settings.
-            </p>
-          </div>
-        </div>
-      )}
+      <WelcomeDialog />
 
       {/* Budget Progress Card */}
       <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
@@ -334,6 +286,24 @@ export default async function DashboardPage() {
                 {topCategory 
                   ? `${Math.round((topCategory[1] / Math.max(actualSpentTotal, 1)) * 100)}% of your JPY expenses went to ${topCategory[0].replace(/_/g, " ")}.`
                   : "No JPY transactions logged this month yet."}
+              </p>
+            </div>
+          </div>
+
+          {/* Pocket Money Remaining */}
+          <div className="flex items-start gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
+            <div className={`p-2 rounded-lg shrink-0 ${pocketIsLow ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}>
+              <IconPizza className="size-4" />
+            </div>
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Pocket Money</span>
+              <span className="text-sm font-bold text-foreground">
+                {formatJPY(pocketRemaining)} <span className="text-xs font-normal text-muted-foreground">left of {formatJPY(pocketLimit)}</span>
+              </span>
+              <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
+                {pocketIsLow 
+                  ? "Pocket money is critically low (under 20% remaining). Consider reducing food/drink expenses." 
+                  : `${Math.round((pocketRemaining / pocketLimit) * 100)}% of your pocket money is still available.`}
               </p>
             </div>
           </div>

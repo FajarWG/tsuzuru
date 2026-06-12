@@ -18,9 +18,7 @@ import {
   IconChartBar,
   IconChartDonut,
   IconActivity,
-  IconPizza,
-  IconTrendingUp,
-  IconTrendingDown
+  IconPizza
 } from "@tabler/icons-react";
 
 interface MonthlyOverviewItem {
@@ -59,6 +57,7 @@ export default function ChartsContainer({
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 
@@ -99,6 +98,7 @@ export default function ChartsContainer({
               <XAxis dataKey="month" stroke="#8A8A8A" />
               <YAxis tickFormatter={(val) => `¥${val / 1000}k`} stroke="#8A8A8A" />
               <Tooltip
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 formatter={(val: any) => [formatJPY(Number(val)), ""]}
                 contentStyle={{
                   backgroundColor: "#F7F6F3",
@@ -145,6 +145,7 @@ export default function ChartsContainer({
                       ))}
                     </Pie>
                     <Tooltip
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       formatter={(val: any) => [formatJPY(Number(val)), ""]}
                       contentStyle={{
                         backgroundColor: "#F7F6F3",
@@ -203,6 +204,7 @@ export default function ChartsContainer({
                       ))}
                     </Pie>
                     <Tooltip
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
                       formatter={(val: any) => [formatJPY(Number(val)), ""]}
                       contentStyle={{
                         backgroundColor: "#F7F6F3",

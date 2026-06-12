@@ -140,14 +140,14 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
         )}
 
         {/* Type toggle */}
-        <div className="flex bg-muted p-1 rounded-xl w-full border border-border/20">
+        <div className="flex bg-muted p-1 rounded-lg w-full border border-border/20">
           {(["expense", "income"] as const).map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => setType(t)}
               className={cn(
-                "flex-1 h-10 rounded-lg text-xs font-semibold tracking-wide transition-all capitalize",
+                "flex-1 h-10 rounded-md text-xs font-semibold tracking-wide transition-all capitalize",
                 type === t
                   ? "bg-white dark:bg-zinc-800 text-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground"

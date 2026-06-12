@@ -12,7 +12,7 @@ export async function seedUserFinancialData(userId: string) {
   }
 
   // 1. Create Default Settings
-  const settings = await prisma.userSettings.create({
+  await prisma.userSettings.create({
     data: {
       userId,
       monthlyBudget: 150000, // Default: 150,000 JPY
@@ -23,7 +23,7 @@ export async function seedUserFinancialData(userId: string) {
   });
 
   // 2. Create Default Accounts
-  const jago = await prisma.account.create({
+  await prisma.account.create({
     data: {
       userId,
       name: "Jago",
@@ -53,7 +53,7 @@ export async function seedUserFinancialData(userId: string) {
     },
   });
 
-  const paypayInvest = await prisma.account.create({
+  await prisma.account.create({
     data: {
       userId,
       name: "PayPay Investasi",

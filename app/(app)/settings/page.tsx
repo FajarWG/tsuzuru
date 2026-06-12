@@ -7,7 +7,11 @@ export const metadata = {
   title: "Settings — Tsuzuru",
 };
 
-export default async function SettingsPage() {
+interface SettingsPageProps {
+  searchParams: Promise<{ tab?: string }>;
+}
+
+export default async function SettingsPage({ searchParams }: SettingsPageProps) {
   const session = await auth();
 
   if (!session || !session.user) {
@@ -15,6 +19,8 @@ export default async function SettingsPage() {
   }
 
   const userId = session.user.id;
+  const params = await searchParams;
+  const activeTab = params.tab || "templates";
 
   // 1. Fetch user settings (with fallback creation if not found)
   let userSettings = await prisma.userSettings.findUnique({
@@ -57,6 +63,7 @@ export default async function SettingsPage() {
           email: session.user.email,
           image: session.user.image,
         }}
+        defaultTab={activeTab}
       />
     </div>
   );

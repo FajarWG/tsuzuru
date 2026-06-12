@@ -169,14 +169,14 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
             )}
 
             {/* Expense / Income toggle */}
-            <div className="flex bg-muted p-1 rounded-xl border border-border/20">
+            <div className="flex bg-muted p-1 rounded-lg border border-border/20">
               {(["expense", "income"] as const).map((t) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => setType(t)}
                   className={cn(
-                    "flex-1 h-9 rounded-lg text-xs font-semibold tracking-wide transition-all capitalize",
+                    "flex-1 h-9 rounded-md text-xs font-semibold tracking-wide transition-all capitalize cursor-pointer",
                     type === t
                       ? "bg-white dark:bg-zinc-800 text-foreground shadow-xs"
                       : "text-muted-foreground hover:text-foreground"

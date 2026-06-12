@@ -23,7 +23,7 @@ if (typeof window === "undefined") {
   }
 } else {
   // Dummy instance for client components (they should use Server Actions instead)
-  prismaInstance = null as any;
+  prismaInstance = null as unknown as PrismaClient;
 }
 
 export const prisma = prismaInstance;
