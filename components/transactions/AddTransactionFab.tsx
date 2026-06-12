@@ -179,10 +179,10 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
       <button
         onClick={handleOpen}
         aria-label="Add transaction"
-        className="flex items-center justify-center w-10 h-10 rounded-[14px] bg-primary text-primary-foreground hover:scale-105 active:scale-95 transition-all duration-150"
+        className="flex items-center justify-center w-11 h-11 rounded-[15px] bg-primary text-primary-foreground hover:scale-105 active:scale-95 transition-all duration-150"
         style={{ boxShadow: "0 3px 12px rgba(45,90,61,0.45)" }}
       >
-        <IconPlus className="size-[18px] stroke-[2.5]" />
+        <IconPlus className="size-[22px] stroke-[2.5]" />
       </button>
 
       {/* Dialog */}
@@ -233,7 +233,6 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
                   onChange={(e) => setAmount(e.target.value)}
                   className="flex-1 h-full text-xl font-bold font-sans bg-transparent focus:outline-none text-foreground"
                   placeholder="0"
-                  autoFocus
                   required
                 />
               </div>
@@ -332,7 +331,7 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
               <Input
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                className="h-11 rounded-xl text-sm"
+                className="h-11 rounded-xl"
                 placeholder="e.g. Lawson, taxi, dinner"
               />
             </div>

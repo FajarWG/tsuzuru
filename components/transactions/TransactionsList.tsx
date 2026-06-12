@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import { formatJPY, formatIDR } from "@/lib/format";
 import {
   IconAdjustments,
@@ -11,6 +12,7 @@ import {
   IconDeviceGamepad,
   IconDeviceLaptop,
   IconEdit,
+  IconFilter,
   IconGlass,
   IconHeart,
   IconHelp,
@@ -183,6 +185,7 @@ export default function TransactionsList({
   );
 
   const [search, setSearch] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
   const [accountFilter, setAccountFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -440,17 +443,17 @@ export default function TransactionsList({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search descriptions, categories, accounts..."
-            className="flex-1 h-full bg-transparent text-xs font-medium focus:outline-none text-foreground"
+            className="flex-1 h-full bg-transparent text-base md:text-xs font-medium focus:outline-none text-foreground"
           />
         </div>
         <Button
-          variant="outline"
-          size="icon"
-          className="h-12 w-12 rounded-2xl shrink-0 bg-white dark:bg-zinc-900 cursor-pointer"
-          onClick={resetFilters}
-          aria-label="Reset filters"
+          variant={showFilters ? "secondary" : "outline"}
+          className="h-12 px-4 rounded-2xl shrink-0 bg-white dark:bg-zinc-900 cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
+          onClick={() => setShowFilters(!showFilters)}
+          aria-label="Toggle filters"
         >
-          <IconRefresh className="size-4" />
+          <IconFilter className="size-4" />
+          Filter
         </Button>
       </div>
 
@@ -474,84 +477,108 @@ export default function TransactionsList({
       </div>
 
       {/* Dropdown Filters (Month, Account, Category) */}
-      <div className="grid grid-cols-3 gap-2">
-        <div className="flex flex-col gap-1 min-w-0">
-          <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
-            Month
-          </Label>
-          <Select value={monthFilter} onValueChange={setMonthFilter}>
-            <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
-              <SelectValue className="truncate block max-w-full text-left" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">
-                All Months
-              </SelectItem>
-              {monthOptions.map((opt) => (
-                <SelectItem
-                  key={opt.value}
-                  value={opt.value}
-                  className="text-xs"
-                >
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <AnimatePresence initial={false}>
+        {showFilters && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            className="overflow-hidden flex flex-col gap-3"
+          >
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              <div className="flex flex-col gap-1 min-w-0">
+                <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
+                  Month
+                </Label>
+                <Select value={monthFilter} onValueChange={setMonthFilter}>
+                  <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
+                    <SelectValue className="truncate block max-w-full text-left" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-xs">
+                      All Months
+                    </SelectItem>
+                    {monthOptions.map((opt) => (
+                      <SelectItem
+                        key={opt.value}
+                        value={opt.value}
+                        className="text-xs"
+                      >
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-        <div className="flex flex-col gap-1 min-w-0">
-          <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
-            Account
-          </Label>
-          <Select value={accountFilter} onValueChange={setAccountFilter}>
-            <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
-              <SelectValue className="truncate block max-w-full text-left" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">
-                All Accounts
-              </SelectItem>
-              {accounts.map((acc) => (
-                <SelectItem key={acc.id} value={acc.id} className="text-xs">
-                  {acc.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+              <div className="flex flex-col gap-1 min-w-0">
+                <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
+                  Account
+                </Label>
+                <Select value={accountFilter} onValueChange={setAccountFilter}>
+                  <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
+                    <SelectValue className="truncate block max-w-full text-left" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-xs">
+                      All Accounts
+                    </SelectItem>
+                    {accounts.map((acc) => (
+                      <SelectItem key={acc.id} value={acc.id} className="text-xs">
+                        {acc.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-        <div className="flex flex-col gap-1 min-w-0">
-          <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
-            Category
-          </Label>
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
-              <SelectValue className="truncate block max-w-full text-left" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" className="text-xs">
-                All Categories
-              </SelectItem>
-              <SelectItem value="pocket_money" className="text-xs">
-                Pocket Money
-              </SelectItem>
-              <SelectItem value="shopping" className="text-xs">
-                Shopping
-              </SelectItem>
-              <SelectItem value="income" className="text-xs">
-                Income
-              </SelectItem>
-              <SelectItem value="template" className="text-xs">
-                Templates
-              </SelectItem>
-              <SelectItem value="adjustment" className="text-xs">
-                Adjustments
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
+              <div className="flex flex-col gap-1 min-w-0">
+                <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
+                  Category
+                </Label>
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
+                    <SelectValue className="truncate block max-w-full text-left" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-xs">
+                      All Categories
+                    </SelectItem>
+                    <SelectItem value="pocket_money" className="text-xs">
+                      Pocket Money
+                    </SelectItem>
+                    <SelectItem value="shopping" className="text-xs">
+                      Shopping
+                    </SelectItem>
+                    <SelectItem value="income" className="text-xs">
+                      Income
+                    </SelectItem>
+                    <SelectItem value="template" className="text-xs">
+                      Templates
+                    </SelectItem>
+                    <SelectItem value="adjustment" className="text-xs">
+                      Adjustments
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Reset Filters Option */}
+            <div className="flex justify-end px-1 pb-1">
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="text-[10px] font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <IconRefresh className="size-3" />
+                Reset Filters
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-xl border border-border/40 bg-white p-3 dark:bg-zinc-900">
@@ -711,7 +738,7 @@ export default function TransactionsList({
                 inputMode="decimal"
                 value={editAmount}
                 onChange={(e) => setEditAmount(e.target.value)}
-                className="h-11 rounded-xl text-sm font-semibold"
+                className="h-11 rounded-xl font-semibold"
               />
             </div>
 
@@ -833,7 +860,7 @@ export default function TransactionsList({
               <Input
                 value={editDescription}
                 onChange={(e) => setEditDescription(e.target.value)}
-                className="h-11 rounded-xl text-sm"
+                className="h-11 rounded-xl"
                 placeholder="Optional"
               />
             </div>

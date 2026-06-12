@@ -434,7 +434,7 @@ export default function TemplatesConfigList({
               <Input
                 value={createName}
                 onChange={(e) => setCreateName(e.target.value)}
-                className="h-10 text-sm"
+                className="h-10"
                 placeholder="e.g. Apato, Electricity, Gas"
               />
             </div>
@@ -446,7 +446,7 @@ export default function TemplatesConfigList({
                 type="number"
                 value={createAmount}
                 onChange={(e) => setCreateAmount(e.target.value)}
-                className="h-10 text-sm font-semibold"
+                className="h-10 font-semibold"
                 placeholder="0"
                 min="0"
               />
@@ -523,7 +523,7 @@ export default function TemplatesConfigList({
               <Input
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
-                className="h-10 text-sm"
+                className="h-10"
                 placeholder="e.g. Apato, Gas, Electric"
               />
             </div>
@@ -541,7 +541,7 @@ export default function TemplatesConfigList({
                   type="number"
                   value={editAmount}
                   onChange={(e) => setEditAmount(e.target.value)}
-                  className="pl-8 h-10 text-sm font-semibold"
+                  className="pl-8 h-10 font-semibold"
                   placeholder="0"
                   min="0"
                 />

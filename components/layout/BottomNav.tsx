@@ -34,7 +34,7 @@ export default function BottomNav({ fab }: BottomNavProps) {
       >
         {/* iPhone-style floating pill — truly transparent blur */}
         <nav
-          className="w-full max-w-[360px] pointer-events-auto flex items-center justify-around px-2 h-[52px] rounded-[22px] bg-white/55 dark:bg-zinc-900/55 backdrop-blur-xl border border-border/25 shadow-lg"
+          className="w-full max-w-[380px] pointer-events-auto flex items-center justify-around px-2.5 h-[60px] rounded-[26px] bg-white/20 dark:bg-zinc-950/20 backdrop-blur-2xl border border-border/25 shadow-lg"
         >
           {links.map((link) => {
             const Icon = link.icon;
@@ -54,7 +54,7 @@ export default function BottomNav({ fab }: BottomNavProps) {
                 href={link.href}
                 aria-label={link.label}
                 className={cn(
-                  "flex items-center justify-center w-9 h-9 rounded-[12px] transition-all duration-200",
+                  "flex items-center justify-center w-11 h-11 rounded-[15px] transition-all duration-200",
                   isActive
                     ? "bg-primary/12 text-primary"
                     : "text-zinc-400/80 hover:text-zinc-600 hover:bg-black/5"
@@ -63,7 +63,7 @@ export default function BottomNav({ fab }: BottomNavProps) {
                 <Icon
                   className={cn(
                     "transition-all duration-200",
-                    isActive ? "size-[19px] stroke-[2]" : "size-[18px] stroke-[1.6]"
+                    isActive ? "size-[22px] stroke-[2]" : "size-[21px] stroke-[1.6]"
                   )}
                 />
               </Link>
