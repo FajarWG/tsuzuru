@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createTransactionAction } from "@/lib/actions/transactions";
+import { toast } from "sonner";
 import { IconArrowLeft, IconCalendar, IconLoader } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -88,6 +89,37 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
 
     setIsSubmitting(true);
     setError(null);
+
+    // If offline, save the transaction payload locally in localStorage queue
+    if (typeof window !== "undefined" && !navigator.onLine) {
+      try {
+        const payload = {
+          userId,
+          accountId,
+          type,
+          amount: parseFloat(amount),
+          category: type === "income" ? "income" : category,
+          subCategory: type === "income" ? null : subCategory,
+          mealNumber: type === "expense" && subCategory === "food" ? mealNumber : null,
+          description: description.trim() || null,
+          date: date.toISOString(),
+        };
+
+        const stored = localStorage.getItem("tsuzuru_offline_transactions") || "[]";
+        const transactions = JSON.parse(stored);
+        transactions.push(payload);
+        localStorage.setItem("tsuzuru_offline_transactions", JSON.stringify(transactions));
+
+        toast.success("Offline: Transaksi disimpan secara lokal dan akan disinkronkan saat online.");
+        router.push("/");
+        return;
+      } catch (err) {
+        console.error("[Offline] Failed to save transaction locally:", err);
+        setError("Failed to save transaction locally when offline");
+        setIsSubmitting(false);
+        return;
+      }
+    }
 
     try {
       const res = await createTransactionAction({
