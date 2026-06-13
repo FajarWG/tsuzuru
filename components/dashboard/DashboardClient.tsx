@@ -14,8 +14,11 @@ import {
   IconShirt,
   IconEyeOff,
   IconChevronDown,
+  IconSettings,
+  IconCoins,
 } from "@tabler/icons-react";
 import { getDashboardDataAction } from "@/lib/actions/dashboard";
+import { cn } from "@/lib/utils";
 
 interface Account {
   id: string;
@@ -43,6 +46,14 @@ interface Transaction {
   date: string;
 }
 
+interface BudgetLimitItem {
+  id: string;
+  name: string;
+  label: string;
+  limit: number;
+  spent: number;
+}
+
 interface DashboardData {
   user: {
     name: string | null;
@@ -52,6 +63,15 @@ interface DashboardData {
   userSettings: UserSettings;
   monthlyExpenses: Transaction[];
   previousMonthlyExpenses: Transaction[];
+  budgetLimits?: BudgetLimitItem[];
+}
+
+function BudgetIcon({ name, isLow }: { name: string; isLow: boolean }) {
+  const className = isLow ? "size-4 text-destructive" : "size-4 text-primary";
+  if (name === "monthly") return <IconCurrencyYen className={className} />;
+  if (name === "pocket_money") return <IconPizza className={className} />;
+  if (name === "shopping") return <IconShirt className={className} />;
+  return <IconCoins className={className} />;
 }
 
 // Skeletons that show the layout & static labels immediately
@@ -264,6 +284,7 @@ export default function DashboardClient() {
     },
     monthlyExpenses: [],
     previousMonthlyExpenses: [],
+    budgetLimits: [],
   };
 
   // Header Greeting
@@ -345,73 +366,68 @@ export default function DashboardClient() {
       {/* Budget Progress Card */}
       <AnimatedCard delay={0.1}>
         <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
-          <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-            Budget Progress (今月の予算状況)
-          </h2>
+          <div className="flex items-center justify-between pb-1 border-b border-border/10">
+            <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+              Budget Progress (今月の予算状況)
+            </h2>
+            <Link
+              href="/settings?tab=budget"
+              className="p-1 -mr-1 text-muted-foreground hover:text-foreground hover:bg-muted/40 rounded-lg transition-colors cursor-pointer"
+              title="Manage budget settings"
+            >
+              <IconSettings className="size-4" />
+            </Link>
+          </div>
 
           <div className="grid grid-cols-1 gap-3">
-            {/* Remaining Budget */}
-            <div className="flex items-start gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
-              <div className="p-2 bg-primary/10 text-primary rounded-lg shrink-0">
-                <IconCurrencyYen className="size-4" />
-              </div>
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Remaining Budget</span>
-                <span className="text-sm font-bold text-foreground">
-                  <AnimatedNumber value={budgetRemaining} currency={currency} />{" "}
-                  <span className="text-xs font-normal text-muted-foreground">
-                    left of <AnimatedNumber value={budgetExpectation} currency={currency} />
-                  </span>
-                </span>
-                <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
-                  {budgetRemaining > 0 
-                    ? `${Math.round((budgetRemaining / budgetExpectation) * 100)}% of your monthly budget is still available.` 
-                    : "You have spent or exceeded your monthly budget limits."}
-                </p>
-              </div>
-            </div>
+            {(() => {
+              const budgetLimitsToUse = activeData.budgetLimits && activeData.budgetLimits.length > 0
+                ? activeData.budgetLimits
+                : [
+                    { id: "monthly", name: "monthly", label: "Monthly Expected Budget", limit: budgetExpectation, spent: actualSpentTotal },
+                    { id: "pocket", name: "pocket_money", label: "Pocket Money", limit: pocketLimit, spent: actualPocketSpent },
+                    { id: "shopping", name: "shopping", label: "Shopping", limit: shoppingLimit, spent: actualShoppingSpent },
+                  ];
 
-            {/* Pocket Money Remaining */}
-            <div className="flex items-start gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
-              <div className={`p-2 rounded-lg shrink-0 ${pocketIsLow ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}>
-                <IconPizza className="size-4" />
-              </div>
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Pocket Money</span>
-                <span className="text-sm font-bold text-foreground">
-                  <AnimatedNumber value={pocketRemaining} currency={currency} />{" "}
-                  <span className="text-xs font-normal text-muted-foreground">
-                    left of <AnimatedNumber value={pocketLimit} currency={currency} />
-                  </span>
-                </span>
-                <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
-                  {pocketIsLow 
-                    ? "Pocket money is critically low (under 20% remaining). Consider reducing food/drink expenses." 
-                    : `${Math.round((pocketRemaining / pocketLimit) * 100)}% of your pocket money is still available.`}
-                </p>
-              </div>
-            </div>
+              return budgetLimitsToUse.map((limit) => {
+                const remaining = Math.max(limit.limit - limit.spent, 0);
+                const percent = limit.limit > 0 ? Math.min((limit.spent / limit.limit) * 100, 100) : 0;
+                const isLow = limit.limit > 0 && (100 - percent) < 20;
 
-            {/* Shopping Remaining */}
-            <div className="flex items-start gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
-              <div className={`p-2 rounded-lg shrink-0 ${shoppingIsLow ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}>
-                <IconShirt className="size-4" />
-              </div>
-              <div className="flex flex-col gap-0.5 min-w-0">
-                <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Shopping</span>
-                <span className="text-sm font-bold text-foreground">
-                  <AnimatedNumber value={shoppingRemaining} currency={currency} />{" "}
-                  <span className="text-xs font-normal text-muted-foreground">
-                    left of <AnimatedNumber value={shoppingLimit} currency={currency} />
-                  </span>
-                </span>
-                <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
-                  {shoppingIsLow 
-                    ? "Shopping limit is critically low (under 20% remaining). Consider holding off on shopping purchases." 
-                    : `${Math.round((shoppingRemaining / shoppingLimit) * 100)}% of your shopping budget is still available.`}
-                </p>
-              </div>
-            </div>
+                return (
+                  <div key={limit.id} className="flex items-start gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl relative overflow-hidden">
+                    {/* Progress Bar background highlight */}
+                    <div
+                      className={cn(
+                        "absolute left-0 top-0 bottom-0 opacity-8 transition-all duration-500",
+                        isLow ? "bg-destructive" : "bg-primary"
+                      )}
+                      style={{ width: `${percent}%` }}
+                    />
+                    
+                    <div className={cn("p-2 rounded-lg shrink-0 z-10", isLow ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary")}>
+                      <BudgetIcon name={limit.name} isLow={isLow} />
+                    </div>
+                    <div className="flex flex-col gap-0.5 min-w-0 z-10 flex-1">
+                      <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{limit.label}</span>
+                      <span className="text-sm font-bold text-foreground">
+                        <AnimatedNumber value={remaining} currency={currency} />{" "}
+                        <span className="text-xs font-normal text-muted-foreground">
+                          left of <AnimatedNumber value={limit.limit} currency={currency} />
+                        </span>
+                      </span>
+                      <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
+                        {isLow
+                          ? `${limit.label} is critically low (under 20% remaining).`
+                          : remaining > 0
+                          ? `${Math.round((remaining / limit.limit) * 100)}% of your budget is still available.`
+                          : `You have spent or exceeded your budget limits.`}
+                      </p>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
           </div>
         </div>
       </AnimatedCard>

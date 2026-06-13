@@ -32,6 +32,13 @@ interface TemplateItem {
   intervalMonths: number;
 }
 
+interface BudgetLimitItem {
+  id: string;
+  name: string;
+  label: string;
+  limit: number;
+}
+
 interface ProfileItem {
   name?: string | null;
   email?: string | null;
@@ -42,6 +49,7 @@ interface SettingsData {
   userSettings: UserSettingsData;
   accounts: AccountItem[];
   templates: TemplateItem[];
+  budgetLimits: BudgetLimitItem[];
   profile: ProfileItem;
 }
 
@@ -66,7 +74,7 @@ export default function SettingsClient({ userId, defaultTab = "templates" }: Set
     return null;
   });
   const [isMounted, setIsMounted] = useState(isGloballyMounted);
-  const [loading, setLoading] = useState(true);
+  const [isDataLoading, setIsDataLoading] = useState(true);
 
   // 1. Set mounted state
   useEffect(() => {
@@ -84,18 +92,6 @@ export default function SettingsClient({ userId, defaultTab = "templates" }: Set
         if (res.success && res.data) {
           const freshData = res.data as unknown as SettingsData;
 
-          let isDataChanged = false;
-          if (data) {
-            const oldHash = JSON.stringify(data);
-            const newHash = JSON.stringify(freshData);
-            if (oldHash !== newHash) {
-              isDataChanged = true;
-            }
-          } else {
-            // First load from DB
-            isDataChanged = true;
-          }
-
           setData(freshData);
           localStorage.setItem("tsuzuru_settings_data", JSON.stringify(freshData));
         } else {
@@ -105,7 +101,7 @@ export default function SettingsClient({ userId, defaultTab = "templates" }: Set
         console.error("Error syncing settings:", err);
         toast.error("Failed to sync settings with server.");
       } finally {
-        setLoading(false);
+        setIsDataLoading(false);
       }
     };
   }, [data]);
@@ -134,7 +130,7 @@ export default function SettingsClient({ userId, defaultTab = "templates" }: Set
   }, [isMounted]);
 
   // Render Skeletons if first visit and loading
-  if (!isMounted || (!data && loading)) {
+  if (!isMounted || (!data && isDataLoading)) {
     return <SettingsLoading />;
   }
 
@@ -147,6 +143,7 @@ export default function SettingsClient({ userId, defaultTab = "templates" }: Set
   };
   const accounts = data?.accounts || [];
   const templates = data?.templates || [];
+  const budgetLimits = data?.budgetLimits || [];
   const profile = data?.profile || {
     name: null,
     email: null,
@@ -160,6 +157,7 @@ export default function SettingsClient({ userId, defaultTab = "templates" }: Set
         userSettings={userSettings}
         accounts={accounts}
         templates={templates}
+        budgetLimits={budgetLimits}
         profile={profile}
         defaultTab={defaultTab}
       />

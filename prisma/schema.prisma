@@ -17,6 +17,7 @@ model User {
   templates     MonthlyTemplate[]
   settings      UserSettings?
   billFriends   BillFriend[]
+  budgetLimits  BudgetLimit[]
 }
 
 model Account {
@@ -83,4 +84,16 @@ model BillFriend {
   settledAt   DateTime?
   createdAt   DateTime  @default(now())
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model BudgetLimit {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String   // slug/unique name for category matching (e.g. "pocket_money")
+  label     String   // display name (e.g. "Pocket Money")
+  limit     Float
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, name])
 }
