@@ -618,7 +618,7 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
                   Allocate Receipt Items
                 </Label>
                 
-                <div className="flex flex-col gap-2 max-h-[260px] overflow-y-auto pr-1">
+                <div className="flex flex-col gap-2 max-h-[260px] overflow-y-auto overflow-x-hidden pr-1">
                   {receiptItems.map((item, idx) => {
                     const assigned = itemAssignments[idx] || ["Me"];
                     const sharedPrice = item.price / assigned.length;
@@ -976,7 +976,7 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
 
               {/* Items list */}
               {receiptItems.length > 0 ? (
-                <div className="flex flex-col gap-1.5 max-h-[220px] overflow-y-auto pr-1">
+                <div className="flex flex-col gap-1.5 max-h-[220px] overflow-y-auto overflow-x-hidden pr-1">
                   {receiptItems.map((item, idx) => (
                     <div key={idx} className="flex items-center justify-between bg-white dark:bg-zinc-900 border border-border/30 px-3 py-2 rounded-xl text-xs">
                       <span className="font-semibold text-foreground truncate max-w-[150px]">{item.name}</span>
