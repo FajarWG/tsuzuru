@@ -30,11 +30,11 @@ export default function BottomNav({ fab }: BottomNavProps) {
     <>
       <div
         className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pointer-events-none"
-        style={{ paddingBottom: "calc(1.1rem + env(safe-area-inset-bottom, 0px))" }}
+        style={{ paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom, 0px))" }}
       >
         {/* iPhone-style floating pill — truly transparent blur */}
         <nav
-          className="w-full max-w-[380px] pointer-events-auto flex items-center justify-around px-2.5 h-[60px] rounded-[26px] bg-white/20 dark:bg-zinc-950/20 backdrop-blur-2xl border border-border/25 shadow-lg"
+          className="w-[calc(100%-28px)] max-w-[402px] pointer-events-auto flex items-center justify-around px-2.5 h-[60px] rounded-[26px] bg-white/70 dark:bg-zinc-950/75 backdrop-blur-xl border border-border/30 shadow-lg"
         >
           {links.map((link) => {
             const Icon = link.icon;

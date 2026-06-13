@@ -289,34 +289,30 @@ export default function TemplatesConfigList({
   
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex justify-between items-start mb-3 pb-2 border-b border-border/10">
-        {!hideHeader ? (
-          <div>
-            <h2 className="font-sans text-base font-bold text-primary">Recurring Bills</h2>
-            <p className="text-[10px] text-muted-foreground">
-              Recurring bills — tap &quot;Paid&quot; when paid.
-            </p>
+      {!hideHeader && (
+        <div className="flex justify-between items-center pb-2 border-b border-border/20 mb-4">
+          <div className="flex items-center gap-2">
+            <IconCalendarRepeat className="size-4 text-primary" />
+            <h2 className="text-sm font-bold text-foreground">Recurring Bills</h2>
           </div>
-        ) : (
-          <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Recurring Bills</span>
-        )}
-        <Button
-          onClick={() => {
-            setCreateName("");
-            setCreateAmount("");
-            setCreateAccountId(accounts[0]?.id || "");
-            setCreateIntervalMonths("1");
-            setCreateError(null);
-            setCreateOpen(true);
-          }}
-          size="sm"
-          variant="outline"
-          className="gap-1 h-7 px-2.5 rounded-lg text-[10px] font-semibold cursor-pointer self-start"
-        >
-          <IconPlus className="size-3" />
-          Add Bill
-        </Button>
-      </div>
+          <Button
+            onClick={() => {
+              setCreateName("");
+              setCreateAmount("");
+              setCreateAccountId(accounts[0]?.id || "");
+              setCreateIntervalMonths("1");
+              setCreateError(null);
+              setCreateOpen(true);
+            }}
+            size="sm"
+            variant="outline"
+            className="gap-1 h-7 px-2.5 rounded-lg text-[10px] font-semibold cursor-pointer"
+          >
+            <IconPlus className="size-3" />
+            Add Bill
+          </Button>
+        </div>
+      )}
 
       <div className="flex flex-col divide-y divide-border/40">
         {items.length === 0 ? (
