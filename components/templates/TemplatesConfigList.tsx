@@ -110,6 +110,7 @@ export default function TemplatesConfigList({
   const [paySuccessId, setPaySuccessId] = useState<string | null>(null);
   const [paySourceAccountId, setPaySourceAccountId] = useState("");
   const [payoffAmount, setPayoffAmount] = useState("");
+  const isPayingItemCc = payingItem && 'isCreditCardBill' in payingItem && (payingItem as any).isCreditCardBill;
 
   // --- Create dialog handlers ---
   const handleCreateBill = async () => {
@@ -716,7 +717,7 @@ export default function TemplatesConfigList({
       <Dialog open={!!payingItem} onOpenChange={(open) => !open && closePay()}>
         <DialogContent className="max-w-[340px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
-            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
+            <DialogHeader className={cn("pb-4 shrink-0", isPayingItemCc && "border-b border-border/20")}>
               <DialogTitle className="font-sans">Mark as Paid</DialogTitle>
               <DialogDescription className="text-sm leading-relaxed">
                 Record payment of{" "}
@@ -728,15 +729,15 @@ export default function TemplatesConfigList({
                 for <strong>{payingItem?.name}</strong>?
                 <br />
                 <span className="text-xs text-muted-foreground mt-1 block">
-                  {payingItem && 'isCreditCardBill' in payingItem && (payingItem as any).isCreditCardBill
+                  {isPayingItemCc
                     ? "This will pay off the credit card and record a dual-entry transfer transaction."
                     : "This will deduct the full amount from the linked account and record it in history."}
                 </span>
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
-              {payingItem && 'isCreditCardBill' in payingItem && (payingItem as any).isCreditCardBill && (
+            {isPayingItemCc && (
+              <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
                 <div className="flex flex-col gap-3">
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-xs font-semibold">Payoff Amount</Label>
@@ -780,17 +781,17 @@ export default function TemplatesConfigList({
                     </Select>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
-            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
+            <DialogFooter className={cn("shrink-0 pt-4 gap-2", isPayingItemCc && "border-t border-border/20")}>
               <Button variant="outline" size="sm" onClick={closePay} disabled={!!isPayingId} className="cursor-pointer">
                 Cancel
               </Button>
               <Button
                 size="sm"
                 onClick={handleMarkPaid}
-                disabled={!!isPayingId || (payingItem && 'isCreditCardBill' in payingItem && (payingItem as any).isCreditCardBill && (!paySourceAccountId || !payoffAmount))}
+                disabled={!!isPayingId || (isPayingItemCc && (!paySourceAccountId || !payoffAmount))}
                 className="min-w-[100px] cursor-pointer"
               >
                 {isPayingId ? (
