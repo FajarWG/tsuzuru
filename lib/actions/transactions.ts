@@ -14,6 +14,8 @@ interface CreateTransactionInput {
   mealNumber?: number | null;
   description?: string | null;
   date?: Date;
+  isReceipt?: boolean;
+  receiptItems?: any;
 }
 
 interface UpdateTransactionInput extends CreateTransactionInput {
@@ -56,6 +58,8 @@ export async function createTransactionAction(data: CreateTransactionInput) {
           mealNumber: data.mealNumber,
           description: data.description,
           date: transactionDate,
+          isReceipt: data.isReceipt ?? false,
+          receiptItems: data.receiptItems ?? null,
         },
       }),
       prisma.account.update({
@@ -133,6 +137,8 @@ export async function updateTransactionAction(data: UpdateTransactionInput) {
           mealNumber: data.mealNumber,
           description: data.description,
           date: data.date || existing.date,
+          isReceipt: data.isReceipt ?? existing.isReceipt,
+          receiptItems: data.receiptItems !== undefined ? data.receiptItems : existing.receiptItems,
         },
       });
     });

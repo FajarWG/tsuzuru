@@ -19,6 +19,7 @@ import {
   IconHome,
   IconLoader,
   IconPizza,
+  IconPlus,
   IconRefresh,
   IconSearch,
   IconShirt,
@@ -26,6 +27,7 @@ import {
   IconTrash,
   IconTrendingUp,
   IconWallet,
+  IconChevronDown,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -78,6 +80,8 @@ interface TransactionItem {
   description: string | null;
   date: Date | string;
   isTemplate: boolean;
+  isReceipt?: boolean;
+  receiptItems?: any;
   account: {
     id: string;
     name: string;
@@ -98,6 +102,7 @@ interface TransactionsListProps {
 }
 
 const POCKET_MONEY_SUBCATS = [
+  { value: "shopping", label: "Shopping" },
   { value: "food", label: "Food" },
   { value: "drinks", label: "Drinks" },
   { value: "transport", label: "Transport" },
@@ -123,6 +128,8 @@ function getCategoryIcon(category: string, subCategory: string | null) {
 
   if (category === "pocket_money") {
     switch (subCategory) {
+      case "shopping":
+        return <IconCreditCard className="size-5 text-stone-500" />;
       case "food":
         return <IconPizza className="size-5 text-amber-600" />;
       case "drinks":
@@ -197,6 +204,7 @@ export default function TransactionsList({
   const [deleting, setDeleting] = useState<TransactionItem | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [expandedReceipts, setExpandedReceipts] = useState<Record<string, boolean>>({});
 
   const [editType, setEditType] = useState<TransactionType>("expense");
   const [editAmount, setEditAmount] = useState("");
@@ -207,6 +215,13 @@ export default function TransactionsList({
   const [editMealNumber, setEditMealNumber] = useState<number | null>(null);
   const [editDescription, setEditDescription] = useState("");
   const [editDate, setEditDate] = useState(() => new Date());
+
+  const [editIsReceipt, setEditIsReceipt] = useState(false);
+  const [editReceiptItems, setEditReceiptItems] = useState<{ name: string; price: number }[]>([]);
+  const [editNewItemName, setEditNewItemName] = useState("");
+  const [editNewItemPrice, setEditNewItemPrice] = useState("");
+
+  const totalReceiptAmount = editReceiptItems.reduce((sum, item) => sum + item.price, 0);
 
   const monthOptions = useMemo(() => {
     return Array.from({ length: 12 }, (_, i) => {
@@ -322,6 +337,29 @@ export default function TransactionsList({
     setEditMealNumber(tx.mealNumber);
     setEditDescription(tx.description || "");
     setEditDate(new Date(tx.date));
+    setEditIsReceipt(tx.isReceipt || false);
+    try {
+      const items = tx.receiptItems ? (typeof tx.receiptItems === "string" ? JSON.parse(tx.receiptItems) : tx.receiptItems) : [];
+      setEditReceiptItems(Array.isArray(items) ? items : []);
+    } catch {
+      setEditReceiptItems([]);
+    }
+    setEditNewItemName("");
+    setEditNewItemPrice("");
+  };
+
+  const handleEditModeChange = (receiptMode: boolean) => {
+    setEditIsReceipt(receiptMode);
+    if (receiptMode) {
+      setEditType("expense");
+      setEditCategory("pocket_money");
+      setEditSubCategory("shopping");
+    } else {
+      setEditType("expense");
+      setEditCategory("pocket_money");
+      setEditSubCategory("others");
+      setEditMealNumber(null);
+    }
   };
 
   const handleEditTypeChange = (nextType: TransactionType) => {
@@ -332,23 +370,31 @@ export default function TransactionsList({
       setEditMealNumber(null);
     } else {
       setEditCategory("pocket_money");
-      setEditSubCategory("");
+      setEditSubCategory("others");
       setEditMealNumber(null);
     }
   };
 
   const handleEditCategoryChange = (nextCategory: TransactionCategory) => {
     setEditCategory(nextCategory);
-    setEditSubCategory("");
+    setEditSubCategory(["pocket_money", "shopping"].includes(nextCategory) ? "others" : "");
     setEditMealNumber(null);
   };
 
   const handleSaveEdit = async () => {
     if (!editing) return;
 
-    const parsedAmount = parseInputAmount(editAmount);
-    if (!editAmount || parsedAmount <= 0) {
+    const parsedAmount = editIsReceipt ? totalReceiptAmount : parseInputAmount(editAmount);
+    if (editIsReceipt && editReceiptItems.length === 0) {
+      toast.error("Please add at least one item to the receipt");
+      return;
+    }
+    if (!editIsReceipt && (!editAmount || parsedAmount <= 0)) {
       toast.error("Please enter a valid amount");
+      return;
+    }
+    if (parsedAmount <= 0) {
+      toast.error("Transaction amount must be greater than 0");
       return;
     }
     if (
@@ -381,6 +427,8 @@ export default function TransactionsList({
             : null,
         description: editDescription.trim() || null,
         date: editDate,
+        isReceipt: editIsReceipt,
+        receiptItems: editIsReceipt ? editReceiptItems : null,
       });
 
       if (res.success) {
@@ -652,59 +700,93 @@ export default function TransactionsList({
               </h3>
 
               <div className="flex flex-col gap-2">
-                {items.map((tx) => (
-                  <div
-                    key={tx.id}
-                    className="bg-white dark:bg-zinc-900 border border-border/40 rounded-2xl p-4 flex justify-between items-center gap-3 shadow-xs"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div className="p-2 bg-muted rounded-xl text-primary">
-                        {getCategoryIcon(tx.category, tx.subCategory)}
-                      </div>
-                      <div className="flex min-w-0 flex-col gap-0.5">
-                        <span className="truncate text-xs font-semibold text-foreground leading-tight">
-                          {tx.description || tx.category.replace(/_/g, " ")}
-                        </span>
-                        <span className="truncate text-[10px] text-muted-foreground leading-none">
-                          {tx.account.name} · {tx.subCategory || tx.category}
-                        </span>
-                      </div>
-                    </div>
+                 {items.map((tx) => {
+                  const isExpanded = !!expandedReceipts[tx.id];
+                  return (
+                    <div
+                      key={tx.id}
+                      onClick={() => tx.isReceipt && setExpandedReceipts((prev) => ({ ...prev, [tx.id]: !prev[tx.id] }))}
+                      className={cn(
+                        "border rounded-2xl p-4 flex flex-col gap-3 shadow-xs transition-all select-none bg-white dark:bg-zinc-900",
+                        tx.isReceipt 
+                          ? "border-emerald-500/30 dark:border-emerald-500/20 cursor-pointer hover:bg-zinc-50/40 dark:hover:bg-zinc-950/20" 
+                          : "border-border/40"
+                      )}
+                    >
+                      <div className="flex justify-between items-center w-full gap-3">
+                        <div className="flex min-w-0 items-center gap-3 flex-1">
+                          <div className="p-2 bg-muted rounded-xl text-primary shrink-0">
+                            {getCategoryIcon(tx.category, tx.subCategory)}
+                          </div>
+                          <div className="flex min-w-0 flex-col gap-0.5">
+                            <span className="truncate text-xs font-semibold text-foreground leading-tight">
+                              {tx.description || tx.category.replace(/_/g, " ")}
+                            </span>
+                            <span className="truncate text-[10px] text-muted-foreground leading-none">
+                              {tx.account.name} · {tx.subCategory || tx.category}
+                            </span>
+                          </div>
+                        </div>
 
-                    <div className="flex shrink-0 items-center gap-2">
-                      <div className="text-right flex flex-col items-end">
-                        <span
-                          className={`text-xs font-sans font-bold ${
-                            tx.type === "expense"
-                              ? "text-destructive"
-                              : "text-primary"
-                          }`}
-                        >
-                          {tx.type === "expense" ? "-" : "+"}
-                          {formatCurrency(tx.amount, tx.currency)}
-                        </span>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <div className="text-right flex flex-col items-end mr-1">
+                            <span
+                              className={`text-xs font-sans font-bold ${
+                                tx.type === "expense"
+                                  ? "text-destructive"
+                                  : "text-primary"
+                              }`}
+                            >
+                              {tx.type === "expense" ? "-" : "+"}
+                              {formatCurrency(tx.amount, tx.currency)}
+                            </span>
+                          </div>
+
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEdit(tx);
+                            }}
+                            aria-label="Edit transaction"
+                          >
+                            <IconEdit className="size-3.5" />
+                          </Button>
+                        </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => openEdit(tx)}
-                        aria-label="Edit transaction"
-                      >
-                        <IconEdit className="size-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => {
-                          setDeleting(tx);
-                        }}
-                        aria-label="Delete transaction"
-                      >
-                        <IconTrash className="size-3.5 text-destructive" />
-                      </Button>
+
+                      {/* Collapsible Items list */}
+                      {tx.isReceipt && isExpanded && (() => {
+                        try {
+                          const items = tx.receiptItems ? (typeof tx.receiptItems === "string" ? JSON.parse(tx.receiptItems) : tx.receiptItems) : [];
+                          if (Array.isArray(items) && items.length > 0) {
+                            return (
+                              <div className="w-full pt-2.5 border-t border-border/20 flex flex-col gap-1.5">
+                                <span className="text-[9px] font-bold tracking-wider text-muted-foreground uppercase mb-0.5 px-0.5">
+                                  Items ({items.length})
+                                </span>
+                                <div className="flex flex-col gap-1.5 pl-1.5 pr-0.5">
+                                  {items.map((item: any, idx: number) => (
+                                    <div key={idx} className="flex justify-between items-center text-xs text-muted-foreground">
+                                      <span className="truncate max-w-[220px]">• {item.name}</span>
+                                      <span className="font-sans font-semibold text-foreground shrink-0">
+                                        {formatCurrency(item.price, tx.currency)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          }
+                        } catch {
+                          return null;
+                        }
+                        return null;
+                      })()}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))
@@ -729,61 +811,369 @@ export default function TransactionsList({
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto px-1 flex flex-col gap-4 py-3 min-h-0">
-
-              <div className="flex bg-muted p-1 rounded-lg border border-border/20">
-                {(["expense", "income"] as const).map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => handleEditTypeChange(type)}
-                    className={cn(
-                      "flex-1 h-9 rounded-md text-xs font-semibold tracking-wide transition-all capitalize cursor-pointer",
-                      editType === type
-                        ? "bg-white dark:bg-zinc-800 text-foreground shadow-xs"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {type}
-                  </button>
-                ))}
+              {/* Mode Selector */}
+              <div className="flex gap-2 bg-muted/50 p-1 rounded-xl border border-border/10">
+                <button
+                  type="button"
+                  onClick={() => handleEditModeChange(false)}
+                  className={cn(
+                    "flex-1 h-8 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                    !editIsReceipt
+                      ? "bg-white dark:bg-zinc-800 text-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Single Transaction
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleEditModeChange(true)}
+                  className={cn(
+                    "flex-1 h-8 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                    editIsReceipt
+                      ? "bg-white dark:bg-zinc-800 text-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Receipt Mode
+                </button>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground">
-                  Amount
-                </Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  value={editAmount}
-                  onChange={(e) => setEditAmount(formatInputAmount(e.target.value))}
-                  className="h-11 rounded-xl font-semibold"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground">
-                  Account
-                </Label>
-                <Select value={editAccountId} onValueChange={setEditAccountId}>
-                  <SelectTrigger className="h-11 rounded-xl text-sm font-semibold">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accounts.map((acc) => (
-                      <SelectItem key={acc.id} value={acc.id} className="text-sm">
-                        {acc.name}{" "}
-                        <span className="text-muted-foreground">
-                          ({acc.currency})
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {editType === "expense" && (
+              {!editIsReceipt ? (
                 <>
+                  {/* Type Selector */}
+                  <div className="flex bg-muted p-1 rounded-lg border border-border/20">
+                    {(["expense", "income"] as const).map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => {
+                          handleEditTypeChange(type);
+                          if (type === "income") {
+                            setEditIsReceipt(false);
+                          }
+                        }}
+                        className={cn(
+                          "flex-1 h-9 rounded-md text-xs font-semibold tracking-wide transition-all capitalize cursor-pointer",
+                          editType === type
+                            ? "bg-white dark:bg-zinc-800 text-foreground shadow-xs"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Amount */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground">
+                      Amount
+                    </Label>
+                    <div className="relative flex items-center bg-white dark:bg-zinc-900 border border-border/50 rounded-xl px-3 focus-within:border-primary transition-colors h-11">
+                      <span className="text-sm font-bold text-muted-foreground mr-1.5 select-none">
+                        {editing?.currency === "IDR" ? "Rp" : "¥"}
+                      </span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={editAmount}
+                        onChange={(e) => setEditAmount(formatInputAmount(e.target.value))}
+                        className="flex-1 h-full text-sm font-bold font-sans tracking-wide bg-transparent focus:outline-none text-foreground"
+                        placeholder="0"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* Account */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground">
+                      Account
+                    </Label>
+                    <Select value={editAccountId} onValueChange={setEditAccountId}>
+                      <SelectTrigger className="h-11 rounded-xl text-sm font-semibold">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts.map((acc) => (
+                          <SelectItem key={acc.id} value={acc.id} className="text-sm">
+                            {acc.name}{" "}
+                            <span className="text-muted-foreground">
+                              ({acc.currency})
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Expense categories */}
+                  {editType === "expense" && (
+                    <>
+                      <div className="flex flex-col gap-1.5">
+                        <Label className="text-xs font-semibold text-muted-foreground">
+                          Category
+                        </Label>
+                        <Select
+                          value={editCategory}
+                          onValueChange={(value) =>
+                            handleEditCategoryChange(value as TransactionCategory)
+                          }
+                        >
+                          <SelectTrigger className="h-11 rounded-xl text-sm font-semibold">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pocket_money" className="text-sm">
+                              Pocket Money
+                            </SelectItem>
+                            <SelectItem value="shopping" className="text-sm">
+                              Shopping
+                            </SelectItem>
+                            <SelectItem value="template" className="text-sm">
+                              Template
+                            </SelectItem>
+                            <SelectItem value="adjustment" className="text-sm">
+                              Adjustment
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {["pocket_money", "shopping"].includes(editCategory) && (
+                        <div className="flex flex-col gap-1.5">
+                          <Label className="text-xs font-semibold text-muted-foreground">
+                            Sub-category
+                          </Label>
+                          <Select
+                            value={editSubCategory}
+                            onValueChange={(value) => {
+                              setEditSubCategory(value);
+                              setEditMealNumber(value === "food" ? 1 : null);
+                            }}
+                          >
+                            <SelectTrigger className="h-11 rounded-xl text-sm font-semibold">
+                              <SelectValue placeholder="Select sub-category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {editSubcatOptions.map((opt) => (
+                                <SelectItem
+                                  key={opt.value}
+                                  value={opt.value}
+                                  className="text-sm"
+                                >
+                                  {opt.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
+                      {editCategory === "pocket_money" &&
+                        editSubCategory === "food" && (
+                          <div className="flex flex-col gap-2 p-3 bg-primary/5 border border-primary/10 rounded-xl">
+                            <Label className="text-[10px] font-bold tracking-wide text-primary uppercase">
+                              Which meal?
+                            </Label>
+                            <div className="flex gap-2">
+                              {[1, 2, 3, 4].map((meal) => (
+                                <button
+                                  key={meal}
+                                  type="button"
+                                  onClick={() => setEditMealNumber(meal)}
+                                  className={cn(
+                                    "flex-1 h-8 rounded-lg border text-xs font-semibold transition-all",
+                                    editMealNumber === meal
+                                      ? "bg-primary text-primary-foreground border-transparent"
+                                      : "bg-white dark:bg-zinc-900 border-border text-foreground hover:bg-muted",
+                                  )}
+                                >
+                                  {meal}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                    </>
+                  )}
+
+                  {/* Description */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground">
+                      Description
+                    </Label>
+                    <Input
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                      className="h-11 rounded-xl"
+                      placeholder="Optional"
+                    />
+                  </div>
+
+                  {/* Date */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground">
+                      Date
+                    </Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-11 justify-start rounded-xl bg-white px-3 text-sm font-semibold dark:bg-zinc-900"
+                        >
+                          <IconCalendar className="size-4 text-muted-foreground" />
+                          {formatDisplayDate(editDate)}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={editDate}
+                          onSelect={(selectedDate) => {
+                            if (selectedDate) setEditDate(selectedDate);
+                          }}
+                          autoFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* 1. Description */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground">
+                      Description
+                    </Label>
+                    <Input
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                      className="h-11 rounded-xl"
+                      placeholder="Optional"
+                    />
+                  </div>
+
+                  {/* 2. Receipt Items Card */}
+                  <div className="flex flex-col gap-3 p-3 bg-muted/40 border border-border/50 rounded-xl">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                      Receipt Items ({editReceiptItems.length})
+                    </Label>
+
+                    {/* Items list */}
+                    {editReceiptItems.length > 0 ? (
+                      <div className="flex flex-col gap-1.5 max-h-[160px] overflow-y-auto pr-1">
+                        {editReceiptItems.map((item, idx) => (
+                          <div key={idx} className="flex items-center justify-between bg-white dark:bg-zinc-900 border border-border/30 px-3 py-1.5 rounded-lg text-xs">
+                            <span className="font-semibold text-foreground truncate max-w-[150px]">{item.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-muted-foreground">
+                                {editing?.currency === "IDR" ? "Rp" : "¥"}{item.price.toLocaleString()}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditReceiptItems((prev) => prev.filter((_, i) => i !== idx));
+                                }}
+                                className="p-1 hover:bg-red-50 dark:hover:bg-red-950/20 text-red-500 rounded-md transition-colors cursor-pointer"
+                              >
+                                <IconTrash className="size-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        {/* Display Total inside Card */}
+                        {editReceiptItems.length > 0 && (
+                          <div className="flex items-center justify-between border-t border-border/40 pt-2.5 mt-2 px-1">
+                            <span className="text-xs font-semibold text-muted-foreground">Total Amount</span>
+                            <span className="text-sm font-bold text-foreground">
+                              {editing?.currency === "IDR" ? "Rp" : "¥"}{totalReceiptAmount.toLocaleString()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4 px-4 text-xs text-muted-foreground bg-white dark:bg-zinc-900 border border-dashed border-border/50 rounded-lg">
+                        No items added yet. Add manually below.
+                      </div>
+                    )}
+
+                    {/* Add manual item form */}
+                    <div className="flex flex-col gap-1.5 mt-1 pt-1 border-t border-border/40">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/75">
+                        Add Item Manually
+                      </span>
+                      <div className="flex gap-2">
+                        <Input
+                          type="text"
+                          placeholder="Item name"
+                          value={editNewItemName}
+                          onChange={(e) => setEditNewItemName(e.target.value)}
+                          className="h-8 text-xs flex-1 rounded-lg"
+                        />
+                        <div className="relative w-28">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground select-none">
+                            {editing?.currency === "IDR" ? "Rp" : "¥"}
+                          </span>
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="Price"
+                            value={editNewItemPrice}
+                            onChange={(e) => setEditNewItemPrice(formatInputAmount(e.target.value))}
+                            className="h-8 text-xs pl-7 rounded-lg font-semibold"
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-8 w-8 p-0 rounded-lg shrink-0 cursor-pointer"
+                          onClick={() => {
+                            if (!editNewItemName.trim()) {
+                              toast.error("Item name cannot be empty");
+                              return;
+                            }
+                            const parsed = parseInputAmount(editNewItemPrice);
+                            if (parsed <= 0) {
+                              toast.error("Price must be greater than 0");
+                              return;
+                            }
+                            setEditReceiptItems((prev) => [...prev, { name: editNewItemName.trim(), price: parsed }]);
+                            setEditNewItemName("");
+                            setEditNewItemPrice("");
+                          }}
+                        >
+                          <IconPlus className="size-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. Account */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground">
+                      Account
+                    </Label>
+                    <Select value={editAccountId} onValueChange={setEditAccountId}>
+                      <SelectTrigger className="h-11 rounded-xl text-sm font-semibold">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts.map((acc) => (
+                          <SelectItem key={acc.id} value={acc.id} className="text-sm">
+                            {acc.name}{" "}
+                            <span className="text-muted-foreground">
+                              ({acc.currency})
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* 4. Category */}
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-xs font-semibold text-muted-foreground">
                       Category
@@ -814,6 +1204,7 @@ export default function TransactionsList({
                     </Select>
                   </div>
 
+                  {/* 5. Sub-category */}
                   {["pocket_money", "shopping"].includes(editCategory) && (
                     <div className="flex flex-col gap-1.5">
                       <Label className="text-xs font-semibold text-muted-foreground">
@@ -844,92 +1235,61 @@ export default function TransactionsList({
                     </div>
                   )}
 
-                  {editCategory === "pocket_money" &&
-                    editSubCategory === "food" && (
-                      <div className="flex flex-col gap-2 p-3 bg-primary/5 border border-primary/10 rounded-xl">
-                        <Label className="text-[10px] font-bold tracking-wide text-primary uppercase">
-                          Which meal?
-                        </Label>
-                        <div className="flex gap-2">
-                          {[1, 2, 3, 4].map((meal) => (
-                            <button
-                              key={meal}
-                              type="button"
-                              onClick={() => setEditMealNumber(meal)}
-                              className={cn(
-                                "flex-1 h-8 rounded-lg border text-xs font-semibold transition-all",
-                                editMealNumber === meal
-                                  ? "bg-primary text-primary-foreground border-transparent"
-                                  : "bg-white dark:bg-zinc-900 border-border text-foreground hover:bg-muted",
-                              )}
-                            >
-                              {meal}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                  {/* 6. Date */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground">
+                      Date
+                    </Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-11 justify-start rounded-xl bg-white px-3 text-sm font-semibold dark:bg-zinc-900"
+                        >
+                          <IconCalendar className="size-4 text-muted-foreground" />
+                          {formatDisplayDate(editDate)}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="w-auto p-0">
+                        <Calendar
+                          mode="single"
+                          selected={editDate}
+                          onSelect={(selectedDate) => {
+                            if (selectedDate) setEditDate(selectedDate);
+                          }}
+                          autoFocus
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </>
               )}
-
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground">
-                  Description
-                </Label>
-                <Input
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
-                  className="h-11 rounded-xl"
-                  placeholder="Optional"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold text-muted-foreground">
-                  Date
-                </Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-11 justify-start rounded-xl bg-white px-3 text-sm font-semibold dark:bg-zinc-900"
-                    >
-                      <IconCalendar className="size-4 text-muted-foreground" />
-                      {formatDisplayDate(editDate)}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent align="start" className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={editDate}
-                      onSelect={(selectedDate) => {
-                        if (selectedDate) setEditDate(selectedDate);
-                      }}
-                      autoFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
             </div>
 
-            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
+            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 flex flex-row gap-2 w-full sm:space-x-0 sm:justify-between">
               <Button
-                variant="outline"
+                variant="destructive"
                 size="sm"
-                onClick={() => setEditing(null)}
+                type="button"
+                onClick={() => {
+                  setDeleting(editing);
+                  setEditing(null);
+                }}
                 disabled={isSaving}
+                className="flex-1 flex items-center justify-center gap-1.5 cursor-pointer text-xs font-semibold h-10 rounded-xl"
               >
-                Cancel
+                <IconTrash className="size-3.5" />
+                Delete
               </Button>
               <Button
                 size="sm"
                 onClick={handleSaveEdit}
                 disabled={isSaving}
-                className="min-w-[88px]"
+                className="flex-1 flex items-center justify-center gap-1.5 cursor-pointer text-xs font-semibold h-10 rounded-xl"
               >
                 {isSaving ? (
-                  <IconLoader className="size-4 animate-spin" />
+                  <IconLoader className="size-3.5 animate-spin" />
                 ) : (
                   "Save"
                 )}
