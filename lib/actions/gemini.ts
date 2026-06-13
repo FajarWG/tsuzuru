@@ -116,3 +116,65 @@ Do not include markdown tags, code blocks, or extra text. Return ONLY the raw JS
     return { success: false, error: errMsg };
   }
 }
+
+export async function parseReceiptTextCustomAction(text: string, model: string, systemPrompt: string) {
+  const statusCheck = await checkAiLimitAction();
+  if (statusCheck.limited) {
+    return { success: false, error: `AI is temporarily limited. Try again in ${statusCheck.secondsLeft} seconds.` };
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return { success: false, error: "GEMINI_API_KEY is not configured" };
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: `${systemPrompt}\n\nOCR Text:\n${text}` }
+            ]
+          }
+        ],
+        generationConfig: {
+          responseMimeType: "application/json"
+        }
+      })
+    });
+
+    if (response.status === 429) {
+      setAiStatus({ limitUntil: Date.now() + 5 * 60 * 1000 });
+      return { success: false, error: "AI rate limit reached. Auto-parse disabled for 5 minutes." };
+    }
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Gemini API returned status ${response.status}: ${errText}`);
+    }
+
+    const resJson = await response.json();
+    const replyText = resJson.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!replyText) {
+      throw new Error("Empty response from Gemini API");
+    }
+
+    const data = JSON.parse(replyText.trim());
+    return { success: true, data };
+  } catch (err) {
+    console.error("Gemini API error:", err);
+    const errMsg = (err as Error).message;
+    if (errMsg.includes("429") || errMsg.toLowerCase().includes("quota") || errMsg.toLowerCase().includes("rate limit")) {
+      setAiStatus({ limitUntil: Date.now() + 5 * 60 * 1000 });
+    }
+    return { success: false, error: errMsg };
+  }
+}
