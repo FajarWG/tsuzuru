@@ -190,7 +190,7 @@ export default function WelcomeDialog({ isOnboarded, userId }: WelcomeDialogProp
       {
         name: trimmed,
         type: newAccountType,
-        balance: formatInputAmount(newAccountBalance),
+        balance: newAccountType === "credit_card" ? "0" : formatInputAmount(newAccountBalance),
         checked: true,
       },
     ]);
@@ -403,9 +403,10 @@ export default function WelcomeDialog({ isOnboarded, userId }: WelcomeDialogProp
   };
 
   const getAccountIcon = (type: string) => {
-    if (type === "investment") return <IconActivity className="size-4" />;
-    if (type === "ewallet") return <IconCreditCard className="size-4" />;
-    return <IconBuildingBank className="size-4" />;
+    if (type === "investment") return <IconActivity className="size-4 text-emerald-600 dark:text-emerald-400" />;
+    if (type === "credit_card") return <IconCreditCard className="size-4 text-rose-500 dark:text-rose-400" />;
+    if (type === "ewallet") return <IconWallet className="size-4 text-amber-500 dark:text-amber-400" />;
+    return <IconBuildingBank className="size-4 text-blue-500 dark:text-blue-400" />;
   };
 
   return (
@@ -1080,26 +1081,29 @@ export default function WelcomeDialog({ isOnboarded, userId }: WelcomeDialogProp
                     >
                       <option value="bank">Bank Account</option>
                       <option value="ewallet">E-Wallet / Cash</option>
+                      <option value="credit_card">Credit Card</option>
                       <option value="investment">Investment / Others</option>
                     </select>
                   </div>
 
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Starting Balance</Label>
-                    <div className="relative flex items-center">
-                      <span className="absolute left-3 text-xs font-bold text-muted-foreground">
-                        {currency === "JPY" ? "¥" : "Rp"}
-                      </span>
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        value={newAccountBalance}
-                        onChange={(e) => setNewAccountBalance(formatInputAmount(e.target.value))}
-                        className={cn("h-9 font-semibold rounded-xl text-xs", currency === "JPY" ? "pl-7" : "pl-9")}
-                        placeholder="0"
-                      />
+                  {newAccountType !== "credit_card" && (
+                    <div className="flex flex-col gap-1">
+                      <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Starting Balance</Label>
+                      <div className="relative flex items-center">
+                        <span className="absolute left-3 text-xs font-bold text-muted-foreground">
+                          {currency === "JPY" ? "¥" : "Rp"}
+                        </span>
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          value={newAccountBalance}
+                          onChange={(e) => setNewAccountBalance(formatInputAmount(e.target.value))}
+                          className={cn("h-9 font-semibold rounded-xl text-xs", currency === "JPY" ? "pl-7" : "pl-9")}
+                          placeholder="0"
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 <Button

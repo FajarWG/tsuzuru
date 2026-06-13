@@ -27,6 +27,8 @@ import {
   IconWallet,
   IconChevronDown,
   IconChevronUp,
+  IconBuildingBank,
+  IconActivity,
 } from "@tabler/icons-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -231,7 +233,7 @@ export default function SettingsForm({
       toast.error("Please enter account name");
       return;
     }
-    const parsedBalance = parseInputAmount(addAccBalance);
+    const parsedBalance = addAccType === "credit_card" ? 0 : parseInputAmount(addAccBalance);
 
     setIsAddingAcc(true);
 
@@ -282,7 +284,7 @@ export default function SettingsForm({
       toast.error("Please enter account name");
       return;
     }
-    const parsedBalance = parseInputAmount(editAccBalance);
+    const parsedBalance = editAccType === "credit_card" ? (editingAccount.type === "credit_card" ? editingAccount.balance : 0) : parseInputAmount(editAccBalance);
 
     setIsSavingAcc(true);
 
@@ -368,6 +370,9 @@ export default function SettingsForm({
     id: a.id,
     name: a.name,
     currency: a.currency,
+    balance: a.balance,
+    type: a.type,
+    isActive: a.isActive,
   }));
 
   return (
@@ -566,15 +571,23 @@ export default function SettingsForm({
                           )}
                         >
                           <div className="flex min-w-0 items-center gap-2.5">
-                            <div className="p-2 bg-white dark:bg-zinc-800 rounded-lg shadow-2xs text-primary/80 border border-border/20">
-                              <IconCreditCard className="size-4" />
+                            <div className="p-2 bg-white dark:bg-zinc-800 rounded-lg shadow-2xs border border-border/20">
+                              {acc.type === "investment" ? (
+                                <IconActivity className="size-4 text-emerald-600 dark:text-emerald-400" />
+                              ) : acc.type === "credit_card" ? (
+                                <IconCreditCard className="size-4 text-rose-500 dark:text-rose-400" />
+                              ) : acc.type === "ewallet" ? (
+                                <IconWallet className="size-4 text-amber-500 dark:text-amber-400" />
+                              ) : (
+                                <IconBuildingBank className="size-4 text-blue-500 dark:text-blue-400" />
+                              )}
                             </div>
                             <div className="flex min-w-0 flex-col gap-0.5">
                               <span className="truncate text-xs font-semibold text-foreground leading-tight">
                                 {acc.name}
                               </span>
                               <span className="truncate text-[10px] text-muted-foreground leading-none capitalize">
-                                {acc.type} · {acc.currency}{" "}
+                                {acc.type === "credit_card" ? "Credit Card" : acc.type === "ewallet" ? "E-Wallet" : acc.type} · {acc.currency}{" "}
                                 {!acc.isActive && "· Inactive"}
                               </span>
                             </div>
@@ -921,6 +934,12 @@ export default function SettingsForm({
                         E-Wallet
                       </SelectItem>
                       <SelectItem
+                        value="credit_card"
+                        className="text-xs font-medium font-sans"
+                      >
+                        Credit Card
+                      </SelectItem>
+                      <SelectItem
                         value="investment"
                         className="text-xs font-medium"
                       >
@@ -931,18 +950,20 @@ export default function SettingsForm({
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold">Initial Balance</Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  value={addAccBalance}
-                  onChange={(e) => setAddAccBalance(formatInputAmount(e.target.value))}
-                  className="h-10 font-semibold"
-                  placeholder="0"
-                  required
-                />
-              </div>
+              {addAccType !== "credit_card" && (
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-xs font-semibold">Initial Balance</Label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={addAccBalance}
+                    onChange={(e) => setAddAccBalance(formatInputAmount(e.target.value))}
+                    className="h-10 font-semibold"
+                    placeholder="0"
+                    required
+                  />
+                </div>
+              )}
             </div>
 
             <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
@@ -1039,6 +1060,12 @@ export default function SettingsForm({
                         E-Wallet
                       </SelectItem>
                       <SelectItem
+                        value="credit_card"
+                        className="text-xs font-medium font-sans"
+                      >
+                        Credit Card
+                      </SelectItem>
+                      <SelectItem
                         value="investment"
                         className="text-xs font-medium"
                       >
@@ -1049,18 +1076,20 @@ export default function SettingsForm({
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold">Balance</Label>
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  value={editAccBalance}
-                  onChange={(e) => setEditAccBalance(formatInputAmount(e.target.value))}
-                  className="h-10 font-semibold"
-                  placeholder="0"
-                  required
-                />
-              </div>
+              {editAccType !== "credit_card" && (
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-xs font-semibold">Balance</Label>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={editAccBalance}
+                    onChange={(e) => setEditAccBalance(formatInputAmount(e.target.value))}
+                    className="h-10 font-semibold"
+                    placeholder="0"
+                    required
+                  />
+                </div>
+              )}
 
               <div className="flex items-center justify-between rounded-xl bg-muted/40 p-3 border border-border/10">
                 <div className="flex flex-col gap-0.5">

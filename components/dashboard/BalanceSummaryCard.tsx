@@ -14,6 +14,7 @@ import {
   IconChevronUp,
   IconEye,
   IconEyeOff,
+  IconWallet,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -34,9 +35,10 @@ interface BalanceSummaryCardProps {
 }
 
 function AccountTypeIcon({ type }: { type: string }) {
-  if (type === "investment") return <IconActivity className="size-4" />;
-  if (type === "ewallet") return <IconCreditCard className="size-4" />;
-  return <IconBuildingBank className="size-4" />;
+  if (type === "investment") return <IconActivity className="size-4 text-emerald-600 dark:text-emerald-400" />;
+  if (type === "credit_card") return <IconCreditCard className="size-4 text-rose-500 dark:text-rose-400" />;
+  if (type === "ewallet") return <IconWallet className="size-4 text-amber-500 dark:text-amber-400" />;
+  return <IconBuildingBank className="size-4 text-blue-500 dark:text-blue-400" />;
 }
 
 export default function BalanceSummaryCard({
