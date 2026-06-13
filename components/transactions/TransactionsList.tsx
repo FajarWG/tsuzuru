@@ -195,7 +195,6 @@ export default function TransactionsList({
 
   const [editing, setEditing] = useState<TransactionItem | null>(null);
   const [deleting, setDeleting] = useState<TransactionItem | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -323,7 +322,6 @@ export default function TransactionsList({
     setEditMealNumber(tx.mealNumber);
     setEditDescription(tx.description || "");
     setEditDate(new Date(tx.date));
-    setError(null);
   };
 
   const handleEditTypeChange = (nextType: TransactionType) => {
@@ -350,7 +348,7 @@ export default function TransactionsList({
 
     const parsedAmount = parseInputAmount(editAmount);
     if (!editAmount || parsedAmount <= 0) {
-      setError("Please enter a valid amount");
+      toast.error("Please enter a valid amount");
       return;
     }
     if (
@@ -358,12 +356,11 @@ export default function TransactionsList({
       ["pocket_money", "shopping"].includes(editCategory) &&
       !editSubCategory
     ) {
-      setError("Please select a sub-category");
+      toast.error("Please select a sub-category");
       return;
     }
 
     setIsSaving(true);
-    setError(null);
 
     try {
       const res = await updateTransactionAction({
@@ -389,12 +386,13 @@ export default function TransactionsList({
       if (res.success) {
         toast.success("Transaction updated successfully");
         setEditing(null);
+        window.dispatchEvent(new CustomEvent("transaction-added"));
         router.refresh();
       } else {
-        setError(res.error || "Failed to update transaction");
+        toast.error(res.error || "Failed to update transaction");
       }
     } catch {
-      setError("An unexpected error occurred");
+      toast.error("An unexpected error occurred");
     } finally {
       setIsSaving(false);
     }
@@ -404,7 +402,6 @@ export default function TransactionsList({
     if (!deleting) return;
 
     setIsDeleting(true);
-    setError(null);
 
     try {
       const res = await deleteTransactionAction(deleting.id, userId);
@@ -412,12 +409,13 @@ export default function TransactionsList({
       if (res.success) {
         toast.success("Transaction deleted successfully");
         setDeleting(null);
+        window.dispatchEvent(new CustomEvent("transaction-added"));
         router.refresh();
       } else {
-        setError(res.error || "Failed to delete transaction");
+        toast.error(res.error || "Failed to delete transaction");
       }
     } catch {
-      setError("An unexpected error occurred");
+      toast.error("An unexpected error occurred");
     } finally {
       setIsDeleting(false);
     }
@@ -699,7 +697,6 @@ export default function TransactionsList({
                         size="icon-xs"
                         onClick={() => {
                           setDeleting(tx);
-                          setError(null);
                         }}
                         aria-label="Delete transaction"
                       >
@@ -732,11 +729,6 @@ export default function TransactionsList({
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-4 py-3 min-h-0">
-              {error && (
-                <Alert variant="destructive" className="py-2">
-                  <AlertDescription className="text-xs">{error}</AlertDescription>
-                </Alert>
-              )}
 
               <div className="flex bg-muted p-1 rounded-lg border border-border/20">
                 {(["expense", "income"] as const).map((type) => (
@@ -960,12 +952,6 @@ export default function TransactionsList({
               This will remove the transaction and reverse its balance effect.
             </DialogDescription>
           </DialogHeader>
-
-          {error && (
-            <Alert variant="destructive" className="py-2">
-              <AlertDescription className="text-xs">{error}</AlertDescription>
-            </Alert>
-          )}
 
           {deleting && (
             <div className="rounded-2xl border border-border/40 bg-muted/40 p-3">

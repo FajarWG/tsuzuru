@@ -78,11 +78,9 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
   const [direction, setDirection] = useState<"i_owe" | "they_owe">("they_owe");
   const [description, setDescription] = useState("");
   const [isAdding, setIsAdding] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
 
   // Action states
   const [settlingId, setSettlingId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
   const [deletingBill, setDeletingBill] = useState<BillItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -98,18 +96,17 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
 
   const resetAddForm = () => {
     setPersonName(""); setAmount(""); setCurrency("JPY");
-    setDirection("they_owe"); setDescription(""); setAddError(null);
+    setDirection("they_owe"); setDescription("");
   };
 
   const handleAdd = async () => {
     const parsedAmount = parseInputAmount(amount);
     if (!personName.trim() || !amount || parsedAmount <= 0) {
-      setAddError("Please fill in all required fields with valid values.");
+      toast.error("Please fill in all required fields with valid values.");
       return;
     }
 
     setIsAdding(true);
-    setAddError(null);
 
     try {
       const res = await createBillAction({ personName, amount: parsedAmount, currency, direction, description: description || undefined });
@@ -127,27 +124,27 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
         resetAddForm();
         setAddOpen(false);
       } else {
-        setAddError(res.error || "Failed to add bill");
+        toast.error(res.error || "Failed to add bill");
       }
     } catch {
-      setAddError("An unexpected error occurred");
+      toast.error("An unexpected error occurred");
     } finally {
       setIsAdding(false);
     }
   };
 
   const handleSettle = async (id: string) => {
-    setSettlingId(id); setActionError(null);
+    setSettlingId(id);
     try {
       const res = await settleBillAction(id);
       if (res.success) {
         toast.success("Bill settled successfully");
         setBills((prev) => prev.map((b) => b.id === id ? { ...b, isSettled: true, settledAt: new Date() } : b));
       } else {
-        setActionError(res.error || "Failed to settle");
+        toast.error(res.error || "Failed to settle");
       }
     } catch {
-      setActionError("Unexpected error");
+      toast.error("Unexpected error");
     } finally {
       setSettlingId(null);
     }
@@ -212,13 +209,6 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
           </TabsTrigger>
         </TabsList>
       </Tabs>
-
-      {/* Action error */}
-      {actionError && (
-        <Alert variant="destructive" className="py-2">
-          <AlertDescription className="text-xs">{actionError}</AlertDescription>
-        </Alert>
-      )}
 
       {/* Bills list */}
       {displayBills.length === 0 ? (
@@ -337,11 +327,6 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
-              {addError && (
-                <Alert variant="destructive" className="py-2">
-                  <AlertDescription className="text-xs">{addError}</AlertDescription>
-                </Alert>
-              )}
 
               {/* Direction */}
               <div className="flex flex-col gap-1.5">

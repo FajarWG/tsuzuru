@@ -65,7 +65,6 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
   const [date, setDate] = useState(() => new Date());
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const activeAccount = accounts.find((a) => a.id === accountId);
   const currencySymbol = activeAccount?.currency === "IDR" ? "Rp" : "¥";
@@ -85,16 +84,15 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
     e.preventDefault();
     const parsedAmount = parseInputAmount(amount);
     if (!amount || parsedAmount <= 0) {
-      setError("Please enter a valid amount");
+      toast.error("Please enter a valid amount");
       return;
     }
     if (type === "expense" && !subCategory) {
-      setError("Please select a sub-category");
+      toast.error("Please select a sub-category");
       return;
     }
 
     setIsSubmitting(true);
-    setError(null);
 
     // If offline, save the transaction payload locally in localStorage queue
     if (typeof window !== "undefined" && !navigator.onLine) {
@@ -117,11 +115,12 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
         localStorage.setItem("tsuzuru_offline_transactions", JSON.stringify(transactions));
 
         toast.success("Offline: Transaksi disimpan secara lokal dan akan disinkronkan saat online.");
+        window.dispatchEvent(new CustomEvent("transaction-added"));
         router.push("/");
         return;
       } catch (err) {
         console.error("[Offline] Failed to save transaction locally:", err);
-        setError("Failed to save transaction locally when offline");
+        toast.error("Failed to save transaction locally when offline");
         setIsSubmitting(false);
         return;
       }
@@ -141,13 +140,14 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
       });
 
       if (res.success) {
+        window.dispatchEvent(new CustomEvent("transaction-added"));
         router.push("/");
       } else {
-        setError(res.error || "Failed to save transaction");
+        toast.error(res.error || "Failed to save transaction");
         setIsSubmitting(false);
       }
     } catch {
-      setError("An unexpected error occurred");
+      toast.error("An unexpected error occurred");
       setIsSubmitting(false);
     }
   };
@@ -170,12 +170,6 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
             Add Transaction
           </h1>
         </div>
-
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription className="text-xs">{error}</AlertDescription>
-          </Alert>
-        )}
 
         {/* Type toggle */}
         <div className="flex bg-muted p-1 rounded-lg w-full border border-border/20">

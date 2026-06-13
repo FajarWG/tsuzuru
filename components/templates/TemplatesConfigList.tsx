@@ -87,7 +87,6 @@ export default function TemplatesConfigList({
   const [createAccountId, setCreateAccountId] = useState(accounts[0]?.id || "");
   const [createIntervalMonths, setCreateIntervalMonths] = useState("1");
   const [isCreating, setIsCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
 
   // Edit dialog state
   const [editingItem, setEditingItem] = useState<TemplateItem | null>(null);
@@ -97,37 +96,33 @@ export default function TemplatesConfigList({
   const [editIsActive, setEditIsActive] = useState(true);
   const [editIntervalMonths, setEditIntervalMonths] = useState("1");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
-  const [editError, setEditError] = useState<string | null>(null);
 
   // Delete dialog state
   const [deletingItem, setDeletingItem] = useState<TemplateItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Pay dialog state
   const [payingItem, setPayingItem] = useState<TemplateItem | null>(null);
   const [isPayingId, setIsPayingId] = useState<string | null>(null);
-  const [payError, setPayError] = useState<string | null>(null);
   const [paySuccessId, setPaySuccessId] = useState<string | null>(null);
 
   // --- Create dialog handlers ---
   const handleCreateBill = async () => {
     if (!createName.trim()) {
-      setCreateError("Please enter a bill name");
+      toast.error("Please enter a bill name");
       return;
     }
     const parsedAmount = parseInputAmount(createAmount);
     if (!createAmount || parsedAmount < 0) {
-      setCreateError("Please enter a valid amount");
+      toast.error("Please enter a valid amount");
       return;
     }
     if (!createAccountId) {
-      setCreateError("Please select a linked account");
+      toast.error("Please select a linked account");
       return;
     }
 
     setIsCreating(true);
-    setCreateError(null);
 
     try {
       const res = await createTemplateAction({
@@ -149,10 +144,10 @@ export default function TemplatesConfigList({
         setCreateAmount("");
         setCreateIntervalMonths("1");
       } else {
-        setCreateError(res.error || "Failed to create bill");
+        toast.error(res.error || "Failed to create bill");
       }
     } catch {
-      setCreateError("An unexpected error occurred");
+      toast.error("An unexpected error occurred");
     } finally {
       setIsCreating(false);
     }
@@ -166,28 +161,25 @@ export default function TemplatesConfigList({
     setEditAccountId(item.accountId);
     setEditIsActive(item.isActive);
     setEditIntervalMonths(String(item.intervalMonths));
-    setEditError(null);
   };
 
   const closeEdit = () => {
     setEditingItem(null);
-    setEditError(null);
   };
 
   const handleSaveEdit = async () => {
     if (!editingItem) return;
     if (!editName.trim()) {
-      setEditError("Please enter a bill name");
+      toast.error("Please enter a bill name");
       return;
     }
     const parsedAmount = parseInputAmount(editAmount);
     if (!editAmount || parsedAmount < 0) {
-      setEditError("Please enter a valid amount");
+      toast.error("Please enter a valid amount");
       return;
     }
 
     setIsSavingEdit(true);
-    setEditError(null);
 
     try {
       const res = await updateTemplateAction(editingItem.id, {
@@ -216,10 +208,10 @@ export default function TemplatesConfigList({
         );
         closeEdit();
       } else {
-        setEditError(res.error || "Failed to save");
+        toast.error(res.error || "Failed to save");
       }
     } catch {
-      setEditError("An unexpected error occurred");
+      toast.error("An unexpected error occurred");
     } finally {
       setIsSavingEdit(false);
     }
@@ -228,13 +220,11 @@ export default function TemplatesConfigList({
   // --- Delete dialog handlers ---
   const openDelete = (item: TemplateItem) => {
     setDeletingItem(item);
-    setDeleteError(null);
   };
 
   const handleDeleteBill = async () => {
     if (!deletingItem) return;
     setIsDeleting(true);
-    setDeleteError(null);
 
     try {
       const res = await deleteTemplateAction(deletingItem.id);
@@ -243,10 +233,10 @@ export default function TemplatesConfigList({
         setItems((prev) => prev.filter((t) => t.id !== deletingItem.id));
         setDeletingItem(null);
       } else {
-        setDeleteError(res.error || "Failed to delete bill");
+        toast.error(res.error || "Failed to delete bill");
       }
     } catch {
-      setDeleteError("An unexpected error occurred");
+      toast.error("An unexpected error occurred");
     } finally {
       setIsDeleting(false);
     }
@@ -255,18 +245,15 @@ export default function TemplatesConfigList({
   // --- Mark as Paid handlers ---
   const openPay = (item: TemplateItem) => {
     setPayingItem(item);
-    setPayError(null);
   };
 
   const closePay = () => {
     setPayingItem(null);
-    setPayError(null);
   };
 
   const handleMarkPaid = async () => {
     if (!payingItem) return;
     setIsPayingId(payingItem.id);
-    setPayError(null);
 
     try {
       const res = await markTemplatePaidAction(payingItem.id);
@@ -274,12 +261,13 @@ export default function TemplatesConfigList({
         toast.success("Bill marked as paid");
         setPaySuccessId(payingItem.id);
         setTimeout(() => setPaySuccessId(null), 2500);
+        window.dispatchEvent(new CustomEvent("transaction-added"));
         closePay();
       } else {
-        setPayError(res.error || "Failed to record payment");
+        toast.error(res.error || "Failed to record payment");
       }
     } catch {
-      setPayError("An unexpected error occurred");
+      toast.error("An unexpected error occurred");
     } finally {
       setIsPayingId(null);
     }
@@ -301,7 +289,6 @@ export default function TemplatesConfigList({
               setCreateAmount("");
               setCreateAccountId(accounts[0]?.id || "");
               setCreateIntervalMonths("1");
-              setCreateError(null);
               setCreateOpen(true);
             }}
             size="sm"
@@ -419,11 +406,6 @@ export default function TemplatesConfigList({
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
-              {createError && (
-                <Alert variant="destructive" className="py-2">
-                  <AlertDescription className="text-xs">{createError}</AlertDescription>
-                </Alert>
-              )}
 
               {/* Bill Name */}
               <div className="flex flex-col gap-1.5">
@@ -510,11 +492,6 @@ export default function TemplatesConfigList({
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
-              {editError && (
-                <Alert variant="destructive" className="py-2">
-                  <AlertDescription className="text-xs">{editError}</AlertDescription>
-                </Alert>
-              )}
 
               {/* Bill Name */}
               <div className="flex flex-col gap-1.5">
@@ -645,11 +622,6 @@ export default function TemplatesConfigList({
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
-              {deleteError && (
-                <Alert variant="destructive" className="py-2">
-                  <AlertDescription className="text-xs">{deleteError}</AlertDescription>
-                </Alert>
-              )}
             </div>
 
             <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
@@ -696,11 +668,6 @@ export default function TemplatesConfigList({
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
-              {payError && (
-                <Alert variant="destructive" className="py-2">
-                  <AlertDescription className="text-xs">{payError}</AlertDescription>
-                </Alert>
-              )}
             </div>
 
             <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">

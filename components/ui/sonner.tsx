@@ -36,12 +36,12 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }
       toastOptions={{
         classNames: {
-          toast: "group toast group-[.toaster]:bg-popover group-[.toaster]:text-popover-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg border-l-4 rounded-xl px-4 py-3 flex items-center gap-3",
-          success: "group-[.toast]:border-l-primary! group-[.toast]:text-foreground!",
-          error: "group-[.toast]:border-l-destructive! group-[.toast]:text-foreground!",
-          warning: "group-[.toast]:border-l-amber-500! group-[.toast]:text-foreground!",
-          info: "group-[.toast]:border-l-blue-500! group-[.toast]:text-foreground!",
-          description: "group-[.toast]:text-muted-foreground",
+          toast: "group toast group-[.toaster]:bg-popover group-[.toaster]:text-popover-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg border rounded-xl px-4 py-3 flex items-center gap-3",
+          success: "group-[.toaster]:bg-emerald-50/90! dark:group-[.toaster]:bg-emerald-950/30! group-[.toaster]:text-emerald-900! dark:group-[.toaster]:text-emerald-300!",
+          error: "group-[.toaster]:bg-red-50/90! dark:group-[.toaster]:bg-red-950/30! group-[.toaster]:text-red-900! dark:group-[.toaster]:text-red-300!",
+          warning: "group-[.toaster]:bg-amber-50/90! dark:group-[.toaster]:bg-amber-950/30! group-[.toaster]:text-amber-900! dark:group-[.toaster]:text-amber-300!",
+          info: "group-[.toaster]:bg-blue-50/90! dark:group-[.toaster]:bg-blue-950/30! group-[.toaster]:text-blue-900! dark:group-[.toaster]:text-blue-300!",
+          description: "group-[.toaster]:text-muted-foreground! group-[.success]:text-emerald-700/80! dark:group-[.success]:text-emerald-400/80! group-[.error]:text-red-700/80! dark:group-[.error]:text-red-400/80! group-[.warning]:text-amber-700/80! dark:group-[.warning]:text-amber-400/80! group-[.info]:text-blue-700/80! dark:group-[.info]:text-blue-400/80!",
           actionButton:
             "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
           cancelButton:
