@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import { createBillAction, settleBillAction, deleteBillAction } from "@/lib/actions/bill-friends";
 import { toast } from "sonner";
 import { formatJPY, formatIDR, formatInputAmount, parseInputAmount } from "@/lib/format";
@@ -83,6 +84,9 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
   const [description, setDescription] = useState("");
   const [isAdding, setIsAdding] = useState(false);
 
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+
   // Action states
   const [settlingId, setSettlingId] = useState<string | null>(null);
   const [deletingBill, setDeletingBill] = useState<BillItem | null>(null);
@@ -98,9 +102,51 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
   const theyOweJPY = activeBills.filter((b) => b.direction === "they_owe" && b.currency === "JPY").reduce((s, b) => s + b.amount, 0);
   const theyOweIDR = activeBills.filter((b) => b.direction === "they_owe" && b.currency === "IDR").reduce((s, b) => s + b.amount, 0);
 
+  // Suggestions from unique past friend names, ordered by recency
+  const friendNameSuggestions = Array.from(
+    new Set(bills.map((b) => b.personName.trim()))
+  ).filter(Boolean);
+
+  // Filter recommendations based on current input text
+  const filteredSuggestions = friendNameSuggestions.filter((name) =>
+    name.toLowerCase().includes(personName.toLowerCase())
+  );
+
   const resetAddForm = () => {
     setPersonName(""); setAmount(""); setCurrency("JPY");
     setDirection("they_owe"); setDescription("");
+    setShowSuggestions(false);
+    setActiveIndex(-1);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions) {
+      if (e.key === "ArrowDown" && filteredSuggestions.length > 0) {
+        setShowSuggestions(true);
+        setActiveIndex(0);
+        e.preventDefault();
+      }
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      setActiveIndex((prev) => (prev + 1 < filteredSuggestions.length ? prev + 1 : prev));
+      e.preventDefault();
+    } else if (e.key === "ArrowUp") {
+      setActiveIndex((prev) => (prev - 1 >= 0 ? prev - 1 : prev));
+      e.preventDefault();
+    } else if (e.key === "Enter") {
+      if (activeIndex >= 0 && activeIndex < filteredSuggestions.length) {
+        setPersonName(filteredSuggestions[activeIndex]);
+        setShowSuggestions(false);
+        setActiveIndex(-1);
+        e.preventDefault();
+      }
+    } else if (e.key === "Escape") {
+      setShowSuggestions(false);
+      setActiveIndex(-1);
+      e.preventDefault();
+    }
   };
 
   const handleAdd = async () => {
@@ -163,7 +209,12 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
   return (
     <div className="flex flex-col gap-5 flex-1 pb-4">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.05 }}
+        className="flex justify-between items-center"
+      >
         <div>
           <h1 className="font-sans text-2xl font-bold tracking-wide text-primary">Bill Friends</h1>
           <p className="text-xs text-muted-foreground mt-1">Track what you owe and what&apos;s owed to you.</p>
@@ -172,10 +223,15 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
           <IconPlus className="size-4" />
           Add Bill
         </Button>
-      </div>
+      </motion.div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 gap-2">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.1 }}
+        className="grid grid-cols-2 gap-2"
+      >
         <div className="rounded-xl border border-border/40 bg-white p-3 dark:bg-zinc-900">
           <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
             They Owe
@@ -202,126 +258,139 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
             </p>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "active" | "settled")}>
-        <TabsList className="w-full">
-          <TabsTrigger value="active" className="flex-1">
-            Active{activeBills.length > 0 && ` (${activeBills.length})`}
-          </TabsTrigger>
-          <TabsTrigger value="settled" className="flex-1">
-            Settled{settledBills.length > 0 && ` (${settledBills.length})`}
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.15 }}
+      >
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "active" | "settled")}>
+          <TabsList className="w-full">
+            <TabsTrigger value="active" className="flex-1">
+              Active{activeBills.length > 0 && ` (${activeBills.length})`}
+            </TabsTrigger>
+            <TabsTrigger value="settled" className="flex-1">
+              Settled{settledBills.length > 0 && ` (${settledBills.length})`}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </motion.div>
 
       {/* Bills list */}
-      {displayBills.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 py-12 text-center">
-          <div className="p-4 rounded-full bg-muted">
-            {activeTab === "active" ? (
-              <IconUsersGroup className="size-8 text-muted-foreground/60" />
-            ) : (
-              <IconCoin className="size-8 text-muted-foreground/60" />
-            )}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.2 }}
+        className="flex-1 flex flex-col min-h-0"
+      >
+        {displayBills.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 py-12 text-center">
+            <div className="p-4 rounded-full bg-muted">
+              {activeTab === "active" ? (
+                <IconUsersGroup className="size-8 text-muted-foreground/60" />
+              ) : (
+                <IconCoin className="size-8 text-muted-foreground/60" />
+              )}
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                {activeTab === "active" ? "No active bills" : "No settled bills yet"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {activeTab === "active" ? "Add a bill to start tracking" : "Settle active bills to see them here"}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-semibold text-foreground">
-              {activeTab === "active" ? "No active bills" : "No settled bills yet"}
-            </p>
-            <p className="text-xs text-muted-foreground mt-1">
-              {activeTab === "active" ? "Add a bill to start tracking" : "Settle active bills to see them here"}
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4">
-          {grouped.map(([person, personBills]) => (
-            <div key={person} className="flex flex-col gap-2">
-              {/* Person header */}
-              <div className="flex items-center gap-2 px-1">
-                <div className="flex items-center justify-center size-6 rounded-full bg-primary/10 shrink-0">
-                  <span className="text-[10px] font-bold text-primary uppercase">{person.charAt(0)}</span>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {grouped.map(([person, personBills]) => (
+              <div key={person} className="flex flex-col gap-2">
+                {/* Person header */}
+                <div className="flex items-center gap-2 px-1">
+                  <div className="flex items-center justify-center size-6 rounded-full bg-primary/10 shrink-0">
+                    <span className="text-[10px] font-bold text-primary uppercase">{person.charAt(0)}</span>
+                  </div>
+                  <span className="text-xs font-bold text-foreground">{person}</span>
+                  <Separator className="flex-1" />
                 </div>
-                <span className="text-xs font-bold text-foreground">{person}</span>
-                <Separator className="flex-1" />
-              </div>
 
-              {/* Bills */}
-              {personBills.map((bill) => {
-                const isOwed = bill.direction === "they_owe";
-                const isSettlingThis = settlingId === bill.id;
-                const isDeletingThis = deletingBill?.id === bill.id && isDeleting;
+                {/* Bills */}
+                {personBills.map((bill) => {
+                  const isOwed = bill.direction === "they_owe";
+                  const isSettlingThis = settlingId === bill.id;
+                  const isDeletingThis = deletingBill?.id === bill.id && isDeleting;
 
-                return (
-                  <div
-                    key={bill.id}
-                    className={cn(
-                      "bg-white dark:bg-zinc-900 border rounded-2xl p-4 flex justify-between items-center gap-3 shadow-xs transition-all",
-                      bill.isSettled ? "border-border/30 opacity-60" : isOwed ? "border-primary/20" : "border-destructive/20"
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={cn("p-2 rounded-xl shrink-0", bill.isSettled ? "bg-muted" : isOwed ? "bg-primary/10" : "bg-destructive/10")}>
-                        {bill.isSettled ? (
-                          <IconCheck className="size-4 text-muted-foreground stroke-[2]" />
-                        ) : isOwed ? (
-                          <IconArrowDownLeft className="size-4 text-primary stroke-[2.5]" />
-                        ) : (
-                          <IconArrowUpRight className="size-4 text-destructive stroke-[2.5]" />
+                  return (
+                    <div
+                      key={bill.id}
+                      className={cn(
+                        "bg-white dark:bg-zinc-900 border rounded-2xl p-4 flex justify-between items-center gap-3 shadow-xs transition-all",
+                        bill.isSettled ? "border-border/30 opacity-60" : isOwed ? "border-primary/20" : "border-destructive/20"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={cn("p-2 rounded-xl shrink-0", bill.isSettled ? "bg-muted" : isOwed ? "bg-primary/10" : "bg-destructive/10")}>
+                          {bill.isSettled ? (
+                            <IconCheck className="size-4 text-muted-foreground stroke-[2]" />
+                          ) : isOwed ? (
+                            <IconArrowDownLeft className="size-4 text-primary stroke-[2.5]" />
+                          ) : (
+                            <IconArrowUpRight className="size-4 text-destructive stroke-[2.5]" />
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-semibold text-foreground leading-tight">
+                            {bill.description || (isOwed ? "They owe me" : "I owe them")}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground leading-none">
+                            {bill.isSettled
+                              ? `Settled ${new Date(bill.settledAt!).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                              : new Date(bill.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className={cn(
+                          "text-sm font-bold font-sans",
+                          bill.isSettled ? "text-muted-foreground line-through" : isOwed ? "text-primary" : "text-destructive"
+                        )}>
+                          {formatAmount(bill.amount, bill.currency)}
+                        </span>
+
+                        {!bill.isSettled && (
+                          <Button
+                            size="icon-xs"
+                            variant="ghost"
+                            onClick={() => handleSettle(bill.id)}
+                            disabled={isSettlingThis || isDeletingThis}
+                            title="Mark as settled"
+                            className="text-primary hover:text-primary hover:bg-primary/10"
+                          >
+                            {isSettlingThis ? <IconLoader className="size-3 animate-spin" /> : <IconCheck className="size-3 stroke-[2.5]" />}
+                          </Button>
                         )}
-                      </div>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-xs font-semibold text-foreground leading-tight">
-                          {bill.description || (isOwed ? "They owe me" : "I owe them")}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground leading-none">
-                          {bill.isSettled
-                            ? `Settled ${new Date(bill.settledAt!).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-                            : new Date(bill.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className={cn(
-                        "text-sm font-bold font-sans",
-                        bill.isSettled ? "text-muted-foreground line-through" : isOwed ? "text-primary" : "text-destructive"
-                      )}>
-                        {formatAmount(bill.amount, bill.currency)}
-                      </span>
-
-                      {!bill.isSettled && (
                         <Button
                           size="icon-xs"
                           variant="ghost"
-                          onClick={() => handleSettle(bill.id)}
+                          onClick={() => setDeletingBill(bill)}
                           disabled={isSettlingThis || isDeletingThis}
-                          title="Mark as settled"
-                          className="text-primary hover:text-primary hover:bg-primary/10"
+                          title="Delete"
+                          className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                         >
-                          {isSettlingThis ? <IconLoader className="size-3 animate-spin" /> : <IconCheck className="size-3 stroke-[2.5]" />}
+                          {isDeletingThis ? <IconLoader className="size-3 animate-spin" /> : <IconTrash className="size-3" />}
                         </Button>
-                      )}
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        onClick={() => setDeletingBill(bill)}
-                        disabled={isSettlingThis || isDeletingThis}
-                        title="Delete"
-                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                      >
-                        {isDeletingThis ? <IconLoader className="size-3 animate-spin" /> : <IconTrash className="size-3" />}
-                      </Button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      )}
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+      </motion.div>
 
       {/* Add Bill Dialog */}
       <Dialog open={addOpen} onOpenChange={(open) => { if (!isAdding) { setAddOpen(open); if (!open) resetAddForm(); } }}>
@@ -332,7 +401,7 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
               <DialogDescription className="text-xs">Track a debt between you and a friend.</DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+            <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
 
               {/* Direction */}
               <div className="flex flex-col gap-1.5">
@@ -364,14 +433,57 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
               </div>
 
               {/* Person name */}
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5 relative">
                 <Label className="text-xs font-semibold">Friend&apos;s Name *</Label>
                 <Input
                   value={personName}
-                  onChange={(e) => setPersonName(e.target.value)}
+                  onChange={(e) => {
+                    setPersonName(e.target.value);
+                    setShowSuggestions(true);
+                    setActiveIndex(-1);
+                  }}
+                  onFocus={() => {
+                    setShowSuggestions(true);
+                    setActiveIndex(-1);
+                  }}
+                  onBlur={() => {
+                    setTimeout(() => {
+                      setShowSuggestions(false);
+                      setActiveIndex(-1);
+                    }, 150);
+                  }}
+                  onKeyDown={handleKeyDown}
                   placeholder="e.g. Aiko, Budi"
                   className="h-10"
+                  autoComplete="off"
                 />
+                {showSuggestions && filteredSuggestions.length > 0 && (
+                  <div className="absolute z-50 left-0 right-0 top-[66px] max-h-48 overflow-y-auto rounded-2xl border border-border/40 bg-white dark:bg-zinc-900 p-1.5 shadow-lg animate-in fade-in-50 slide-in-from-top-1 duration-150">
+                    <div className="flex flex-col gap-0.5">
+                      {filteredSuggestions.map((name, index) => (
+                        <button
+                          key={name}
+                          type="button"
+                          onMouseDown={(e) => {
+                            // Prevent input blur from triggering before selection
+                            e.preventDefault();
+                            setPersonName(name);
+                            setShowSuggestions(false);
+                            setActiveIndex(-1);
+                          }}
+                          className={cn(
+                            "w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer",
+                            index === activeIndex
+                              ? "bg-primary text-primary-foreground"
+                              : "hover:bg-muted/80 text-foreground"
+                          )}
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Amount + Currency */}
@@ -443,7 +555,7 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+            <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
               {deletingBill && (
                 <div className="rounded-2xl border border-border/40 bg-muted/40 p-3 text-xs flex flex-col gap-1">
                   <p className="font-semibold text-foreground">{deletingBill.description || (deletingBill.direction === "they_owe" ? "They owe me" : "I owe them")}</p>
