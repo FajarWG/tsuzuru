@@ -5,7 +5,11 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
 // Mark a template as paid — deducts full amount from account and records a transaction
-export async function markTemplatePaidAction(templateId: string, sourceAccountId?: string) {
+export async function markTemplatePaidAction(
+  templateId: string,
+  sourceAccountId?: string,
+  customAmount?: number
+) {
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
@@ -23,8 +27,14 @@ export async function markTemplatePaidAction(templateId: string, sourceAccountId
       if (ccAccount.type !== "credit_card") return { success: false, error: "Account is not a credit card" };
       if (!ccAccount.isActive) return { success: false, error: "Credit card account is inactive" };
 
-      const amountToPay = Math.abs(ccAccount.balance);
-      if (amountToPay <= 0) return { success: false, error: "No outstanding balance to pay on this credit card" };
+      const totalDebt = Math.abs(ccAccount.balance);
+      if (totalDebt <= 0) return { success: false, error: "No outstanding balance to pay on this credit card" };
+
+      let amountToPay = totalDebt;
+      if (customAmount !== undefined && customAmount !== null) {
+        if (customAmount <= 0) return { success: false, error: "Payment amount must be greater than zero" };
+        amountToPay = customAmount;
+      }
 
       if (!sourceAccountId) {
         return { success: false, error: "Source account is required to pay credit card bill" };
@@ -40,7 +50,30 @@ export async function markTemplatePaidAction(templateId: string, sourceAccountId
       }
 
       // Record transfer transactions and update balances
-      await prisma.$transaction([
+      let newCcBalance = ccAccount.balance + amountToPay;
+      let adjustmentTx = null;
+
+      if (amountToPay > totalDebt) {
+        const adjustmentAmount = amountToPay - totalDebt;
+        newCcBalance = 0; // The balance should be exactly 0 after paying off the debt and recording the adjustment
+
+        // Create an expense transaction for the difference (previous month's debt that was not recorded in the app)
+        adjustmentTx = prisma.transaction.create({
+          data: {
+            userId,
+            accountId: ccAccountId,
+            type: "expense",
+            amount: adjustmentAmount,
+            currency: ccAccount.currency,
+            category: "adjustment",
+            description: "CC Payment Adjustment",
+            isTemplate: false,
+            date: new Date(),
+          },
+        });
+      }
+
+      const operations: any[] = [
         // 1. Expense from paying account
         prisma.transaction.create({
           data: {
@@ -50,7 +83,7 @@ export async function markTemplatePaidAction(templateId: string, sourceAccountId
             amount: amountToPay,
             currency: sourceAccount.currency,
             category: "template", // mark as template/recurring bill
-            description: `Bayar Tagihan ${ccAccount.name}`,
+            description: `CC Payoff: ${ccAccount.name}`,
             isTemplate: true,
             date: new Date(),
           },
@@ -64,7 +97,7 @@ export async function markTemplatePaidAction(templateId: string, sourceAccountId
             amount: amountToPay,
             currency: ccAccount.currency,
             category: "template",
-            description: `Pembayaran dari ${sourceAccount.name}`,
+            description: `Payment from ${sourceAccount.name}`,
             isTemplate: true,
             date: new Date(),
           },
@@ -74,12 +107,18 @@ export async function markTemplatePaidAction(templateId: string, sourceAccountId
           where: { id: sourceAccountId },
           data: { balance: sourceAccount.balance - amountToPay },
         }),
-        // 4. Increase credit card account balance (bringing it back to 0 or reducing debt)
+        // 4. Update credit card account balance
         prisma.account.update({
           where: { id: ccAccountId },
-          data: { balance: ccAccount.balance + amountToPay },
+          data: { balance: newCcBalance },
         }),
-      ]);
+      ];
+
+      if (adjustmentTx) {
+        operations.push(adjustmentTx);
+      }
+
+      await prisma.$transaction(operations);
 
       revalidatePath("/");
       revalidatePath("/transactions");

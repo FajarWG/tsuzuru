@@ -109,6 +109,7 @@ export default function TemplatesConfigList({
   const [isPayingId, setIsPayingId] = useState<string | null>(null);
   const [paySuccessId, setPaySuccessId] = useState<string | null>(null);
   const [paySourceAccountId, setPaySourceAccountId] = useState("");
+  const [payoffAmount, setPayoffAmount] = useState("");
 
   // --- Create dialog handlers ---
   const handleCreateBill = async () => {
@@ -255,22 +256,34 @@ export default function TemplatesConfigList({
         (a) => a.currency === item.currency && a.type !== "credit_card" && a.isActive
       );
       setPaySourceAccountId(defAcc?.id || "");
+      setPayoffAmount(formatInputAmount(item.amount));
     } else {
       setPaySourceAccountId("");
+      setPayoffAmount("");
     }
   };
 
   const closePay = () => {
     setPayingItem(null);
     setPaySourceAccountId("");
+    setPayoffAmount("");
   };
 
   const handleMarkPaid = async () => {
     if (!payingItem) return;
+
+    const isCc = 'isCreditCardBill' in payingItem && (payingItem as any).isCreditCardBill;
+    const customAmount = isCc ? parseInputAmount(payoffAmount) : undefined;
+
+    if (isCc && (isNaN(customAmount!) || customAmount! <= 0)) {
+      toast.error("Please enter a valid payoff amount");
+      return;
+    }
+
     setIsPayingId(payingItem.id);
 
     try {
-      const res = await markTemplatePaidAction(payingItem.id, paySourceAccountId || undefined);
+      const res = await markTemplatePaidAction(payingItem.id, paySourceAccountId || undefined, customAmount);
       if (res.success) {
         toast.success("Bill marked as paid");
         setPaySuccessId(payingItem.id);
@@ -322,7 +335,7 @@ export default function TemplatesConfigList({
             .filter((acc) => acc.type === "credit_card" && acc.isActive && acc.balance < 0)
             .map((acc) => ({
               id: `cc-bill-${acc.id}`,
-              name: `Tagihan Kartu Kredit ${acc.name}`,
+              name: `Credit Card Bill: ${acc.name}`,
               amount: Math.abs(acc.balance),
               currency: acc.currency,
               accountId: "", // Will be selected at payment time
@@ -724,22 +737,48 @@ export default function TemplatesConfigList({
 
             <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
               {payingItem && 'isCreditCardBill' in payingItem && (payingItem as any).isCreditCardBill && (
-                <div className="flex flex-col gap-1.5">
-                  <Label className="text-xs font-semibold">Deduct payment from account</Label>
-                  <Select value={paySourceAccountId} onValueChange={setPaySourceAccountId}>
-                    <SelectTrigger className="h-10 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {accounts
-                        .filter((acc) => acc.currency === payingItem.currency && acc.type !== "credit_card" && acc.isActive)
-                        .map((acc) => (
-                          <SelectItem key={acc.id} value={acc.id} className="text-xs">
-                            {acc.name} ({acc.currency === "JPY" ? formatJPY(acc.balance) : formatIDR(acc.balance)})
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs font-semibold">Payoff Amount</Label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3 text-sm font-bold text-muted-foreground">
+                        {payingItem.currency === "JPY" ? "¥" : "Rp"}
+                      </span>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={payoffAmount}
+                        onChange={(e) => setPayoffAmount(formatInputAmount(e.target.value))}
+                        className={cn(
+                          payingItem.currency === "JPY" ? "pl-7" : "pl-9",
+                          "h-10 font-semibold text-sm"
+                        )}
+                        placeholder="e.g. 500,000"
+                        required
+                      />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground leading-normal">
+                      Default is the current outstanding balance. You can enter a custom payoff amount (e.g. last month's statement balance).
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs font-semibold">Deduct payment from account</Label>
+                    <Select value={paySourceAccountId} onValueChange={setPaySourceAccountId}>
+                      <SelectTrigger className="h-10 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {accounts
+                          .filter((acc) => acc.currency === payingItem.currency && acc.type !== "credit_card" && acc.isActive)
+                          .map((acc) => (
+                            <SelectItem key={acc.id} value={acc.id} className="text-xs">
+                              {acc.name} ({acc.currency === "JPY" ? formatJPY(acc.balance) : formatIDR(acc.balance)})
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               )}
             </div>
@@ -751,7 +790,7 @@ export default function TemplatesConfigList({
               <Button
                 size="sm"
                 onClick={handleMarkPaid}
-                disabled={!!isPayingId || (payingItem && 'isCreditCardBill' in payingItem && (payingItem as any).isCreditCardBill && !paySourceAccountId)}
+                disabled={!!isPayingId || (payingItem && 'isCreditCardBill' in payingItem && (payingItem as any).isCreditCardBill && (!paySourceAccountId || !payoffAmount))}
                 className="min-w-[100px] cursor-pointer"
               >
                 {isPayingId ? (
