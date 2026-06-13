@@ -88,3 +88,31 @@ export async function deleteBillAction(billId: string) {
     return { success: false, error: "Failed to delete bill" };
   }
 }
+
+export async function getBillFriendsDataAction() {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+  try {
+    const billsRaw = await prisma.billFriend.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const bills = billsRaw.map((bill) => ({
+      ...bill,
+      settledAt: bill.settledAt ? bill.settledAt.toISOString() : null,
+      createdAt: bill.createdAt.toISOString(),
+    }));
+
+    return {
+      success: true,
+      data: {
+        bills,
+      },
+    };
+  } catch (err) {
+    console.error("getBillFriendsDataAction error:", err);
+    return { success: false, error: "Failed to fetch bill friends data" };
+  }
+}

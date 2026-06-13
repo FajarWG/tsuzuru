@@ -147,22 +147,28 @@ function MonthlyInsightsSkeleton() {
   );
 }
 
+let isGloballyMounted = false;
+
 export default function DashboardClient() {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [isMounted, setIsMounted] = useState(false);
+  const [data, setData] = useState<DashboardData | null>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("tsuzuru_dashboard_data");
+        return cached ? JSON.parse(cached) : null;
+      } catch (e) {
+        console.warn("Failed to load cached dashboard data:", e);
+        return null;
+      }
+    }
+    return null;
+  });
+  const [isMounted, setIsMounted] = useState(isGloballyMounted);
   const [loading, setLoading] = useState(true);
 
-  // 1. Initial Load from LocalStorage
+  // 1. Set mounted state
   useEffect(() => {
     setIsMounted(true);
-    try {
-      const cached = localStorage.getItem("tsuzuru_dashboard_data");
-      if (cached) {
-        setData(JSON.parse(cached));
-      }
-    } catch (e) {
-      console.warn("Failed to load cached dashboard data:", e);
-    }
+    isGloballyMounted = true;
   }, []);
 
   // 2. stable sync function using ref to avoid stale closure issues
