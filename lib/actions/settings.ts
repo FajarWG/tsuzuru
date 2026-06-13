@@ -195,3 +195,57 @@ export async function completeOnboardingAction(data: OnboardingInput) {
   }
 }
 
+export async function getUserSettingsDataAction() {
+  const session = await auth();
+  if (!session || !session.user || !session.user.id) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  const userId = session.user.id;
+
+  try {
+    let userSettings = await prisma.userSettings.findUnique({
+      where: { userId },
+    });
+
+    if (!userSettings) {
+      userSettings = await prisma.userSettings.create({
+        data: {
+          userId,
+          monthlyBudget: 150000,
+          pocketMoneyLimit: 40000,
+          shoppingLimit: 60000,
+          budgetCurrency: "JPY",
+        },
+      });
+    }
+
+    const accounts = await prisma.account.findMany({
+      where: { userId },
+      orderBy: { name: "asc" },
+    });
+
+    const templates = await prisma.monthlyTemplate.findMany({
+      where: { userId },
+      orderBy: { name: "asc" },
+    });
+
+    return {
+      success: true,
+      data: {
+        userSettings,
+        accounts,
+        templates,
+        profile: {
+          name: session.user.name || null,
+          email: session.user.email || null,
+          image: session.user.image || null,
+        },
+      },
+    };
+  } catch (error) {
+    console.error("Failed to fetch settings data:", error);
+    return { success: false, error: "Failed to fetch settings data" };
+  }
+}
+

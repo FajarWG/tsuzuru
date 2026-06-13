@@ -39,22 +39,28 @@ interface TransactionsClientProps {
   userId: string;
 }
 
+let isGloballyMounted = false;
+
 export default function TransactionsClient({ userId }: TransactionsClientProps) {
-  const [data, setData] = useState<TransactionsData | null>(null);
-  const [isMounted, setIsMounted] = useState(false);
+  const [data, setData] = useState<TransactionsData | null>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("tsuzuru_transactions_data");
+        return cached ? JSON.parse(cached) : null;
+      } catch (e) {
+        console.warn("Failed to load cached transactions data:", e);
+        return null;
+      }
+    }
+    return null;
+  });
+  const [isMounted, setIsMounted] = useState(isGloballyMounted);
   const [loading, setLoading] = useState(true);
 
-  // 1. Initial Load from LocalStorage
+  // 1. Set mounted state
   useEffect(() => {
     setIsMounted(true);
-    try {
-      const cached = localStorage.getItem("tsuzuru_transactions_data");
-      if (cached) {
-        setData(JSON.parse(cached));
-      }
-    } catch (e) {
-      console.warn("Failed to load cached transactions data:", e);
-    }
+    isGloballyMounted = true;
   }, []);
 
   // 2. Stable sync function using ref

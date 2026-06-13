@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createBillAction, settleBillAction, deleteBillAction } from "@/lib/actions/bill-friends";
 import { toast } from "sonner";
 import { formatJPY, formatIDR, formatInputAmount, parseInputAmount } from "@/lib/format";
@@ -70,6 +70,10 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
   const [bills, setBills] = useState<BillItem[]>(initialBills);
   const [activeTab, setActiveTab] = useState<"active" | "settled">("active");
 
+  useEffect(() => {
+    setBills(initialBills);
+  }, [initialBills]);
+
   // Add form dialog
   const [addOpen, setAddOpen] = useState(false);
   const [personName, setPersonName] = useState("");
@@ -123,6 +127,7 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
         ]);
         resetAddForm();
         setAddOpen(false);
+        window.dispatchEvent(new CustomEvent("bill-updated"));
       } else {
         toast.error(res.error || "Failed to add bill");
       }
@@ -140,6 +145,7 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
       if (res.success) {
         toast.success("Bill settled successfully");
         setBills((prev) => prev.map((b) => b.id === id ? { ...b, isSettled: true, settledAt: new Date() } : b));
+        window.dispatchEvent(new CustomEvent("bill-updated"));
       } else {
         toast.error(res.error || "Failed to settle");
       }
@@ -460,6 +466,7 @@ export default function BillFriendsList({ bills: initialBills }: BillFriendsList
                   toast.success("Bill deleted successfully");
                   setBills((prev) => prev.filter((b) => b.id !== deletingBill.id));
                   setDeletingBill(null);
+                  window.dispatchEvent(new CustomEvent("bill-updated"));
                 } else {
                   toast.error(res.error || "Failed to delete");
                 }

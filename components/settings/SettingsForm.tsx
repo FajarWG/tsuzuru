@@ -151,6 +151,7 @@ export default function SettingsForm({
         toast.success("Main currency updated successfully");
         setCurrencySuccess(true);
         setTimeout(() => setCurrencySuccess(false), 2000);
+        window.dispatchEvent(new CustomEvent("transaction-added"));
       } else {
         toast.error(res.error || "Failed to update main currency");
       }
@@ -213,6 +214,7 @@ export default function SettingsForm({
           setBudgetSuccess(false);
           setBudgetOpen(false);
         }, 1000);
+        window.dispatchEvent(new CustomEvent("transaction-added"));
       } else {
         toast.error(res.error || "Failed to save");
       }
@@ -253,6 +255,7 @@ export default function SettingsForm({
         setAddAccBalance("");
         setAddAccCurrency("JPY");
         setAddAccType("bank");
+        window.dispatchEvent(new CustomEvent("transaction-added"));
       } else {
         toast.error(res.error || "Failed to create account");
       }
@@ -302,6 +305,7 @@ export default function SettingsForm({
             .sort((a, b) => a.name.localeCompare(b.name)),
         );
         setEditingAccount(null);
+        window.dispatchEvent(new CustomEvent("transaction-added"));
       } else {
         toast.error(res.error || "Failed to update account");
       }
@@ -327,6 +331,7 @@ export default function SettingsForm({
           prev.filter((a) => a.id !== deletingAccount.id),
         );
         setDeletingAccount(null);
+        window.dispatchEvent(new CustomEvent("transaction-added"));
       } else {
         toast.error(res.error || "Failed to delete account");
       }
