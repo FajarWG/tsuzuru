@@ -728,7 +728,7 @@ export default function TransactionsList({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-4 py-3 min-h-0">
+            <div className="flex-1 overflow-y-auto px-1 flex flex-col gap-4 py-3 min-h-0">
 
               <div className="flex bg-muted p-1 rounded-lg border border-border/20">
                 {(["expense", "income"] as const).map((type) => (

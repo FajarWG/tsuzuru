@@ -405,7 +405,7 @@ export default function TemplatesConfigList({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+            <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
 
               {/* Bill Name */}
               <div className="flex flex-col gap-1.5">
@@ -491,7 +491,7 @@ export default function TemplatesConfigList({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+            <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
 
               {/* Bill Name */}
               <div className="flex flex-col gap-1.5">
@@ -621,7 +621,7 @@ export default function TemplatesConfigList({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+            <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
             </div>
 
             <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
@@ -667,7 +667,7 @@ export default function TemplatesConfigList({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+            <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
             </div>
 
             <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">

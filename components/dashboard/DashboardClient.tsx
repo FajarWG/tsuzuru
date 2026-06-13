@@ -200,13 +200,6 @@ export default function DashboardClient() {
 
           setData(freshData);
           localStorage.setItem("tsuzuru_dashboard_data", JSON.stringify(freshData));
-
-          // Toast notifications based on state
-          if (isBalanceChanged) {
-            toast.success("Balances updated!", {
-              description: "Data fetch complete and balances have been updated.",
-            });
-          }
         } else {
           toast.error(res.error || "Failed to fetch the latest data from the server.");
         }

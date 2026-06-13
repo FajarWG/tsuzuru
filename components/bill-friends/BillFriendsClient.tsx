@@ -74,13 +74,6 @@ export default function BillFriendsClient({ userId }: BillFriendsClientProps) {
 
           setData(freshData);
           localStorage.setItem("tsuzuru_bill_friends_data", JSON.stringify(freshData));
-
-          // Toast only if data changed
-          if (isDataChanged && data) {
-            toast.success("Bills updated!", {
-              description: "Latest friend ledger has been synchronized.",
-            });
-          }
         } else {
           toast.error(res.error || "Failed to fetch latest bill records.");
         }

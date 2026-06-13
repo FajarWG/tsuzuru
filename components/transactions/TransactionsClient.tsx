@@ -88,13 +88,6 @@ export default function TransactionsClient({ userId }: TransactionsClientProps) 
 
           setData(freshData);
           localStorage.setItem("tsuzuru_transactions_data", JSON.stringify(freshData));
-
-          // Only toast if transaction balances/items have changed
-          if (isDataChanged && data) {
-            toast.success("Transactions updated!", {
-              description: "Latest transaction ledger has been synchronized.",
-            });
-          }
         } else {
           toast.error(res.error || "Failed to fetch latest transaction records.");
         }

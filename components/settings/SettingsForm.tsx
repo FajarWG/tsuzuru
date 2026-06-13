@@ -372,16 +372,26 @@ export default function SettingsForm({
 
   return (
     <div className="flex flex-col gap-5 flex-1 pb-10">
-      <div>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.05 }}
+      >
         <h1 className="font-sans text-2xl font-bold tracking-wide text-primary">
           Settings
         </h1>
         <p className="text-xs text-muted-foreground mt-1">
           Manage recurring bills, budget, accounts, and profile.
         </p>
-      </div>
+      </motion.div>
 
-      <Tabs key={defaultTab} defaultValue={defaultTab} className="gap-4">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.1 }}
+        className="flex flex-col gap-4 flex-1"
+      >
+        <Tabs key={defaultTab} defaultValue={defaultTab} className="gap-4">
         <TabsList className="grid h-auto w-full grid-cols-3 rounded-2xl">
           <TabsTrigger value="templates" className="text-[10px] cursor-pointer">
             <IconCalendarRepeat className="size-3.5" />
@@ -734,6 +744,7 @@ export default function SettingsForm({
           </section>
         </TabsContent>
       </Tabs>
+      </motion.div>
 
       {/* Budget Settings Dialog */}
       <Dialog
@@ -751,7 +762,7 @@ export default function SettingsForm({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+            <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
 
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs font-semibold">
@@ -859,7 +870,7 @@ export default function SettingsForm({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+            <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
 
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs font-semibold">Account Name</Label>
@@ -977,7 +988,7 @@ export default function SettingsForm({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+            <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
 
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs font-semibold">Account Name</Label>
@@ -1135,7 +1146,7 @@ export default function SettingsForm({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
+            <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
             </div>
 
             <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2 mt-2">

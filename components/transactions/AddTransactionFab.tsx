@@ -198,7 +198,7 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
               <DialogTitle className="font-sans text-xl">Add Transaction</DialogTitle>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-4 py-3">
+            <div className="flex-1 overflow-y-auto px-1 flex flex-col gap-4 py-3">
 
               {/* Expense / Income toggle */}
               <div className="flex bg-muted p-1 rounded-lg border border-border/20">

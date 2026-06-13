@@ -98,13 +98,6 @@ export default function SettingsClient({ userId, defaultTab = "templates" }: Set
 
           setData(freshData);
           localStorage.setItem("tsuzuru_settings_data", JSON.stringify(freshData));
-
-          // Toast only if settings/accounts changed
-          if (isDataChanged && data) {
-            toast.success("Settings updated!", {
-              description: "Latest user settings, templates, and accounts synchronized.",
-            });
-          }
         } else {
           toast.error(res.error || "Failed to fetch latest user settings.");
         }
