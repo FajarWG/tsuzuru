@@ -1,5 +1,6 @@
 "use server";
 
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
@@ -179,5 +180,56 @@ export async function deleteTransactionAction(transactionId: string, userId: str
   } catch (error) {
     console.error("Failed to delete transaction:", error);
     return { success: false, error: (error as Error).message };
+  }
+}
+
+export async function getTransactionsDataAction() {
+  const session = await auth();
+  if (!session || !session.user || !session.user.id) {
+    return { success: false, error: "Unauthorized" };
+  }
+
+  const userId = session.user.id;
+
+  try {
+    const transactionsRaw = await prisma.transaction.findMany({
+      where: { userId },
+      orderBy: { date: "desc" },
+      include: {
+        account: {
+          select: {
+            id: true,
+            name: true,
+            currency: true,
+          },
+        },
+      },
+    });
+
+    const accounts = await prisma.account.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        name: true,
+        currency: true,
+      },
+    });
+
+    // Serialize Dates
+    const transactions = transactionsRaw.map((tx) => ({
+      ...tx,
+      date: tx.date.toISOString(),
+    }));
+
+    return {
+      success: true,
+      data: {
+        transactions,
+        accounts,
+      },
+    };
+  } catch (error) {
+    console.error("Failed to fetch transactions data:", error);
+    return { success: false, error: "Failed to fetch transactions data" };
   }
 }
