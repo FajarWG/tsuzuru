@@ -98,6 +98,7 @@ export async function resetUserSettingsAndDataAction() {
           pocketMoneyLimit: 0,
           shoppingLimit: 0,
           budgetCurrency: "JPY", // reset to default currency
+          isOnboarded: false,
         },
       }),
     ]);
@@ -113,3 +114,84 @@ export async function resetUserSettingsAndDataAction() {
     return { success: false, error: (error as Error).message };
   }
 }
+
+interface OnboardingInput {
+  userId: string;
+  currency: string;
+  monthlyBudget: number;
+  pocketMoneyLimit: number;
+  shoppingLimit: number;
+  accounts: {
+    name: string;
+    balance: number;
+    type: string;
+  }[];
+  templates: {
+    name: string;
+    amount: number;
+    accountName: string;
+  }[];
+}
+
+export async function completeOnboardingAction(data: OnboardingInput) {
+  try {
+    await prisma.$transaction(async (tx) => {
+      // 1. Update user settings with onboarding values
+      await tx.userSettings.update({
+        where: { userId: data.userId },
+        data: {
+          monthlyBudget: data.monthlyBudget,
+          pocketMoneyLimit: data.pocketMoneyLimit,
+          shoppingLimit: data.shoppingLimit,
+          budgetCurrency: data.currency,
+          isOnboarded: true,
+        },
+      });
+
+      // 2. Create the chosen financial accounts
+      const createdAccounts: Record<string, string> = {};
+      for (const acc of data.accounts) {
+        const dbAcc = await tx.account.create({
+          data: {
+            userId: data.userId,
+            name: acc.name,
+            currency: data.currency,
+            balance: acc.balance,
+            type: acc.type,
+          },
+        });
+        createdAccounts[acc.name] = dbAcc.id;
+      }
+
+      // 3. Create the monthly template bills linked to accounts
+      if (data.templates && data.templates.length > 0) {
+        const templatesData = data.templates.map((tpl) => {
+          const accountId = createdAccounts[tpl.accountName];
+          if (!accountId) {
+            throw new Error(`Account ID not found for account name: ${tpl.accountName}`);
+          }
+          return {
+            userId: data.userId,
+            name: tpl.name,
+            amount: tpl.amount,
+            currency: data.currency,
+            accountId,
+          };
+        });
+
+        await tx.monthlyTemplate.createMany({
+          data: templatesData,
+        });
+      }
+    });
+
+    revalidatePath("/");
+    revalidatePath("/settings");
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to complete onboarding:", error);
+    return { success: false, error: (error as Error).message };
+  }
+}
+

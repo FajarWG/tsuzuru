@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import BottomNav from "@/components/layout/BottomNav";
 import AddTransactionFab from "@/components/transactions/AddTransactionFab";
 import OfflineStatusIndicator from "@/components/layout/OfflineStatusIndicator";
+import WelcomeDialog from "@/components/dashboard/WelcomeDialog";
 
 export default async function AppLayout({
   children,
@@ -21,12 +22,39 @@ export default async function AppLayout({
   console.log("[AppLayout] Querying DB for user ID:", session.user.id);
   const dbUser = await prisma.user.findUnique({
     where: { id: session.user.id },
+    include: { settings: true },
   });
   console.log("[AppLayout] Looked up DB User:", dbUser);
 
   if (!dbUser) {
     console.warn("[AppLayout] User not found in DB! Redirecting to /api/auth/clear");
     redirect("/api/auth/clear");
+  }
+
+  let userSettings = dbUser.settings;
+  if (!userSettings) {
+    userSettings = await prisma.userSettings.create({
+      data: {
+        userId: dbUser.id,
+        monthlyBudget: 0,
+        pocketMoneyLimit: 0,
+        shoppingLimit: 0,
+        budgetCurrency: "JPY",
+        isOnboarded: false,
+      },
+    });
+  }
+
+  let isOnboarded = userSettings.isOnboarded;
+  if (!isOnboarded) {
+    const accountCount = await prisma.account.count({ where: { userId: dbUser.id } });
+    if (accountCount > 0) {
+      userSettings = await prisma.userSettings.update({
+        where: { userId: dbUser.id },
+        data: { isOnboarded: true },
+      });
+      isOnboarded = true;
+    }
   }
 
   // Fetch accounts for the add transaction FAB dialog
@@ -37,8 +65,9 @@ export default async function AppLayout({
   });
 
   return (
-    <div className="flex-1 w-full max-w-[430px] mx-auto min-h-screen bg-background shadow-2xl border-x border-border/20 relative flex flex-col">
+    <div className="flex-1 w-full max-w-[430px] mx-auto min-h-screen bg-background shadow-2xl border-x border-border/20 relative flex flex-col overflow-x-hidden">
       <OfflineStatusIndicator />
+      <WelcomeDialog isOnboarded={isOnboarded} userId={session.user.id} />
       <main className="flex-1 flex flex-col p-5">
         {children}
       </main>

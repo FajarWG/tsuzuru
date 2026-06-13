@@ -9,18 +9,32 @@ export default function PwaRegister() {
   const router = useRouter();
 
   useEffect(() => {
-    // 1. Register Service Worker
+    // 1. Register Service Worker (Production only)
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker
-          .register("/sw.js")
-          .then((registration) => {
-            console.log("[PWA] Service Worker registered with scope:", registration.scope);
-          })
-          .catch((error) => {
-            console.error("[PWA] Service Worker registration failed:", error);
-          });
-      });
+      if (process.env.NODE_ENV === "development") {
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          if (registrations.length > 0) {
+            Promise.all(registrations.map((r) => r.unregister())).then((results) => {
+              const success = results.some(Boolean);
+              if (success) {
+                console.log("[PWA] Unregistered service worker in dev mode to allow HMR updates");
+                window.location.reload();
+              }
+            });
+          }
+        });
+      } else {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker
+            .register("/sw.js")
+            .then((registration) => {
+              console.log("[PWA] Service Worker registered with scope:", registration.scope);
+            })
+            .catch((error) => {
+              console.error("[PWA] Service Worker registration failed:", error);
+            });
+        });
+      }
     }
 
     // 2. Background Synchronization logic

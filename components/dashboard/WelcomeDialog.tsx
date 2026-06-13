@@ -1,131 +1,1375 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  IconLoader,
+  IconCheck,
+  IconChevronRight,
+  IconChevronLeft,
+  IconCoins,
+  IconWallet,
+  IconArrowRight,
+  IconActivity,
+  IconBuildingBank,
+  IconCreditCard,
+  IconConfetti,
+  IconInfoCircle,
+  IconPlus,
+  IconTrash,
+  IconBulb,
+} from "@tabler/icons-react";
+import { completeOnboardingAction } from "@/lib/actions/settings";
+import { cn } from "@/lib/utils";
+import { formatInputAmount, parseInputAmount } from "@/lib/format";
 
-export default function WelcomeDialog() {
+interface WelcomeDialogProps {
+  isOnboarded: boolean;
+  userId: string;
+}
+
+interface AccountOnboardingItem {
+  name: string;
+  type: string;
+  balance: string;
+  checked: boolean;
+}
+
+interface TemplateOnboardingItem {
+  name: string;
+  amount: string;
+  accountName: string;
+  checked: boolean;
+}
+
+interface RecommendationItem {
+  name: string;
+  type: string;
+  defaultBalance: string;
+}
+
+const JPY_RECS: RecommendationItem[] = [
+  { name: "Yucho Bank", type: "bank", defaultBalance: "100,000" },
+  { name: "PayPay", type: "ewallet", defaultBalance: "20,000" },
+  { name: "PayPay Investasi", type: "investment", defaultBalance: "50,000" },
+];
+
+const IDR_RECS: RecommendationItem[] = [
+  { name: "Jago", type: "bank", defaultBalance: "5,000,000" },
+  { name: "Mandiri", type: "bank", defaultBalance: "2,000,000" },
+  { name: "Cash/E-Wallet", type: "ewallet", defaultBalance: "500,000" },
+];
+
+const JPY_DEFAULT_TEMPLATES: TemplateOnboardingItem[] = [
+  { name: "Apato (家賃)", amount: "55,000", accountName: "Yucho Bank", checked: true },
+  { name: "Listrik (電気)", amount: "6,000", accountName: "PayPay", checked: true },
+  { name: "Air (水道)", amount: "3,000", accountName: "PayPay", checked: true },
+  { name: "Gas (ガス)", amount: "4,000", accountName: "PayPay", checked: true },
+  { name: "Kartu SIM", amount: "2,500", accountName: "PayPay", checked: true },
+];
+
+const IDR_DEFAULT_TEMPLATES: TemplateOnboardingItem[] = [
+  { name: "Kost", amount: "1,500,000", accountName: "Jago", checked: true },
+  { name: "Internet/WiFi", amount: "400,000", accountName: "Jago", checked: true },
+  { name: "Air", amount: "100,000", accountName: "Jago", checked: true },
+  { name: "Listrik", amount: "300,000", accountName: "Cash/E-Wallet", checked: true },
+  { name: "SIM Card", amount: "100,000", accountName: "Cash/E-Wallet", checked: true },
+];
+
+export default function WelcomeDialog({ isOnboarded, userId }: WelcomeDialogProps) {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
-  const [dontShowAgain, setDontShowAgain] = useState(false);
+  const [step, setStep] = useState(1);
+
+  // Configuration States
+  const [currency, setCurrency] = useState<"JPY" | "IDR">("JPY");
+  const [accounts, setAccounts] = useState<AccountOnboardingItem[]>([]);
+  const [templates, setTemplates] = useState<TemplateOnboardingItem[]>([]);
+  
+  const [monthlyBudget, setMonthlyBudget] = useState("");
+  const [pocketMoneyLimit, setPocketMoneyLimit] = useState("");
+  const [shoppingLimit, setShoppingLimit] = useState("");
+  
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSettingUp, setIsSettingUp] = useState(false);
+
+  // Inline Sub-dialog Overlay States
+  const [showAddAccount, setShowAddAccount] = useState(false);
+  const [newAccountName, setNewAccountName] = useState("");
+  const [newAccountType, setNewAccountType] = useState("bank");
+  const [newAccountBalance, setNewAccountBalance] = useState("0");
+
+  const [showSelectRecommendations, setShowSelectRecommendations] = useState(false);
+  const [selectedRecommendations, setSelectedRecommendations] = useState<string[]>([]);
+
+  const [showAddBill, setShowAddBill] = useState(false);
+  const [newBillName, setNewBillName] = useState("");
+  const [newBillAmount, setNewBillAmount] = useState("0");
+  const [newBillAccount, setNewBillAccount] = useState("");
+
+  const [showSelectBillRecommendations, setShowSelectBillRecommendations] = useState(false);
+  const [selectedBillRecommendations, setSelectedBillRecommendations] = useState<string[]>([]);
+
+  const [showBudgetTips, setShowBudgetTips] = useState(false);
 
   useEffect(() => {
-    // Check if the user has opted out of seeing this dialog
-    const hideWelcome = localStorage.getItem("tsuzuru_hide_welcome");
-    if (hideWelcome !== "true") {
+    if (!isOnboarded) {
       setIsOpen(true);
+      applyDefaults("JPY");
     }
-  }, []);
+  }, [isOnboarded]);
 
-  const handleClose = () => {
-    if (dontShowAgain) {
-      localStorage.setItem("tsuzuru_hide_welcome", "true");
-    }
-    setIsOpen(false);
+  const applyDefaults = (curr: "JPY" | "IDR") => {
+    setAccounts([]); // starts empty!
+    setTemplates([]); // starts empty!
+    setMonthlyBudget(""); // starts empty!
+    setPocketMoneyLimit(""); // starts empty!
+    setShoppingLimit(""); // starts empty!
   };
 
-  const handleOpenChange = (open: boolean) => {
-    if (!open && dontShowAgain) {
-      localStorage.setItem("tsuzuru_hide_welcome", "true");
+  const handleStartSetupLoading = () => {
+    setStep(5);
+    setIsSettingUp(true);
+    setTimeout(() => {
+      setIsSettingUp(false);
+    }, 3000);
+  };
+
+  const handleCurrencyChange = (newCurr: "JPY" | "IDR") => {
+    setCurrency(newCurr);
+    applyDefaults(newCurr);
+  };
+
+  // Accounts Handlers
+  const handleAccountCheck = (index: number, checked: boolean) => {
+    const updated = [...accounts];
+    updated[index].checked = checked;
+    setAccounts(updated);
+  };
+
+  const handleAccountBalanceChange = (index: number, value: string) => {
+    const updated = [...accounts];
+    updated[index].balance = formatInputAmount(value);
+    setAccounts(updated);
+  };
+
+  const handleRemoveAccount = (index: number) => {
+    const nameToRemove = accounts[index].name;
+    setAccounts(accounts.filter((_, i) => i !== index));
+    setTemplates(templates.filter((t) => t.accountName !== nameToRemove));
+  };
+
+  const handleAddAccountClick = () => {
+    setNewAccountName("");
+    setNewAccountType("bank");
+    setNewAccountBalance("0");
+    setShowAddAccount(true);
+  };
+
+  const handleAddAccountSubmit = () => {
+    const trimmed = newAccountName.trim();
+    if (!trimmed) return;
+    if (accounts.some((a) => a.name.toLowerCase() === trimmed.toLowerCase())) {
+      toast.error("An account with this name already exists");
+      return;
     }
-    setIsOpen(open);
+    setAccounts([
+      ...accounts,
+      {
+        name: trimmed,
+        type: newAccountType,
+        balance: formatInputAmount(newAccountBalance),
+        checked: true,
+      },
+    ]);
+    setShowAddAccount(false);
+    toast.success(`Custom account "${trimmed}" added!`);
+  };
+
+  // Select Recommendation Handlers
+  const handleSelectRecommendationsClick = () => {
+    const currentRecNames = accounts.map((a) => a.name);
+    const defaults = currency === "JPY" ? JPY_RECS : IDR_RECS;
+    const selected = defaults.filter((d) => currentRecNames.includes(d.name)).map((d) => d.name);
+    setSelectedRecommendations(selected);
+    setShowSelectRecommendations(true);
+  };
+
+  const handleToggleRecommendation = (name: string) => {
+    if (selectedRecommendations.includes(name)) {
+      setSelectedRecommendations(selectedRecommendations.filter((n) => n !== name));
+    } else {
+      setSelectedRecommendations([...selectedRecommendations, name]);
+    }
+  };
+
+  const handleAddRecommendationsSubmit = () => {
+    const recsToUse = currency === "JPY" ? JPY_RECS : IDR_RECS;
+    const customAccounts = accounts.filter((a) => {
+      const isRecommendation = recsToUse.some((r) => r.name === a.name);
+      return !isRecommendation;
+    });
+
+    const selectedRecItems: AccountOnboardingItem[] = [];
+    for (const name of selectedRecommendations) {
+      const recItem = recsToUse.find((r) => r.name === name);
+      if (recItem) {
+        const existing = accounts.find((a) => a.name === name);
+        selectedRecItems.push({
+          name: recItem.name,
+          type: recItem.type,
+          balance: existing ? existing.balance : recItem.defaultBalance,
+          checked: true,
+        });
+      }
+    }
+
+    setAccounts([...customAccounts, ...selectedRecItems]);
+    setShowSelectRecommendations(false);
+    toast.success("Accounts selection updated!");
+  };
+
+  // Templates Handlers
+  const handleTemplateCheck = (index: number, checked: boolean) => {
+    const updated = [...templates];
+    updated[index].checked = checked;
+    setTemplates(updated);
+  };
+
+  const handleTemplateAmountChange = (index: number, value: string) => {
+    const updated = [...templates];
+    updated[index].amount = formatInputAmount(value);
+    setTemplates(updated);
+  };
+
+  const handleRemoveTemplate = (index: number) => {
+    setTemplates(templates.filter((_, i) => i !== index));
+  };
+
+  const handleAddBillClick = () => {
+    const checkedAccs = accounts.filter((a) => a.checked);
+    if (checkedAccs.length === 0) {
+      toast.error("Please add and select at least one active financial account first");
+      return;
+    }
+    setNewBillName("");
+    setNewBillAmount("0");
+    setNewBillAccount(checkedAccs[0].name);
+    setShowAddBill(true);
+  };
+
+  const handleAddBillSubmit = () => {
+    const trimmed = newBillName.trim();
+    if (!trimmed) return;
+    if (templates.some((t) => t.name.toLowerCase() === trimmed.toLowerCase())) {
+      toast.error("A bill template with this name already exists");
+      return;
+    }
+    setTemplates([
+      ...templates,
+      {
+        name: trimmed,
+        amount: formatInputAmount(newBillAmount),
+        accountName: newBillAccount,
+        checked: true,
+      },
+    ]);
+    setShowAddBill(false);
+    toast.success(`Custom bill template "${trimmed}" added!`);
+  };
+
+  // Select Bill Recommendations Handlers
+  const handleSelectBillRecommendationsClick = () => {
+    const currentBillNames = templates.map((t) => t.name);
+    const defaults = currency === "JPY" ? JPY_DEFAULT_TEMPLATES : IDR_DEFAULT_TEMPLATES;
+    const selected = defaults.filter((d) => currentBillNames.includes(d.name)).map((d) => d.name);
+    setSelectedBillRecommendations(selected);
+    setShowSelectBillRecommendations(true);
+  };
+
+  const handleToggleBillRecommendation = (name: string) => {
+    if (selectedBillRecommendations.includes(name)) {
+      setSelectedBillRecommendations(selectedBillRecommendations.filter((n) => n !== name));
+    } else {
+      setSelectedBillRecommendations([...selectedBillRecommendations, name]);
+    }
+  };
+
+  const handleAddBillRecommendationsSubmit = () => {
+    const recsToUse = currency === "JPY" ? JPY_DEFAULT_TEMPLATES : IDR_DEFAULT_TEMPLATES;
+    const customBills = templates.filter((t) => {
+      const isRecommendation = recsToUse.some((r) => r.name === t.name);
+      return !isRecommendation;
+    });
+
+    const activeAccNames = accounts.filter((a) => a.checked).map((a) => a.name);
+    const fallbackAccount = activeAccNames[0] || "";
+
+    const selectedBillItems: TemplateOnboardingItem[] = [];
+    for (const name of selectedBillRecommendations) {
+      const recItem = recsToUse.find((r) => r.name === name);
+      if (recItem) {
+        const isLinkedActive = activeAccNames.includes(recItem.accountName);
+        const existing = templates.find((t) => t.name === name);
+        selectedBillItems.push({
+          name: recItem.name,
+          amount: existing ? existing.amount : recItem.amount,
+          accountName: isLinkedActive ? recItem.accountName : fallbackAccount,
+          checked: true,
+        });
+      }
+    }
+
+    setTemplates([...customBills, ...selectedBillItems]);
+    setShowSelectBillRecommendations(false);
+    toast.success("Bill templates selection updated!");
+  };
+
+  const handleApplyBudgetRecommendations = () => {
+    if (currency === "JPY") {
+      setMonthlyBudget("150,000");
+      setPocketMoneyLimit("40,000");
+      setShoppingLimit("60,000");
+    } else {
+      setMonthlyBudget("10,000,000");
+      setPocketMoneyLimit("3,000,000");
+      setShoppingLimit("4,000,000");
+    }
+    setShowBudgetTips(false);
+    toast.success("Recommended budget limits applied!");
+  };
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    
+    // Checked accounts
+    const activeAccounts = accounts
+      .filter((a) => a.checked)
+      .map((a) => ({
+        name: a.name,
+        type: a.type,
+        balance: parseInputAmount(a.balance),
+      }));
+
+    // Checked templates
+    const fallbackAccount = activeAccounts[0]?.name || "";
+    const activeTemplates = templates
+      .filter((t) => t.checked)
+      .map((t) => {
+        const isLinkedActive = activeAccounts.some((a) => a.name === t.accountName);
+        return {
+          name: t.name,
+          amount: parseInputAmount(t.amount),
+          accountName: isLinkedActive ? t.accountName : fallbackAccount,
+        };
+      });
+
+    try {
+      const result = await completeOnboardingAction({
+        userId,
+        currency,
+        monthlyBudget: parseInputAmount(monthlyBudget),
+        pocketMoneyLimit: parseInputAmount(pocketMoneyLimit),
+        shoppingLimit: parseInputAmount(shoppingLimit),
+        accounts: activeAccounts,
+        templates: activeTemplates,
+      });
+
+      if (result.success) {
+        toast.success("Workspace setup completed successfully!");
+        setIsOpen(false);
+        router.refresh();
+      } else {
+        toast.error(result.error || "Failed to finalize onboarding setup");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("An unexpected error occurred during onboarding finalization");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const getAccountIcon = (type: string) => {
+    if (type === "investment") return <IconActivity className="size-4" />;
+    if (type === "ewallet") return <IconCreditCard className="size-4" />;
+    return <IconBuildingBank className="size-4" />;
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-[400px] rounded-3xl p-0">
-        <div className="flex flex-col max-h-[85vh] p-6">
-          <DialogHeader className="gap-1.5 pb-4 shrink-0 border-b border-border/20">
-            <DialogTitle className="font-sans text-lg text-primary text-center">
-              ようこそ
-            </DialogTitle>
-            <div className="text-center font-sans text-[10px] text-muted-foreground tracking-widest uppercase -mt-1">
-              Welcome to Tsuzuru
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed text-center mt-2">
-              We have set up a default Kakeibo (家計簿) workspace with standard accounts, budgets, and bill templates to help you start tracking right away.
-            </p>
-          </DialogHeader>
-
-          <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-3.5 min-h-0">
-            {/* Steps List */}
-            <div className="grid grid-cols-1 gap-3.5">
-              {/* Step 1 */}
-              <div className="flex gap-3">
-                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary mt-0.5">
-                  <span className="text-[10px] font-sans font-bold">1</span>
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-xs font-semibold text-foreground">4 Financial Accounts Configured</span>
-                  <span className="text-[10px] text-muted-foreground leading-relaxed">
-                    Includes JPY accounts (Yucho Bank ¥100k, PayPay ¥20k, PayPay Investasi ¥50k) and an IDR account (Jago Rp5M).
-                  </span>
-                </div>
-              </div>
-
-              {/* Step 2 */}
-              <div className="flex gap-3">
-                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary mt-0.5">
-                  <span className="text-[10px] font-sans font-bold">2</span>
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-xs font-semibold text-foreground">Monthly Budget Limits Set</span>
-                  <span className="text-[10px] text-muted-foreground leading-relaxed">
-                    A monthly budget of ¥150,000 JPY is set, allocating ¥40,000 for Pocket Money and ¥60,000 for Shopping.
-                  </span>
-                </div>
-              </div>
-
-              {/* Step 3 */}
-              <div className="flex gap-3">
-                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary mt-0.5">
-                  <span className="text-[10px] font-sans font-bold">3</span>
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-xs font-semibold text-foreground">5 Recurring Bill Templates Ready</span>
-                  <span className="text-[10px] text-muted-foreground leading-relaxed">
-                    Rent, Electricity, Water, Gas, and SIM Card templates are ready. Pay them with one click in settings!
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-muted/40 border border-border/20 rounded-xl p-3 text-center">
-              <p className="text-[10px] font-medium text-muted-foreground leading-relaxed">
-                💡 Tip: Click the <strong className="text-primary font-bold">+</strong> button in the bottom navigation to log a new expense or income.
-              </p>
+    <Dialog open={isOpen} onOpenChange={() => {}}>
+      <DialogContent className="max-w-[430px] rounded-3xl p-0 overflow-hidden" showCloseButton={false}>
+        <div className="flex flex-col max-h-[85vh] p-6 relative min-h-[480px]">
+          
+          {/* Header Step Counter Indicator */}
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-[10px] font-sans font-bold tracking-widest text-muted-foreground uppercase">
+              Step {step} of 5
+            </span>
+            <div className="flex gap-1">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <div
+                  key={s}
+                  className={cn(
+                    "h-1 rounded-full transition-all duration-300",
+                    s === step ? "w-5 bg-primary" : "w-2 bg-muted-foreground/20"
+                  )}
+                />
+              ))}
             </div>
           </div>
 
-          <div className="flex flex-col gap-3.5 mt-2 shrink-0 pt-4 border-t border-border/20">
-            {/* Checkbox for don't show again */}
-            <label className="flex items-center gap-2.5 cursor-pointer px-1 justify-center sm:justify-start">
-              <input
-                type="checkbox"
-                id="dontShowAgain"
-                checked={dontShowAgain}
-                onChange={(e) => setDontShowAgain(e.target.checked)}
-                className="size-4 rounded border-border accent-primary text-primary focus:ring-primary cursor-pointer"
-              />
-              <span className="text-[11px] font-medium text-muted-foreground select-none">
-                Don't show this message again
-              </span>
-            </label>
-
-            <DialogFooter className="w-full">
-              <Button
-                onClick={handleClose}
-                className="w-full h-10 rounded-xl font-medium text-xs tracking-wider"
+          <AnimatePresence mode="wait">
+            {step === 1 && (
+              <motion.div
+                key="step1"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className="flex flex-col gap-4"
               >
-                Get Started
-              </Button>
-            </DialogFooter>
-          </div>
+                <DialogHeader className="gap-1 pb-4 shrink-0 border-b border-border/20 text-center">
+                  <DialogTitle className="font-sans text-xl text-primary">
+                    ようこそ
+                  </DialogTitle>
+                  <div className="font-sans text-[10px] text-muted-foreground tracking-widest uppercase -mt-1">
+                    Welcome to Tsuzuru
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed mt-2">
+                    Tsuzuru (綴る) helps you weave your financial story. Let's customize your workspace in a few easy steps to match your profile!
+                  </p>
+                </DialogHeader>
+
+                <div className="flex-1 overflow-y-auto py-2 flex flex-col gap-4 min-h-0">
+                  <div className="grid grid-cols-1 gap-3.5">
+                    <div className="flex gap-3 items-start p-3 bg-muted/20 border border-border/20 rounded-2xl">
+                      <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0">
+                        <IconWallet className="size-4" />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs font-semibold text-foreground">Financial Accounts</span>
+                        <span className="text-[10px] text-muted-foreground leading-relaxed">
+                          Setup your daily banks, e-wallets, or cash starting balances.
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 items-start p-3 bg-muted/20 border border-border/20 rounded-2xl">
+                      <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0">
+                        <IconCoins className="size-4" />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs font-semibold text-foreground">Monthly Budget Limits</span>
+                        <span className="text-[10px] text-muted-foreground leading-relaxed">
+                          Set goals for your general expenses, pocket money, and shopping.
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 items-start p-3 bg-muted/20 border border-border/20 rounded-2xl">
+                      <div className="p-2 bg-primary/10 text-primary rounded-xl shrink-0">
+                        <IconCheck className="size-4" />
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs font-semibold text-foreground">Recurring Bill Templates</span>
+                        <span className="text-[10px] text-muted-foreground leading-relaxed">
+                          Save templates for rent, electricity, or water bills to pay in 1-click.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-border/20 shrink-0">
+                  <Button
+                    onClick={() => setStep(2)}
+                    className="w-full h-11 rounded-xl font-medium text-xs tracking-wider gap-2 cursor-pointer"
+                  >
+                    Set up your account <IconChevronRight className="size-4" />
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
+            {step === 2 && (
+              <motion.div
+                key="step2"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className="flex flex-col gap-4"
+              >
+                <DialogHeader className="gap-0.5 pb-2 shrink-0 border-b border-border/20">
+                  <DialogTitle className="font-sans text-lg text-primary">
+                    Currency & Accounts
+                  </DialogTitle>
+                  <p className="text-[11px] text-muted-foreground">
+                    Select your main currency and configure active starting accounts.
+                  </p>
+                </DialogHeader>
+
+                <div className="flex-1 overflow-y-auto py-1 flex flex-col gap-3 min-h-0 max-h-[38vh] pr-1">
+                  {/* Currency Toggle */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground pl-1">
+                      Main Currency
+                    </Label>
+                    <div className="flex bg-muted p-1 rounded-xl border border-border/10">
+                      {(["JPY", "IDR"] as const).map((curr) => (
+                        <button
+                          key={curr}
+                          type="button"
+                          onClick={() => handleCurrencyChange(curr)}
+                          className={cn(
+                            "flex-1 h-9 rounded-lg text-xs font-semibold tracking-wide transition-all cursor-pointer",
+                            currency === curr
+                              ? "bg-white dark:bg-zinc-800 text-foreground shadow-xs"
+                              : "text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          {curr === "JPY" ? "JPY (¥)" : "IDR (Rp)"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Accounts List */}
+                  <div className="flex flex-col gap-2">
+                    <div className="flex justify-between items-center pl-1">
+                      <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Financial Accounts
+                      </Label>
+                    </div>
+                    
+                    <div className="flex flex-col gap-2">
+                      {accounts.length === 0 ? (
+                        <div className="text-center py-6 border border-dashed border-border rounded-2xl bg-muted/10">
+                          <p className="text-[11px] text-muted-foreground font-semibold">No accounts added yet.</p>
+                          <p className="text-[9px] text-muted-foreground/60 mt-0.5">Add custom accounts or select from recommendations below.</p>
+                        </div>
+                      ) : (
+                        accounts.map((acc, index) => (
+                          <div
+                            key={acc.name}
+                            className={cn(
+                              "flex items-center justify-between p-3 border rounded-2xl transition-all",
+                              acc.checked
+                                ? "bg-muted/30 border-primary/40"
+                                : "bg-transparent border-border opacity-60"
+                            )}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <Checkbox
+                                checked={acc.checked}
+                                onCheckedChange={(checked) => handleAccountCheck(index, !!checked)}
+                              />
+                              <div className="p-1.5 bg-white dark:bg-zinc-800 rounded-lg text-primary border border-border/20 shrink-0">
+                                {getAccountIcon(acc.type)}
+                              </div>
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-xs font-bold text-foreground truncate leading-tight font-sans">
+                                  {acc.name}
+                                </span>
+                                <span className="text-[9px] text-muted-foreground capitalize leading-none font-sans">
+                                  {acc.type}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              {acc.checked && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] font-semibold text-muted-foreground">
+                                    {currency === "JPY" ? "¥" : "Rp"}
+                                  </span>
+                                  <input
+                                    type="text"
+                                    value={acc.balance}
+                                    onChange={(e) => handleAccountBalanceChange(index, e.target.value)}
+                                    className="w-20 h-7 text-right text-xs bg-white dark:bg-zinc-900 border border-border rounded-lg px-2 focus:outline-none focus:border-primary font-semibold font-sans"
+                                  />
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveAccount(index)}
+                                className="p-1 text-zinc-400 hover:text-destructive transition-colors cursor-pointer shrink-0"
+                                title="Delete Account"
+                              >
+                                <IconTrash className="size-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="mt-1.5">
+                      {accounts.some((a) => (currency === "JPY" ? JPY_RECS : IDR_RECS).some((r) => r.name === a.name)) ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleAddAccountClick}
+                          className="w-full text-[10px] font-semibold tracking-wide border-dashed border-primary/40 text-primary hover:bg-primary/5 h-9 rounded-xl cursor-pointer flex items-center justify-center gap-1.5 animate-in fade-in duration-300"
+                        >
+                          <IconPlus className="size-3.5" /> Add Custom Account
+                        </Button>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleAddAccountClick}
+                            className="text-[10px] font-semibold tracking-wide border-dashed border-primary/40 text-primary hover:bg-primary/5 h-9 rounded-xl cursor-pointer flex items-center justify-center gap-1.5"
+                          >
+                            <IconPlus className="size-3.5" /> Add Custom
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleSelectRecommendationsClick}
+                            className="text-[10px] font-semibold tracking-wide border-dashed border-primary/40 text-primary hover:bg-primary/5 h-9 rounded-xl cursor-pointer flex items-center justify-center gap-1.5"
+                          >
+                            <IconCheck className="size-3.5" /> Select Recommendation
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-border/20 flex gap-2.5 shrink-0">
+                  <Button
+                    variant="outline"
+                    onClick={() => setStep(1)}
+                    className="w-1/3 h-11 rounded-xl font-medium text-xs tracking-wider gap-1.5 cursor-pointer"
+                  >
+                    <IconChevronLeft className="size-4" /> Back
+                  </Button>
+                  <Button
+                    onClick={() => setStep(3)}
+                    disabled={!accounts.some((a) => a.checked)}
+                    className="flex-1 h-11 rounded-xl font-medium text-xs tracking-wider gap-1.5 cursor-pointer"
+                  >
+                    Continue <IconChevronRight className="size-4" />
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
+            {step === 3 && (
+              <motion.div
+                key="step3"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className="flex flex-col gap-4"
+              >
+                <DialogHeader className="gap-0.5 pb-3 shrink-0 border-b border-border/20">
+                  <DialogTitle className="font-sans text-lg text-primary">
+                    Monthly Budget Limits
+                  </DialogTitle>
+                  <p className="text-[11px] text-muted-foreground">
+                    Set up your monthly expected budget limits in {currency}.
+                  </p>
+                </DialogHeader>
+
+                <div className="flex-1 overflow-y-auto py-1 flex flex-col gap-3.5 min-h-0 max-h-[40vh]">
+                  {/* Monthly Budget Input */}
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs font-semibold text-muted-foreground">
+                      Monthly Expected Budget
+                    </Label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3 text-xs font-bold text-muted-foreground">
+                        {currency === "JPY" ? "¥" : "Rp"}
+                      </span>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={monthlyBudget}
+                        onChange={(e) => setMonthlyBudget(formatInputAmount(e.target.value))}
+                        className={cn("h-10 font-semibold rounded-xl", currency === "JPY" ? "pl-7" : "pl-9")}
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Limit Dividers */}
+                  <div className="grid grid-cols-2 gap-3.5">
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs font-semibold text-muted-foreground">
+                        Pocket Money Limit
+                      </Label>
+                      <div className="relative flex items-center">
+                        <span className="absolute left-3 text-xs font-bold text-muted-foreground">
+                          {currency === "JPY" ? "¥" : "Rp"}
+                        </span>
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          value={pocketMoneyLimit}
+                          onChange={(e) => setPocketMoneyLimit(formatInputAmount(e.target.value))}
+                          className={cn("h-10 font-semibold rounded-xl", currency === "JPY" ? "pl-7" : "pl-9")}
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs font-semibold text-muted-foreground">
+                        Shopping Limit
+                      </Label>
+                      <div className="relative flex items-center">
+                        <span className="absolute left-3 text-xs font-bold text-muted-foreground">
+                          {currency === "JPY" ? "¥" : "Rp"}
+                        </span>
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          value={shoppingLimit}
+                          onChange={(e) => setShoppingLimit(formatInputAmount(e.target.value))}
+                          className={cn("h-10 font-semibold rounded-xl", currency === "JPY" ? "pl-7" : "pl-9")}
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowBudgetTips(true)}
+                    className="text-xs text-primary hover:underline font-semibold flex items-center gap-1.5 cursor-pointer mt-1 self-start"
+                  >
+                    <IconInfoCircle className="size-4 text-primary" /> See Explanation
+                  </button>
+
+                  {/* Tip banner to fill empty space */}
+                  <div className="p-3 bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 rounded-2xl flex gap-2.5 items-start mt-2">
+                    <IconBulb className="size-5 text-amber-500 shrink-0 mt-0.5" />
+                    <div className="flex flex-col gap-0.5 text-left">
+                      <span className="text-[11px] font-bold text-foreground font-sans">Budget Planning Tip</span>
+                      <p className="text-[10px] text-muted-foreground leading-normal font-sans">
+                        Setting budget limits helps you track spending categories. You can apply our default balanced guidelines by clicking "See Explanation" above.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-border/20 flex gap-2.5 shrink-0">
+                  <Button
+                    variant="outline"
+                    onClick={() => setStep(2)}
+                    className="w-1/3 h-11 rounded-xl font-medium text-xs tracking-wider gap-1.5 cursor-pointer"
+                  >
+                    <IconChevronLeft className="size-4" /> Back
+                  </Button>
+                  <Button
+                    onClick={() => setStep(4)}
+                    className="flex-1 h-11 rounded-xl font-medium text-xs tracking-wider gap-1.5 cursor-pointer"
+                  >
+                    Continue <IconChevronRight className="size-4" />
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
+            {step === 4 && (
+              <motion.div
+                key="step4"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className="flex flex-col gap-4"
+              >
+                <DialogHeader className="gap-0.5 pb-2 shrink-0 border-b border-border/20">
+                  <DialogTitle className="font-sans text-lg text-primary">
+                    Recurring Bills
+                  </DialogTitle>
+                  <p className="text-[11px] text-muted-foreground">
+                    Configure your monthly recurring bills.
+                  </p>
+                </DialogHeader>
+
+                <div className="flex-1 overflow-y-auto py-1 flex flex-col gap-2.5 min-h-0 max-h-[38vh] pr-1">
+                  {templates.length === 0 ? (
+                    <div className="text-center py-6 border border-dashed border-border rounded-2xl bg-muted/10">
+                      <p className="text-[11px] text-muted-foreground font-semibold">No recurring bills added yet.</p>
+                      <p className="text-[9px] text-muted-foreground/60 mt-0.5">Add custom bills or select from recommendations below.</p>
+                    </div>
+                  ) : (
+                    templates.map((tpl, index) => (
+                      <div
+                        key={tpl.name}
+                        className={cn(
+                          "flex items-center justify-between p-3 border rounded-2xl transition-all",
+                          tpl.checked
+                            ? "bg-muted/30 border-primary/40"
+                            : "bg-transparent border-border opacity-60"
+                        )}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <Checkbox
+                            checked={tpl.checked}
+                            onCheckedChange={(checked) => handleTemplateCheck(index, !!checked)}
+                          />
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-xs font-bold text-foreground truncate leading-tight font-sans">
+                              {tpl.name}
+                            </span>
+                            <span className="text-[9px] text-muted-foreground truncate leading-none font-sans">
+                              Paid via {tpl.accountName}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {tpl.checked && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] font-semibold text-muted-foreground">
+                                {currency === "JPY" ? "¥" : "Rp"}
+                              </span>
+                              <input
+                                type="text"
+                                value={tpl.amount}
+                                onChange={(e) => handleTemplateAmountChange(index, e.target.value)}
+                                className="w-18 h-7 text-right text-xs bg-white dark:bg-zinc-900 border border-border rounded-lg px-2 focus:outline-none focus:border-primary font-semibold font-sans"
+                              />
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTemplate(index)}
+                            className="p-1 text-zinc-400 hover:text-destructive transition-colors cursor-pointer shrink-0"
+                            title="Delete Bill"
+                          >
+                            <IconTrash className="size-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+
+                  {/* Tip banner to fill empty space */}
+                  <div className="p-3 bg-primary/5 border border-primary/15 rounded-2xl flex gap-2.5 items-start mt-2">
+                    <IconInfoCircle className="size-5 text-primary shrink-0 mt-0.5" />
+                    <div className="flex flex-col gap-0.5 text-left">
+                      <span className="text-[11px] font-bold text-foreground font-sans">Why track recurring bills?</span>
+                      <p className="text-[10px] text-muted-foreground leading-normal font-sans">
+                        Registering bills (like Rent, Netflix, or Utilities) links them to your active accounts. Every month, you can record payments with a single tap from your dashboard to save time.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-1.5">
+                  {templates.some((t) => (currency === "JPY" ? JPY_DEFAULT_TEMPLATES : IDR_DEFAULT_TEMPLATES).some((r) => r.name === t.name)) ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleAddBillClick}
+                      className="w-full text-[10px] font-semibold tracking-wide border-dashed border-primary/40 text-primary hover:bg-primary/5 h-9 rounded-xl cursor-pointer flex items-center justify-center gap-1.5 animate-in fade-in duration-300"
+                    >
+                      <IconPlus className="size-3.5" /> Add Custom Bill
+                    </Button>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAddBillClick}
+                        className="text-[10px] font-semibold tracking-wide border-dashed border-primary/40 text-primary hover:bg-primary/5 h-9 rounded-xl cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <IconPlus className="size-3.5" /> Add Custom
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleSelectBillRecommendationsClick}
+                        className="text-[10px] font-semibold tracking-wide border-dashed border-primary/40 text-primary hover:bg-primary/5 h-9 rounded-xl cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <IconCheck className="size-3.5" /> Select Recommendation
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-4 border-t border-border/20 flex gap-2.5 shrink-0">
+                  <Button
+                    variant="outline"
+                    onClick={() => setStep(3)}
+                    className="w-1/3 h-11 rounded-xl font-medium text-xs tracking-wider gap-1.5 cursor-pointer"
+                  >
+                    <IconChevronLeft className="size-4" /> Back
+                  </Button>
+                  <Button
+                    onClick={handleStartSetupLoading}
+                    className="flex-1 h-11 rounded-xl font-medium text-xs tracking-wider gap-1.5 cursor-pointer"
+                  >
+                    Setup Complete <IconChevronRight className="size-4" />
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+
+            {step === 5 && (
+              <motion.div
+                key="step5"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className="flex flex-col gap-4 text-center py-4 justify-center items-center min-h-[340px] w-full"
+              >
+                {isSettingUp ? (
+                  <div className="flex flex-col items-center justify-center gap-4 py-8 animate-in fade-in duration-300">
+                    <div className="relative flex items-center justify-center">
+                      {/* Pulse rings */}
+                      <div className="absolute size-16 bg-primary/10 rounded-full animate-ping" />
+                      <div className="absolute size-20 bg-primary/5 rounded-full animate-pulse" />
+                      <IconLoader className="size-10 text-primary animate-spin" />
+                    </div>
+                    <div className="flex flex-col gap-1.5 mt-2">
+                      <span className="font-sans text-sm font-bold text-foreground">Setting up your workspace...</span>
+                      <p className="text-[10px] text-muted-foreground max-w-[200px] leading-relaxed">
+                        Initializing financial accounts, budgets, and recurring bills.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-4 text-center w-full animate-in zoom-in-95 duration-300">
+                    {/* SVG Checkmark */}
+                    <div className="flex justify-center items-center h-16">
+                      <motion.svg
+                        className="w-16 h-16 text-emerald-500"
+                        viewBox="0 0 52 52"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={3.5}
+                      >
+                        <motion.circle
+                          cx={26}
+                          cy={26}
+                          r={23}
+                          initial={{ pathLength: 0 }}
+                          animate={{ pathLength: 1 }}
+                          transition={{ duration: 0.4, ease: "easeInOut" }}
+                        />
+                        <motion.path
+                          d="M16 27 l7 7 l14 -14"
+                          strokeLinecap="round"
+                          initial={{ pathLength: 0 }}
+                          animate={{ pathLength: 1 }}
+                          transition={{ duration: 0.3, delay: 0.4, ease: "easeInOut" }}
+                        />
+                      </motion.svg>
+                    </div>
+
+                    <div className="flex flex-col gap-1 mt-2">
+                      <h3 className="font-sans text-lg font-bold text-foreground">
+                        Workspace Ready!
+                      </h3>
+                      <p className="text-xs text-muted-foreground leading-relaxed max-w-[280px] mx-auto">
+                        Your {currency} financial workspace is fully configured and ready for use.
+                      </p>
+                    </div>
+
+                    {/* Summary Box */}
+                    <div className="bg-muted/40 border border-border/20 rounded-2xl p-4 text-left max-w-[320px] mx-auto w-full flex flex-col gap-1.5 shadow-2xs">
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-muted-foreground">Base Currency:</span>
+                        <span className="font-bold text-foreground">{currency}</span>
+                      </div>
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-muted-foreground">Accounts Linked:</span>
+                        <span className="font-bold text-foreground font-sans">
+                          {accounts.filter((a) => a.checked).length} active
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-muted-foreground">Monthly Budget:</span>
+                        <span className="font-bold text-foreground font-sans">
+                          {currency === "JPY" ? "¥" : "Rp"}{monthlyBudget || "0"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-muted-foreground">Bills Tracked:</span>
+                        <span className="font-bold text-foreground font-sans">
+                          {templates.filter((t) => t.checked).length} bills
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-6 w-full shrink-0">
+                      <Button
+                        onClick={handleSubmit}
+                        disabled={isSubmitting}
+                        className="w-full h-11 rounded-xl font-medium text-xs tracking-wider gap-2 cursor-pointer"
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <IconLoader className="size-4 animate-spin" /> Saving...
+                          </>
+                        ) : (
+                          <>
+                            Start Tracking <IconArrowRight className="size-4" />
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Sub-dialog absolute overlay for adding custom account */}
+          {showAddAccount && (
+            <div className="absolute inset-0 bg-black/40 z-30 flex items-center justify-center p-4 backdrop-blur-xs">
+              <div className="bg-background w-full rounded-2xl p-5 border border-border/80 shadow-2xl flex flex-col gap-4 animate-in zoom-in-95 duration-200">
+                <div className="flex justify-between items-center pb-2 border-b border-border/20">
+                  <h4 className="text-sm font-bold text-primary font-sans">Add Custom Account</h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddAccount(false)}
+                    className="text-muted-foreground hover:text-foreground text-xs font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Account Name</Label>
+                    <Input
+                      value={newAccountName}
+                      onChange={(e) => setNewAccountName(e.target.value)}
+                      placeholder="e.g. BNI, Cash, Pocket Cash"
+                      className="h-9 rounded-xl text-xs"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Account Type</Label>
+                    <select
+                      value={newAccountType}
+                      onChange={(e) => setNewAccountType(e.target.value)}
+                      className="h-9 px-3 border border-border rounded-xl bg-background text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent font-semibold"
+                    >
+                      <option value="bank">Bank Account</option>
+                      <option value="ewallet">E-Wallet / Cash</option>
+                      <option value="investment">Investment / Others</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Starting Balance</Label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3 text-xs font-bold text-muted-foreground">
+                        {currency === "JPY" ? "¥" : "Rp"}
+                      </span>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={newAccountBalance}
+                        onChange={(e) => setNewAccountBalance(formatInputAmount(e.target.value))}
+                        className={cn("h-9 font-semibold rounded-xl text-xs", currency === "JPY" ? "pl-7" : "pl-9")}
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={handleAddAccountSubmit}
+                  disabled={!newAccountName.trim()}
+                  className="w-full h-10 rounded-xl font-medium text-xs tracking-wider cursor-pointer mt-1 font-sans"
+                >
+                  Add Account
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Sub-dialog absolute overlay for selecting recommendations */}
+          {showSelectRecommendations && (
+            <div className="absolute inset-0 bg-black/40 z-30 flex items-center justify-center p-4 backdrop-blur-xs">
+              <div className="bg-background w-full rounded-2xl p-5 border border-border/80 shadow-2xl flex flex-col gap-4 animate-in zoom-in-95 duration-200 max-h-[90%]">
+                <div className="flex justify-between items-center pb-2 border-b border-border/20">
+                  <h4 className="text-sm font-bold text-primary font-sans">Select Recommendations</h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowSelectRecommendations(false)}
+                    className="text-muted-foreground hover:text-foreground text-xs font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                <p className="text-[9px] text-muted-foreground leading-relaxed -mt-2">
+                  Check the default accounts you want to initialize. They will be added with default starting balances.
+                </p>
+
+                <div className="flex-col gap-2.5 max-h-[260px] overflow-y-auto pr-1 flex">
+                  {(currency === "JPY" ? JPY_RECS : IDR_RECS).map((rec) => {
+                    const isChecked = selectedRecommendations.includes(rec.name);
+                    return (
+                      <div
+                        key={rec.name}
+                        onClick={() => handleToggleRecommendation(rec.name)}
+                        className={cn(
+                          "flex items-center gap-3 p-2.5 border rounded-2xl cursor-pointer transition-all select-none",
+                          isChecked
+                            ? "bg-primary/5 border-primary/40"
+                            : "bg-transparent border-border hover:bg-muted/10"
+                        )}
+                      >
+                        <Checkbox
+                          checked={isChecked}
+                          className="pointer-events-none"
+                        />
+                        <div className="p-1.5 bg-white dark:bg-zinc-800 rounded-lg text-primary border border-border/20 shrink-0">
+                          {getAccountIcon(rec.type)}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-xs font-bold text-foreground truncate leading-tight font-sans">
+                            {rec.name}
+                          </span>
+                          <span className="text-[9px] text-muted-foreground capitalize leading-none mt-0.5 font-sans">
+                            {rec.type}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={handleAddRecommendationsSubmit}
+                  className="w-full h-10 rounded-xl font-medium text-xs tracking-wider cursor-pointer font-sans"
+                >
+                  Add Recommendations
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Sub-dialog absolute overlay for See Tips & Recommendations */}
+          {showBudgetTips && (
+            <div className="absolute inset-0 bg-black/40 z-30 flex items-center justify-center p-4 backdrop-blur-xs">
+              <div className="bg-background w-full rounded-2xl p-5 border border-border/80 shadow-2xl flex flex-col gap-4 animate-in zoom-in-95 duration-200 max-h-[90%] overflow-y-auto">
+                <div className="pb-1 border-b border-border/20">
+                  <h4 className="text-sm font-bold text-primary">Budget Recommendations</h4>
+                </div>
+
+                <div className="flex flex-col gap-3 text-xs text-muted-foreground">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-bold text-foreground font-sans">Monthly Expected Budget</span>
+                    <p className="text-[10px] leading-relaxed">
+                      Main spending limit for the entire month across all financial accounts. Used to calculate overall remaining balance.
+                    </p>
+                    <span className="text-[9px] font-bold text-primary uppercase mt-0.5">
+                      Recommended: {currency === "JPY" ? "¥150,000 JPY" : "Rp 10.000.000 IDR"}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-0.5 border-t border-border/10 pt-2.5">
+                    <span className="font-bold text-foreground font-sans">Pocket Money Limit</span>
+                    <p className="text-[10px] leading-relaxed">
+                      Allowance allocated for daily items, snacks, transport, and other flexible pocket money expenses.
+                    </p>
+                    <span className="text-[9px] font-bold text-primary uppercase mt-0.5">
+                      Recommended: {currency === "JPY" ? "¥40,000 JPY" : "Rp 3.000.000 IDR"}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-0.5 border-t border-border/10 pt-2.5">
+                    <span className="font-bold text-foreground font-sans">Shopping Limit</span>
+                    <p className="text-[10px] leading-relaxed">
+                      Allocation designated for non-daily purchases like buying clothing, electronics, and household goods.
+                    </p>
+                    <span className="text-[9px] font-bold text-primary uppercase mt-0.5">
+                      Recommended: {currency === "JPY" ? "¥60,000 JPY" : "Rp 4.000.000 IDR"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 mt-1">
+                  <Button
+                    type="button"
+                    onClick={handleApplyBudgetRecommendations}
+                    className="w-full h-10 rounded-xl font-medium text-xs tracking-wider cursor-pointer"
+                  >
+                    Apply Recommended Limits
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowBudgetTips(false)}
+                    className="w-full h-10 rounded-xl font-medium text-xs tracking-wider cursor-pointer"
+                  >
+                    Close
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Sub-dialog absolute overlay for adding custom bill */}
+          {showAddBill && (
+            <div className="absolute inset-0 bg-black/40 z-30 flex items-center justify-center p-4 backdrop-blur-xs">
+              <div className="bg-background w-full rounded-2xl p-5 border border-border/80 shadow-2xl flex flex-col gap-4 animate-in zoom-in-95 duration-200">
+                <div className="flex justify-between items-center pb-2 border-b border-border/20">
+                  <h4 className="text-sm font-bold text-primary">Add Custom Bill</h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddBill(false)}
+                    className="text-muted-foreground hover:text-foreground text-xs font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Bill Name</Label>
+                    <Input
+                      value={newBillName}
+                      onChange={(e) => setNewBillName(e.target.value)}
+                      placeholder="e.g. Netflix Premium, Spotify, Gym"
+                      className="h-9 rounded-xl text-xs"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Amount</Label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3 text-xs font-bold text-muted-foreground">
+                        {currency === "JPY" ? "¥" : "Rp"}
+                      </span>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={newBillAmount}
+                        onChange={(e) => setNewBillAmount(formatInputAmount(e.target.value))}
+                        className={cn("h-9 font-semibold rounded-xl text-xs", currency === "JPY" ? "pl-7" : "pl-9")}
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Paid From Account</Label>
+                    <select
+                      value={newBillAccount}
+                      onChange={(e) => setNewBillAccount(e.target.value)}
+                      className="h-9 px-3 border border-border rounded-xl bg-background text-xs focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent font-semibold"
+                    >
+                      {accounts.filter((a) => a.checked).map((acc) => (
+                        <option key={acc.name} value={acc.name}>
+                          {acc.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={handleAddBillSubmit}
+                  disabled={!newBillName.trim()}
+                  className="w-full h-10 rounded-xl font-medium text-xs tracking-wider cursor-pointer mt-1 font-sans"
+                >
+                  Add Bill Template
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Sub-dialog absolute overlay for selecting bill recommendations */}
+          {showSelectBillRecommendations && (
+            <div className="absolute inset-0 bg-black/40 z-30 flex items-center justify-center p-4 backdrop-blur-xs">
+              <div className="bg-background w-full rounded-2xl p-5 border border-border/80 shadow-2xl flex flex-col gap-4 animate-in zoom-in-95 duration-200 max-h-[90%]">
+                <div className="flex justify-between items-center pb-2 border-b border-border/20">
+                  <h4 className="text-sm font-bold text-primary font-sans">Select Templates</h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowSelectBillRecommendations(false)}
+                    className="text-muted-foreground hover:text-foreground text-xs font-semibold cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                <p className="text-[10px] text-muted-foreground leading-relaxed -mt-2">
+                  Select pre-configured monthly bill templates to register. They will link to their default accounts with recommended amounts. You can customize them in the main screen later.
+                </p>
+
+                <div className="flex-col gap-2.5 max-h-[260px] overflow-y-auto pr-1 flex">
+                  {(currency === "JPY" ? JPY_DEFAULT_TEMPLATES : IDR_DEFAULT_TEMPLATES).map((rec) => {
+                    const isChecked = selectedBillRecommendations.includes(rec.name);
+                    return (
+                      <div
+                        key={rec.name}
+                        onClick={() => handleToggleBillRecommendation(rec.name)}
+                        className={cn(
+                          "flex items-center gap-3 p-2.5 border rounded-2xl cursor-pointer transition-all select-none",
+                          isChecked
+                            ? "bg-primary/5 border-primary/40"
+                            : "bg-transparent border-border hover:bg-muted/10"
+                        )}
+                      >
+                        <Checkbox
+                          checked={isChecked}
+                          className="pointer-events-none"
+                        />
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-xs font-bold text-foreground truncate leading-tight font-sans">
+                            {rec.name}
+                          </span>
+                          <span className="text-[9px] text-muted-foreground truncate leading-none mt-0.5 font-sans">
+                            Default link: {rec.accountName}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <Button
+                  type="button"
+                  onClick={handleAddBillRecommendationsSubmit}
+                  className="w-full h-10 rounded-xl font-medium text-xs tracking-wider cursor-pointer font-sans"
+                >
+                  Add Selected Recommendations
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

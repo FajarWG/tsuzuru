@@ -30,12 +30,12 @@ export default function BottomNav({ fab }: BottomNavProps) {
     <>
       <div
         className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pointer-events-none"
-        style={{ paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom, 0px))" }}
+        style={{
+          paddingBottom: "calc(1.7rem + env(safe-area-inset-bottom, 0px))",
+        }}
       >
         {/* iPhone-style floating pill — truly transparent blur */}
-        <nav
-          className="w-[calc(100%-28px)] max-w-[402px] pointer-events-auto flex items-center justify-around px-2.5 h-[60px] rounded-[26px] bg-white/70 dark:bg-zinc-950/75 backdrop-blur-xl border border-border/30 shadow-lg"
-        >
+        <nav className="w-[calc(100%-36px)] max-w-[320px] pointer-events-auto flex items-center justify-around px-2.5 h-[60px] rounded-xl bg-white/10 dark:bg-zinc-950/20 backdrop-blur-lg border border-border/90 shadow-lg">
           {links.map((link) => {
             const Icon = link.icon;
             const isActive =
@@ -43,7 +43,11 @@ export default function BottomNav({ fab }: BottomNavProps) {
               (link.href !== "/" && pathname.startsWith(link.href));
 
             if (link.isFab) {
-              return <div key={link.href} className="mx-1">{fab}</div>;
+              return (
+                <div key={link.href} className="mx-1">
+                  {fab}
+                </div>
+              );
             }
 
             if (!Icon) return null;
@@ -57,13 +61,15 @@ export default function BottomNav({ fab }: BottomNavProps) {
                   "flex items-center justify-center w-11 h-11 rounded-[15px] transition-all duration-200",
                   isActive
                     ? "bg-primary/12 text-primary"
-                    : "text-zinc-400/80 hover:text-zinc-600 hover:bg-black/5"
+                    : "text-zinc-400/80 hover:text-zinc-600 hover:bg-black/5",
                 )}
               >
                 <Icon
                   className={cn(
                     "transition-all duration-200",
-                    isActive ? "size-[22px] stroke-[2]" : "size-[21px] stroke-[1.6]"
+                    isActive
+                      ? "size-[22px] stroke-[2]"
+                      : "size-[21px] stroke-[1.6]",
                   )}
                 />
               </Link>

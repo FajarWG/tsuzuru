@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { Suspense } from "react";
 import BalanceSummaryCard from "@/components/dashboard/BalanceSummaryCard";
-import WelcomeDialog from "@/components/dashboard/WelcomeDialog";
 import MonthlyInsightsCard from "@/components/dashboard/MonthlyInsightsCard";
 import AnimatedCard from "@/components/ui/AnimatedCard";
 import Skeleton from "@/components/ui/skeleton";
@@ -300,10 +299,11 @@ export default async function DashboardPage() {
     userSettings = await prisma.userSettings.create({
       data: {
         userId,
-        monthlyBudget: 150000,
-        pocketMoneyLimit: 40000,
-        shoppingLimit: 60000,
+        monthlyBudget: 0,
+        pocketMoneyLimit: 0,
+        shoppingLimit: 0,
         budgetCurrency: "JPY",
+        isOnboarded: false,
       },
     });
   }
@@ -365,7 +365,7 @@ export default async function DashboardPage() {
         <BalanceSummarySection accountsPromise={accountsPromise} />
       </Suspense>
 
-      <WelcomeDialog />
+
 
       {/* Budget Progress Card (formatted like insights) */}
       <Suspense fallback={<BudgetProgressSkeleton />}>
