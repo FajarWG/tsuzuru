@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { createBillAction, settleBillAction, deleteBillAction, settleBillWithAllocationsAction } from "@/lib/actions/bill-friends";
 import { toast } from "sonner";
 import { formatJPY, formatIDR, formatInputAmount, parseInputAmount } from "@/lib/format";
@@ -459,79 +459,87 @@ export default function BillFriendsList({ bills: initialBills, accounts = [] }: 
                   </div>
 
                     {/* Bills */}
-                    {!isCollapsed && (
-                      <div className="flex flex-col gap-2">
-                        {personBills.map((bill) => {
-                          const isOwed = bill.direction === "they_owe";
-                          const isSettlingThis = settlingId === bill.id;
-                          const isDeletingThis = deletingBill?.id === bill.id && isDeleting;
+                    <AnimatePresence initial={false}>
+                      {!isCollapsed && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.25, ease: "easeInOut" }}
+                          className="overflow-hidden w-full flex flex-col gap-2"
+                        >
+                          {personBills.map((bill) => {
+                            const isOwed = bill.direction === "they_owe";
+                            const isSettlingThis = settlingId === bill.id;
+                            const isDeletingThis = deletingBill?.id === bill.id && isDeleting;
 
-                          return (
-                            <div
-                              key={bill.id}
-                              className={cn(
-                                "bg-white dark:bg-zinc-900 border rounded-2xl p-4 flex justify-between items-center gap-3 shadow-xs transition-all",
-                                bill.isSettled ? "border-border/30 opacity-60" : isOwed ? "border-primary/20" : "border-destructive/20"
-                              )}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className={cn("p-2 rounded-xl shrink-0", bill.isSettled ? "bg-muted" : isOwed ? "bg-primary/10" : "bg-destructive/10")}>
-                                  {bill.isSettled ? (
-                                    <IconCheck className="size-4 text-muted-foreground stroke-[2]" />
-                                  ) : isOwed ? (
-                                    <IconArrowDownLeft className="size-4 text-primary stroke-[2.5]" />
-                                  ) : (
-                                    <IconArrowUpRight className="size-4 text-destructive stroke-[2.5]" />
+                            return (
+                              <div
+                                key={bill.id}
+                                className={cn(
+                                  "bg-white dark:bg-zinc-900 border rounded-2xl p-4 flex justify-between items-center gap-3 shadow-xs transition-all",
+                                  bill.isSettled ? "border-border/30 opacity-60" : isOwed ? "border-primary/20" : "border-destructive/20"
+                                )}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className={cn("p-2 rounded-xl shrink-0", bill.isSettled ? "bg-muted" : isOwed ? "bg-primary/10" : "bg-destructive/10")}>
+                                    {bill.isSettled ? (
+                                      <IconCheck className="size-4 text-muted-foreground stroke-[2]" />
+                                    ) : isOwed ? (
+                                      <IconArrowDownLeft className="size-4 text-primary stroke-[2.5]" />
+                                    ) : (
+                                      <IconArrowUpRight className="size-4 text-destructive stroke-[2.5]" />
+                                    )}
+                                  </div>
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="text-xs font-semibold text-foreground leading-tight">
+                                      {bill.description || (isOwed ? "They owe me" : "I owe them")}
+                                    </span>
+                                    <span className="text-[10px] text-muted-foreground leading-none">
+                                      {bill.isSettled
+                                        ? `Settled ${new Date(bill.settledAt!).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                                        : new Date(bill.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className={cn(
+                                    "text-sm font-bold font-sans",
+                                    bill.isSettled ? "text-muted-foreground line-through" : isOwed ? "text-primary" : "text-destructive"
+                                  )}>
+                                    {formatAmount(bill.amount, bill.currency)}
+                                  </span>
+
+                                  {!bill.isSettled && (
+                                    <Button
+                                      size="icon-xs"
+                                      variant="ghost"
+                                      onClick={() => openSettleDialog(bill)}
+                                      disabled={isSettlingThis || isDeletingThis}
+                                      title="Mark as settled"
+                                      className="text-primary hover:text-primary hover:bg-primary/10"
+                                    >
+                                      {isSettlingThis ? <IconLoader className="size-3 animate-spin" /> : <IconCheck className="size-3 stroke-[2.5]" />}
+                                    </Button>
                                   )}
-                                </div>
-                                <div className="flex flex-col gap-0.5">
-                                  <span className="text-xs font-semibold text-foreground leading-tight">
-                                    {bill.description || (isOwed ? "They owe me" : "I owe them")}
-                                  </span>
-                                  <span className="text-[10px] text-muted-foreground leading-none">
-                                    {bill.isSettled
-                                      ? `Settled ${new Date(bill.settledAt!).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-                                      : new Date(bill.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <span className={cn(
-                                  "text-sm font-bold font-sans",
-                                  bill.isSettled ? "text-muted-foreground line-through" : isOwed ? "text-primary" : "text-destructive"
-                                )}>
-                                  {formatAmount(bill.amount, bill.currency)}
-                                </span>
-
-                                {!bill.isSettled && (
                                   <Button
                                     size="icon-xs"
                                     variant="ghost"
-                                    onClick={() => openSettleDialog(bill)}
+                                    onClick={() => setDeletingBill(bill)}
                                     disabled={isSettlingThis || isDeletingThis}
-                                    title="Mark as settled"
-                                    className="text-primary hover:text-primary hover:bg-primary/10"
+                                    title="Delete"
+                                    className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                   >
-                                    {isSettlingThis ? <IconLoader className="size-3 animate-spin" /> : <IconCheck className="size-3 stroke-[2.5]" />}
+                                    {isDeletingThis ? <IconLoader className="size-3 animate-spin" /> : <IconTrash className="size-3" />}
                                   </Button>
-                                )}
-                                <Button
-                                  size="icon-xs"
-                                  variant="ghost"
-                                  onClick={() => setDeletingBill(bill)}
-                                  disabled={isSettlingThis || isDeletingThis}
-                                  title="Delete"
-                                  className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                >
-                                  {isDeletingThis ? <IconLoader className="size-3 animate-spin" /> : <IconTrash className="size-3" />}
-                                </Button>
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                            );
+                          })}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 );
               })}
