@@ -503,7 +503,7 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
               </DialogTitle>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto px-1 flex flex-col gap-4 py-3" onClick={() => setShowFriendSuggestions(false)}>
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-1 flex flex-col gap-4 py-3" onClick={() => setShowFriendSuggestions(false)}>
               {showSplitPrompt ? (
                 <div className="flex flex-col items-center justify-center py-6 px-4 gap-6 text-center">
                   <div className="size-16 rounded-full bg-primary/10 flex items-center justify-center text-primary">
@@ -675,7 +675,7 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
                       Allocate Receipt Items
                     </Label>
                     
-                    <div className="flex flex-col gap-2 max-h-[260px] overflow-y-auto pr-1">
+                    <div className="flex flex-col gap-2 max-h-[260px] overflow-y-auto overflow-x-hidden pr-1">
                       {receiptItems.map((item, idx) => {
                         const assigned = itemAssignments[idx] || ["Me"];
                         const sharedPrice = item.price / assigned.length;
@@ -1020,7 +1020,7 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
 
                     {/* Items list */}
                     {receiptItems.length > 0 ? (
-                      <div className="flex flex-col gap-1.5 max-h-[180px] overflow-y-auto pr-1">
+                      <div className="flex flex-col gap-1.5 max-h-[180px] overflow-y-auto overflow-x-hidden pr-1">
                         {receiptItems.map((item, idx) => (
                           <div key={idx} className="flex items-center justify-between bg-white dark:bg-zinc-900 border border-border/30 px-3 py-1.5 rounded-lg text-xs">
                             <span className="font-semibold text-foreground truncate max-w-[150px]">{item.name}</span>
