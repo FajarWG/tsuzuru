@@ -5,13 +5,89 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
 // Mark a template as paid — deducts full amount from account and records a transaction
-export async function markTemplatePaidAction(templateId: string) {
+export async function markTemplatePaidAction(templateId: string, sourceAccountId?: string) {
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
   const userId = session.user.id;
 
   try {
+    // Check if it is a credit card bill
+    if (templateId.startsWith("cc-bill-")) {
+      const ccAccountId = templateId.replace("cc-bill-", "");
+
+      const ccAccount = await prisma.account.findFirst({
+        where: { id: ccAccountId, userId },
+      });
+      if (!ccAccount) return { success: false, error: "Credit card account not found" };
+      if (ccAccount.type !== "credit_card") return { success: false, error: "Account is not a credit card" };
+      if (!ccAccount.isActive) return { success: false, error: "Credit card account is inactive" };
+
+      const amountToPay = Math.abs(ccAccount.balance);
+      if (amountToPay <= 0) return { success: false, error: "No outstanding balance to pay on this credit card" };
+
+      if (!sourceAccountId) {
+        return { success: false, error: "Source account is required to pay credit card bill" };
+      }
+
+      const sourceAccount = await prisma.account.findFirst({
+        where: { id: sourceAccountId, userId },
+      });
+      if (!sourceAccount) return { success: false, error: "Paying account not found" };
+      if (!sourceAccount.isActive) return { success: false, error: "Paying account is inactive" };
+      if (sourceAccount.currency !== ccAccount.currency) {
+        return { success: false, error: "Currency mismatch between paying account and credit card" };
+      }
+
+      // Record transfer transactions and update balances
+      await prisma.$transaction([
+        // 1. Expense from paying account
+        prisma.transaction.create({
+          data: {
+            userId,
+            accountId: sourceAccountId,
+            type: "expense",
+            amount: amountToPay,
+            currency: sourceAccount.currency,
+            category: "template", // mark as template/recurring bill
+            description: `Bayar Tagihan ${ccAccount.name}`,
+            isTemplate: true,
+            date: new Date(),
+          },
+        }),
+        // 2. Income/payment to credit card account (reducing its debt)
+        prisma.transaction.create({
+          data: {
+            userId,
+            accountId: ccAccountId,
+            type: "income",
+            amount: amountToPay,
+            currency: ccAccount.currency,
+            category: "template",
+            description: `Pembayaran dari ${sourceAccount.name}`,
+            isTemplate: true,
+            date: new Date(),
+          },
+        }),
+        // 3. Deduct from source account balance
+        prisma.account.update({
+          where: { id: sourceAccountId },
+          data: { balance: sourceAccount.balance - amountToPay },
+        }),
+        // 4. Increase credit card account balance (bringing it back to 0 or reducing debt)
+        prisma.account.update({
+          where: { id: ccAccountId },
+          data: { balance: ccAccount.balance + amountToPay },
+        }),
+      ]);
+
+      revalidatePath("/");
+      revalidatePath("/transactions");
+      revalidatePath("/settings");
+      return { success: true };
+    }
+
+    // Otherwise, normal monthly template payment
     const template = await prisma.monthlyTemplate.findUnique({
       where: { id: templateId },
     });

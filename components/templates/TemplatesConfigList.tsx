@@ -56,6 +56,9 @@ interface AccountItem {
   id: string;
   name: string;
   currency: string;
+  balance: number;
+  type: string;
+  isActive: boolean;
 }
 
 interface TemplatesConfigListProps {
@@ -105,6 +108,7 @@ export default function TemplatesConfigList({
   const [payingItem, setPayingItem] = useState<TemplateItem | null>(null);
   const [isPayingId, setIsPayingId] = useState<string | null>(null);
   const [paySuccessId, setPaySuccessId] = useState<string | null>(null);
+  const [paySourceAccountId, setPaySourceAccountId] = useState("");
 
   // --- Create dialog handlers ---
   const handleCreateBill = async () => {
@@ -245,10 +249,20 @@ export default function TemplatesConfigList({
   // --- Mark as Paid handlers ---
   const openPay = (item: TemplateItem) => {
     setPayingItem(item);
+    const isCc = 'isCreditCardBill' in item && (item as any).isCreditCardBill;
+    if (isCc) {
+      const defAcc = accounts.find(
+        (a) => a.currency === item.currency && a.type !== "credit_card" && a.isActive
+      );
+      setPaySourceAccountId(defAcc?.id || "");
+    } else {
+      setPaySourceAccountId("");
+    }
   };
 
   const closePay = () => {
     setPayingItem(null);
+    setPaySourceAccountId("");
   };
 
   const handleMarkPaid = async () => {
@@ -256,7 +270,7 @@ export default function TemplatesConfigList({
     setIsPayingId(payingItem.id);
 
     try {
-      const res = await markTemplatePaidAction(payingItem.id);
+      const res = await markTemplatePaidAction(payingItem.id, paySourceAccountId || undefined);
       if (res.success) {
         toast.success("Bill marked as paid");
         setPaySuccessId(payingItem.id);
@@ -302,96 +316,135 @@ export default function TemplatesConfigList({
       )}
 
       <div className="flex flex-col divide-y divide-border/40">
-        {items.length === 0 ? (
-          <div className="text-center text-xs text-muted-foreground py-6">
-            No recurring bills configured. Click &quot;Add Bill&quot; to create one.
-          </div>
-        ) : (
-          items.map((item) => {
+        {(() => {
+          // Generate Credit Card bills dynamically from accounts with debt (balance < 0)
+          const ccBills = accounts
+            .filter((acc) => acc.type === "credit_card" && acc.isActive && acc.balance < 0)
+            .map((acc) => ({
+              id: `cc-bill-${acc.id}`,
+              name: `Tagihan Kartu Kredit ${acc.name}`,
+              amount: Math.abs(acc.balance),
+              currency: acc.currency,
+              accountId: "", // Will be selected at payment time
+              isActive: true,
+              intervalMonths: 1,
+              isCreditCardBill: true,
+              creditCardAccountId: acc.id,
+            }));
+
+          const allBills = [...items, ...ccBills];
+
+          if (allBills.length === 0) {
+            return (
+              <div className="text-center text-xs text-muted-foreground py-6">
+                No recurring bills configured. Click &quot;Add Bill&quot; to create one.
+              </div>
+            );
+          }
+
+          return allBills.map((item) => {
+            const isCreditCardBill = 'isCreditCardBill' in item && (item as any).isCreditCardBill;
             const linkedAccount = accounts.find((a) => a.id === item.accountId);
             const monthlyEquivalent =
               item.intervalMonths > 1 ? item.amount / item.intervalMonths : null;
             const isPaying = isPayingId === item.id;
             const justPaid = paySuccessId === item.id;
 
+            // Find default source account for credit card bill
+            const defaultSourceAccount = isCreditCardBill
+              ? accounts.find(
+                  (a) => a.currency === item.currency && a.type !== "credit_card" && a.isActive
+                )
+              : null;
+
             return (
-              <div key={item.id} className="py-3 flex items-center justify-between gap-3">
+              <div key={item.id} className="py-2 flex items-center justify-between gap-3 text-xs">
                 <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-foreground truncate">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs font-semibold text-foreground truncate">
                       {item.name}
                     </span>
                     {!item.isActive && (
-                      <Badge variant="secondary" className="text-[9px] h-4 px-1.5">
+                      <Badge variant="secondary" className="text-[8px] h-3.5 px-1 font-normal">
                         Inactive
                       </Badge>
                     )}
                     {item.intervalMonths > 1 && (
-                      <Badge variant="outline" className="text-[9px] h-4 px-1.5 gap-1">
-                        <IconCalendarRepeat className="size-2.5" />
-                        {INTERVAL_OPTIONS.find((o) => o.value === String(item.intervalMonths))?.label || `Every ${item.intervalMonths}mo`}
+                      <Badge variant="outline" className="text-[8px] h-3.5 px-1 gap-0.5 font-normal">
+                        <IconCalendarRepeat className="size-2" />
+                        {INTERVAL_OPTIONS.find((o) => o.value === String(item.intervalMonths))?.label.replace("Every ", "") || `${item.intervalMonths}mo`}
+                      </Badge>
+                    )}
+                    {isCreditCardBill && (
+                      <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-rose-500/10 text-rose-600 dark:text-rose-400 border-none font-semibold">
+                        Auto-generated
                       </Badge>
                     )}
                   </div>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-sm font-bold font-sans text-foreground">
+                  <span className="text-[10px] text-muted-foreground">
+                    {isCreditCardBill
+                      ? `Pay from: ${defaultSourceAccount?.name || "select when paying"}`
+                      : (linkedAccount?.name || "Unknown account")}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex flex-col items-end min-w-0 select-none">
+                    <span className="text-xs font-bold font-sans text-foreground">
                       {item.currency === "JPY" ? formatJPY(item.amount) : formatIDR(item.amount)}
                     </span>
                     {monthlyEquivalent !== null && (
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-[9px] text-muted-foreground">
                         ≈ {item.currency === "JPY" ? formatJPY(monthlyEquivalent) : formatIDR(monthlyEquivalent)}/mo
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] text-muted-foreground">
-                    {linkedAccount?.name || "Unknown account"}
-                  </span>
-                </div>
 
-                <div className="flex items-center gap-1 shrink-0">
-                  {/* Mark as Paid */}
-                  {item.isActive && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className={cn(
-                        "h-8 px-2.5 text-xs gap-1.5 cursor-pointer",
-                        justPaid && "border-primary/40 text-primary bg-primary/5"
-                      )}
-                      onClick={() => openPay(item)}
-                      disabled={isPaying || justPaid}
-                    >
-                      {isPaying ? (
-                        <IconLoader className="size-3.5 animate-spin" />
-                      ) : justPaid ? (
-                        <>
-                          <IconCheck className="size-3.5" />
-                          Paid!
-                        </>
-                      ) : (
-                        <>
-                          <IconCash className="size-3.5" />
-                          Paid
-                        </>
-                      )}
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-1">
+                    {item.isActive && (
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        className={cn(
+                          "gap-1 cursor-pointer font-semibold",
+                          justPaid && "border-primary/40 text-primary bg-primary/5"
+                        )}
+                        onClick={() => openPay(item)}
+                        disabled={isPaying || justPaid}
+                      >
+                        {isPaying ? (
+                          <IconLoader className="size-3 animate-spin" />
+                        ) : justPaid ? (
+                          <>
+                            <IconCheck className="size-3" />
+                            Paid!
+                          </>
+                        ) : (
+                          <>
+                            <IconCash className="size-3" />
+                            Paid
+                          </>
+                        )}
+                      </Button>
+                    )}
 
-                  {/* Edit */}
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    onClick={() => openEdit(item)}
-                    aria-label={`Edit ${item.name}`}
-                    className="cursor-pointer"
-                  >
-                    <IconSettings className="size-4" />
-                  </Button>
+                    {!isCreditCardBill && (
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        onClick={() => openEdit(item)}
+                        aria-label={`Edit ${item.name}`}
+                        className="cursor-pointer"
+                      >
+                        <IconSettings className="size-3" />
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
-          })
-        )}
+          });
+        })()}
       </div>
 
       {/* ===== Create Dialog ===== */}
@@ -662,12 +715,33 @@ export default function TemplatesConfigList({
                 for <strong>{payingItem?.name}</strong>?
                 <br />
                 <span className="text-xs text-muted-foreground mt-1 block">
-                  This will deduct the full amount from the linked account and record it in history.
+                  {payingItem && 'isCreditCardBill' in payingItem && (payingItem as any).isCreditCardBill
+                    ? "This will pay off the credit card and record a dual-entry transfer transaction."
+                    : "This will deduct the full amount from the linked account and record it in history."}
                 </span>
               </DialogDescription>
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
+              {payingItem && 'isCreditCardBill' in payingItem && (payingItem as any).isCreditCardBill && (
+                <div className="flex flex-col gap-1.5">
+                  <Label className="text-xs font-semibold">Deduct payment from account</Label>
+                  <Select value={paySourceAccountId} onValueChange={setPaySourceAccountId}>
+                    <SelectTrigger className="h-10 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accounts
+                        .filter((acc) => acc.currency === payingItem.currency && acc.type !== "credit_card" && acc.isActive)
+                        .map((acc) => (
+                          <SelectItem key={acc.id} value={acc.id} className="text-xs">
+                            {acc.name} ({acc.currency === "JPY" ? formatJPY(acc.balance) : formatIDR(acc.balance)})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
@@ -677,7 +751,7 @@ export default function TemplatesConfigList({
               <Button
                 size="sm"
                 onClick={handleMarkPaid}
-                disabled={!!isPayingId}
+                disabled={!!isPayingId || (payingItem && 'isCreditCardBill' in payingItem && (payingItem as any).isCreditCardBill && !paySourceAccountId)}
                 className="min-w-[100px] cursor-pointer"
               >
                 {isPayingId ? (
