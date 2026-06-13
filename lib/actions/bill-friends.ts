@@ -213,3 +213,32 @@ export async function settleBillWithAllocationsAction(
     return { success: false, error: (err as Error).message || "Failed to settle bill" };
   }
 }
+
+export async function createMultipleBillsAction(bills: CreateBillInput[]) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+  try {
+    await prisma.$transaction(
+      bills.map((bill) =>
+        prisma.billFriend.create({
+          data: {
+            userId: session.user.id,
+            personName: bill.personName.trim(),
+            amount: bill.amount,
+            currency: bill.currency,
+            direction: bill.direction,
+            description: bill.description?.trim() || null,
+          },
+        })
+      )
+    );
+
+    revalidatePath("/bill-friends");
+    return { success: true };
+  } catch (err) {
+    console.error("createMultipleBillsAction error:", err);
+    return { success: false, error: "Failed to create bills" };
+  }
+}
+

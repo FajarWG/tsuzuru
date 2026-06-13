@@ -67,6 +67,11 @@ interface BillFriendsListProps {
 const formatAmount = (amount: number, currency: string) =>
   currency === "JPY" ? formatJPY(amount) : formatIDR(amount);
 
+const cleanDescription = (desc: string | null) => {
+  if (!desc) return "";
+  return desc.replace(/\[tx_id:[^\]]+\]/g, "").trim();
+};
+
 function groupByPerson(bills: BillItem[]) {
   const map = new Map<string, BillItem[]>();
   for (const bill of bills) {
@@ -493,7 +498,7 @@ export default function BillFriendsList({ bills: initialBills, accounts = [] }: 
                                   </div>
                                   <div className="flex flex-col gap-0.5">
                                     <span className="text-xs font-semibold text-foreground leading-tight">
-                                      {bill.description || (isOwed ? "They owe me" : "I owe them")}
+                                      {cleanDescription(bill.description) || (isOwed ? "They owe me" : "I owe them")}
                                     </span>
                                     <span className="text-[10px] text-muted-foreground leading-none">
                                       {bill.isSettled
@@ -713,7 +718,7 @@ export default function BillFriendsList({ bills: initialBills, accounts = [] }: 
             <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
               {deletingBill && (
                 <div className="rounded-2xl border border-border/40 bg-muted/40 p-3 text-xs flex flex-col gap-1">
-                  <p className="font-semibold text-foreground">{deletingBill.description || (deletingBill.direction === "they_owe" ? "They owe me" : "I owe them")}</p>
+                  <p className="font-semibold text-foreground">{cleanDescription(deletingBill.description) || (deletingBill.direction === "they_owe" ? "They owe me" : "I owe them")}</p>
                   <p className="text-muted-foreground">
                     Friend: {deletingBill.personName} · Amount: {formatAmount(deletingBill.amount, deletingBill.currency)}
                   </p>
@@ -762,7 +767,7 @@ export default function BillFriendsList({ bills: initialBills, accounts = [] }: 
                 <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
                   <div className="rounded-2xl border border-border/40 bg-muted/40 p-3 text-xs flex flex-col gap-1">
                     <p className="font-semibold text-foreground">
-                      {settleBillTarget.description || (settleBillTarget.direction === "they_owe" ? "They owe me" : "I owe them")}
+                      {cleanDescription(settleBillTarget.description) || (settleBillTarget.direction === "they_owe" ? "They owe me" : "I owe them")}
                     </p>
                     <p className="text-muted-foreground">
                       Friend: {settleBillTarget.personName} · Total Amount: {formatAmount(settleBillTarget.amount, settleBillTarget.currency)}
