@@ -18,8 +18,16 @@ interface BillItem {
   createdAt: string;
 }
 
+interface AccountItem {
+  id: string;
+  name: string;
+  currency: string;
+  balance: number;
+}
+
 interface BillFriendsData {
   bills: BillItem[];
+  accounts: AccountItem[];
 }
 
 interface BillFriendsClientProps {
@@ -113,10 +121,11 @@ export default function BillFriendsClient({ userId }: BillFriendsClientProps) {
 
   // Render client list view
   const activeBills = data?.bills || [];
+  const activeAccounts = data?.accounts || [];
 
   return (
     <div className="flex flex-col flex-1">
-      <BillFriendsList bills={activeBills as any} />
+      <BillFriendsList bills={activeBills as any} accounts={activeAccounts} />
     </div>
   );
 }
