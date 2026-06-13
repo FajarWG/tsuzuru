@@ -27,6 +27,9 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Tsuzuru",
   },
+  icons: {
+    apple: "/icon512_maskable.png",
+  },
 };
 
 export const viewport: Viewport = {
