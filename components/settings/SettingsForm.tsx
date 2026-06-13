@@ -395,14 +395,7 @@ export default function SettingsForm({
 
         <TabsContent value="templates" className="mt-0">
           <section className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5">
-            <div className="flex items-center gap-2 mb-4">
-              <IconCalendarRepeat className="size-4 text-primary" />
-              <h2 className="text-sm font-bold text-foreground">
-                Recurring Bills
-              </h2>
-            </div>
             <TemplatesConfigList
-              hideHeader
               templates={templates}
               accounts={accountsForTemplates}
             />
