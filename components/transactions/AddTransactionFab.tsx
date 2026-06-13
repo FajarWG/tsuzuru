@@ -3,10 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createTransactionAction } from "@/lib/actions/transactions";
-import { checkAiLimitAction, parseReceiptTextAction } from "@/lib/actions/gemini";
 import { getBillFriendsDataAction, createMultipleBillsAction } from "@/lib/actions/bill-friends";
-import { createWorker } from "tesseract.js";
-import { IconPlus, IconLoader, IconCalendar, IconCamera, IconTrash, IconUpload, IconUsers, IconChevronLeft, IconX } from "@tabler/icons-react";
+import { IconPlus, IconLoader, IconCalendar, IconTrash, IconUsers, IconChevronLeft, IconX, IconSparkles, IconCopy, IconCheck } from "@tabler/icons-react";
 import { formatInputAmount, parseInputAmount } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -16,6 +14,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -90,10 +90,9 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
   const [receiptItems, setReceiptItems] = useState<{ name: string; price: number }[]>([]);
   const [newItemName, setNewItemName] = useState("");
   const [newItemPrice, setNewItemPrice] = useState("");
-  const [isScanning, setIsScanning] = useState(false);
-  const [scanStatus, setScanStatus] = useState("");
-  const [aiLimited, setAiLimited] = useState(false);
-  const [aiLimitSeconds, setAiLimitSeconds] = useState(0);
+  const [isAiImportOpen, setIsAiImportOpen] = useState(false);
+  const [isPromptCopied, setIsPromptCopied] = useState(false);
+  const [aiImportText, setAiImportText] = useState("");
 
   // Split Bill States
   const [showSplitPrompt, setShowSplitPrompt] = useState(false);
@@ -120,86 +119,68 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
     }
   }, [open]);
 
-  // Check AI rate limit on mount
-  useEffect(() => {
-    async function checkLimit() {
-      const res = await checkAiLimitAction();
-      if (res.limited) {
-        setAiLimited(true);
-        setAiLimitSeconds(res.secondsLeft || 0);
-      }
-    }
-    checkLimit();
-  }, []);
-
-  // AI rate limit countdown
-  useEffect(() => {
-    if (aiLimitSeconds <= 0) return;
-    const interval = setInterval(() => {
-      setAiLimitSeconds((sec) => {
-        if (sec <= 1) {
-          setAiLimited(false);
-          clearInterval(interval);
-          return 0;
-        }
-        return sec - 1;
+  // Copy AI Prompt
+  const handleCopyPrompt = () => {
+    const promptText = `Analyze this receipt image. Extract all items and their final prices.\nMake sure the prices returned for each item include any tax, service charge, or fees (distribute them proportionally if listed separately).\nReturn the output STRICTLY in JSON format with this structure:\n{\n  "items": [\n    { "name": "Item Name", "price": 1000 }\n  ]\n}\nReturn only the raw JSON. Do not include markdown code block wrapper (like \`\`\`json) or any extra explanation.`;
+    navigator.clipboard.writeText(promptText)
+      .then(() => {
+        setIsPromptCopied(true);
+        toast.success("AI Prompt copied to clipboard!");
+        setTimeout(() => setIsPromptCopied(false), 2000);
+      })
+      .catch((err) => {
+        console.error("Failed to copy prompt:", err);
+        toast.error("Failed to copy prompt. Please select and copy manually.");
       });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [aiLimitSeconds]);
+  };
 
-  // Scan receipt handler
-  const handleScanReceipt = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Check limit
-    const limitCheck = await checkAiLimitAction();
-    if (limitCheck.limited) {
-      toast.error(`AI is temporarily rate-limited. Please wait ${limitCheck.secondsLeft} seconds.`);
-      setAiLimited(true);
-      setAiLimitSeconds(limitCheck.secondsLeft || 0);
+  // Import by AI handler
+  const handleImportByAi = () => {
+    if (!aiImportText.trim()) {
+      toast.error("Please paste the JSON response from the AI.");
       return;
     }
 
-    setIsScanning(true);
-    setScanStatus("Reading text from receipt image (OCR)...");
-
     try {
-      const worker = await createWorker("eng+jpn");
-      const { data: { text } } = await worker.recognize(file);
-      await worker.terminate();
+      let cleanText = aiImportText.trim();
+      // Match markdown code blocks if present
+      const match = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (match) {
+        cleanText = match[1].trim();
+      }
 
-      if (!text || !text.trim()) {
-        toast.error("Could not read any text from the receipt. Please try another image or add items manually.");
-        setIsScanning(false);
-        setScanStatus("");
+      const parsed = JSON.parse(cleanText);
+      let items: { name: string; price: number }[] = [];
+      if (Array.isArray(parsed)) {
+        items = parsed;
+      } else if (parsed && Array.isArray(parsed.items)) {
+        items = parsed.items;
+      } else {
+        throw new Error("JSON must contain an 'items' array or be a list of items.");
+      }
+
+      const validItems = items.map((item: any) => {
+        if (!item.name || typeof item.price !== "number") {
+          throw new Error("Each item must have a 'name' and a numeric 'price'.");
+        }
+        return {
+          name: String(item.name).trim(),
+          price: Number(item.price)
+        };
+      });
+
+      if (validItems.length === 0) {
+        toast.error("No valid items found to import.");
         return;
       }
 
-      setScanStatus("Parsing receipt text with Gemini AI...");
-      const res = await parseReceiptTextAction(text);
-
-      if (res.success && res.data && Array.isArray(res.data.items)) {
-        const parsedItems = res.data.items.map((item: any) => ({
-          name: item.name || "Unknown Item",
-          price: Number(item.price) || 0
-        }));
-        setReceiptItems((prev) => [...prev, ...parsedItems]);
-        toast.success(`Successfully parsed ${parsedItems.length} items from receipt!`);
-      } else {
-        toast.error(res.error || "Failed to parse receipt with AI");
-        if (res.error?.includes("limited") || res.error?.includes("limit reached")) {
-          setAiLimited(true);
-          setAiLimitSeconds(300);
-        }
-      }
-    } catch (err) {
-      console.error("OCR/AI Scan Error:", err);
-      toast.error("Failed to process receipt. Please add items manually.");
-    } finally {
-      setIsScanning(false);
-      setScanStatus("");
+      setReceiptItems((prev) => [...prev, ...validItems]);
+      toast.success(`Successfully imported ${validItems.length} items!`);
+      setIsAiImportOpen(false);
+      setAiImportText("");
+    } catch (err: any) {
+      console.error("Failed to parse imported JSON:", err);
+      toast.error(err.message || "Failed to parse receipt items. Please ensure you copied the exact JSON response.");
     }
   };
 
@@ -1022,83 +1003,20 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
                         Receipt Items ({receiptItems.length})
                       </Label>
                       
-                      {/* Scan & Upload buttons */}
+                      {/* Import by AI button */}
                       <div className="flex items-center gap-1.5">
-                        <input
-                          type="file"
-                          id="receipt-camera-fab"
-                          accept="image/*"
-                          capture="environment"
-                          onChange={handleScanReceipt}
-                          className="hidden"
-                          disabled={isScanning || aiLimited}
-                        />
-                        <input
-                          type="file"
-                          id="receipt-upload-fab"
-                          accept="image/*"
-                          onChange={handleScanReceipt}
-                          className="hidden"
-                          disabled={isScanning || aiLimited}
-                        />
-
-                        {/* Scan Button */}
                         <Button
                           type="button"
                           variant="outline"
                           size="xs"
-                          className={cn(
-                            "cursor-pointer flex items-center gap-1 text-[11px] h-7 px-2 rounded-lg border-primary/30 text-primary hover:bg-primary/5",
-                            aiLimited && "border-amber-500/30 text-amber-600 dark:text-amber-500 hover:bg-amber-500/5 cursor-not-allowed"
-                          )}
-                          onClick={() => {
-                            if (aiLimited) {
-                              toast.error(`AI is temporarily limited. Please wait ${aiLimitSeconds}s.`);
-                              return;
-                            }
-                            document.getElementById("receipt-camera-fab")?.click();
-                          }}
-                          disabled={isScanning}
+                          className="cursor-pointer flex items-center gap-1 text-[11px] h-7 px-2 rounded-lg border-primary/30 text-primary hover:bg-primary/5"
+                          onClick={() => setIsAiImportOpen(true)}
                         >
-                          {isScanning ? (
-                            <IconLoader className="size-3.5 animate-spin" />
-                          ) : (
-                            <IconCamera className="size-3.5" />
-                          )}
-                          {isScanning ? "Processing..." : aiLimited ? `AI Limit` : "Scan"}
-                        </Button>
-
-                        {/* Upload Button */}
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="xs"
-                          className={cn(
-                            "cursor-pointer flex items-center gap-1 text-[11px] h-7 px-2 rounded-lg border-primary/30 text-primary hover:bg-primary/5",
-                            aiLimited && "border-amber-500/30 text-amber-600 dark:text-amber-500 hover:bg-amber-500/5 cursor-not-allowed"
-                          )}
-                          onClick={() => {
-                            if (aiLimited) {
-                              toast.error(`AI is temporarily limited. Please wait ${aiLimitSeconds}s.`);
-                              return;
-                            }
-                            document.getElementById("receipt-upload-fab")?.click();
-                          }}
-                          disabled={isScanning}
-                        >
-                          <IconUpload className="size-3.5" />
-                          Upload
+                          <IconSparkles className="size-3.5" />
+                          Import by AI
                         </Button>
                       </div>
                     </div>
-
-                    {/* Scan Status banner */}
-                    {isScanning && (
-                      <div className="text-xs text-primary font-medium flex items-center gap-1.5 animate-pulse bg-primary/5 p-2 rounded-lg border border-primary/10">
-                        <IconLoader className="size-3 animate-spin" />
-                        <span>{scanStatus}</span>
-                      </div>
-                    )}
 
                     {/* Items list */}
                     {receiptItems.length > 0 ? (
@@ -1302,6 +1220,120 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
               </div>
             )}
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAiImportOpen} onOpenChange={setIsAiImportOpen}>
+        <DialogContent className="max-w-[440px] rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
+              <IconSparkles className="size-5 text-primary animate-pulse" />
+              Import Receipt Items by AI
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Follow this tutorial to extract items and prices using an external AI.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4 py-4">
+            {/* Step 1 */}
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <span className="flex items-center justify-center size-5 rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                  1
+                </span>
+                <span className="text-xs font-bold text-foreground">
+                  Photo your receipt
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground pl-7">
+                Take a clear photo of your shopping receipt with your phone camera, or prepare the receipt image file.
+              </p>
+            </div>
+
+            {/* Step 2 */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <span className="flex items-center justify-center size-5 rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                  2
+                </span>
+                <span className="text-xs font-bold text-foreground flex-1">
+                  Copy prompt & paste to AI
+                </span>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="outline"
+                  onClick={handleCopyPrompt}
+                  className="h-7 px-2.5 text-[11px] rounded-lg border-primary/20 text-primary hover:bg-primary/5 gap-1 shrink-0 cursor-pointer"
+                >
+                  {isPromptCopied ? (
+                    <>
+                      <IconCheck className="size-3" />
+                      Copied!
+                    </>
+                  ) : (
+                    <>
+                      <IconCopy className="size-3" />
+                      Copy Prompt
+                    </>
+                  )}
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground pl-7 leading-relaxed">
+                Send the prompt below to any AI model (ChatGPT, Gemini, Claude) along with your receipt photo:
+              </p>
+              <div className="ml-7 p-2.5 rounded-xl bg-muted/50 border border-border/40 text-[10px] text-muted-foreground font-mono leading-normal max-h-[80px] overflow-y-auto select-all">
+                Analyze this receipt image. Extract all items and their final prices. Make sure the prices returned for each item include any tax, service charge, or fees (distribute them proportionally if listed separately). Return the output STRICTLY in JSON format with this structure: {"{\"items\": [{\"name\": \"Item Name\", \"price\": 1000}]}"}. Return only the raw JSON. Do not include markdown code block wrapper (like \`\`\`json) or any extra explanation.
+              </div>
+            </div>
+
+            {/* Step 3 */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-2">
+                <span className="flex items-center justify-center size-5 rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                  3
+                </span>
+                <span className="text-xs font-bold text-foreground">
+                  Paste AI Response
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground pl-7">
+                Paste the JSON response generated by the AI below:
+              </p>
+              <div className="pl-7">
+                <textarea
+                  value={aiImportText}
+                  onChange={(e) => setAiImportText(e.target.value)}
+                  placeholder={`e.g.\n{\n  "items": [\n    { "name": "Item A", "price": 100 }\n  ]\n}`}
+                  className="flex min-h-[100px] w-full rounded-xl border border-input bg-transparent px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsAiImportOpen(false);
+                setAiImportText("");
+              }}
+              className="rounded-xl h-9 text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleImportByAi}
+              className="rounded-xl h-9 text-xs min-w-[90px]"
+            >
+              Import
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
