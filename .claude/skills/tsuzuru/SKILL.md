@@ -40,6 +40,10 @@ This skill teaches you the core development patterns, coding conventions, and wo
 - Place backend actions and logic in `lib/actions/`.
 - Database schema and seeding logic are managed under `prisma/`.
 
+**Language & Localization**
+- Always use English for all user-facing labels, titles, descriptions, placeholders, and interactive options.
+- Maintain consistency by ensuring error messages, logs, and database schema annotations are in English.
+
 ## Workflows
 
 ### Feature Development with Shared UI and Actions
