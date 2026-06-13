@@ -105,14 +105,111 @@ export async function getBillFriendsDataAction() {
       createdAt: bill.createdAt.toISOString(),
     }));
 
+    const accounts = await prisma.account.findMany({
+      where: { userId: session.user.id, isActive: true },
+      orderBy: { name: "asc" },
+    });
+
     return {
       success: true,
       data: {
         bills,
+        accounts,
       },
     };
   } catch (err) {
     console.error("getBillFriendsDataAction error:", err);
     return { success: false, error: "Failed to fetch bill friends data" };
+  }
+}
+
+interface SettleAllocationInput {
+  accountId: string;
+  amount: number;
+}
+
+export async function settleBillWithAllocationsAction(
+  billId: string,
+  allocations: SettleAllocationInput[]
+) {
+  const session = await auth();
+  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+  try {
+    const bill = await prisma.billFriend.findUnique({ where: { id: billId } });
+    if (!bill || bill.userId !== session.user.id) {
+      return { success: false, error: "Bill not found" };
+    }
+
+    if (bill.isSettled) {
+      return { success: false, error: "Bill is already settled" };
+    }
+
+    const totalAllocated = allocations.reduce((sum, a) => sum + a.amount, 0);
+    if (Math.abs(totalAllocated - bill.amount) > 0.01) {
+      return { success: false, error: "Total allocation must equal bill amount" };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Mark bill as settled
+      await tx.billFriend.update({
+        where: { id: billId },
+        data: {
+          isSettled: true,
+          settledAt: new Date(),
+        },
+      });
+
+      // 2. Adjust each account and create transaction history entries
+      for (const alloc of allocations) {
+        if (alloc.amount <= 0) continue;
+
+        const account = await tx.account.findUnique({ where: { id: alloc.accountId } });
+        if (!account || account.userId !== session.user.id) {
+          throw new Error("Account not found");
+        }
+
+        if (account.currency !== bill.currency) {
+          throw new Error("Currency mismatch");
+        }
+
+        // direction: "i_owe" => I paid them => expense (negative delta)
+        // direction: "they_owe" => they paid me => income (positive delta)
+        const isExpense = bill.direction === "i_owe";
+        const type = isExpense ? "expense" : "income";
+        const balanceDelta = isExpense ? -alloc.amount : alloc.amount;
+
+        // Create Transaction
+        await tx.transaction.create({
+          data: {
+            userId: session.user.id,
+            accountId: alloc.accountId,
+            type,
+            amount: alloc.amount,
+            currency: bill.currency,
+            category: "adjustment",
+            description: `Settled Bill with ${bill.personName}: ${bill.description || (isExpense ? "I owe them" : "They owe me")}`,
+            date: new Date(),
+          },
+        });
+
+        // Update Account Balance
+        await tx.account.update({
+          where: { id: alloc.accountId },
+          data: {
+            balance: { increment: balanceDelta },
+          },
+        });
+      }
+    });
+
+    revalidatePath("/");
+    revalidatePath("/transactions");
+    revalidatePath("/bill-friends");
+
+    return { success: true };
+  } catch (err) {
+    console.error("settleBillWithAllocationsAction error:", err);
+    return { success: false, error: (err as Error).message || "Failed to settle bill" };
   }
 }
