@@ -3,8 +3,10 @@ const OFFLINE_URL = "/offline";
 
 const ASSETS_TO_CACHE = [
   OFFLINE_URL,
-  "/icon-192.png",
-  "/icon-512.png",
+  "/icon192_rounded.png",
+  "/icon512_rounded.png",
+  "/icon192_maskable.png",
+  "/icon512_maskable.png",
 ];
 
 self.addEventListener("install", (event) => {
