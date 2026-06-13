@@ -67,18 +67,18 @@ export default async function ChartsPage() {
   // Category breakdown
   let pocketMoneySpent = 0;
   let shoppingSpent = 0;
-  let templateSpent = 0;
+  let adjustmentSpent = 0;
 
   currentMonthExpenses.forEach((tx) => {
     if (tx.category === "pocket_money") pocketMoneySpent += tx.amount;
     else if (tx.category === "shopping") shoppingSpent += tx.amount;
-    else if (tx.category === "template") templateSpent += tx.amount;
+    else if (tx.category === "adjustment") adjustmentSpent += tx.amount;
   });
 
   const categoryBreakdownData = [
     { name: "Pocket Money", value: pocketMoneySpent },
     { name: "Shopping", value: shoppingSpent },
-    { name: "Templates (Bills)", value: templateSpent },
+    { name: "Adjustments", value: adjustmentSpent },
   ];
 
   // Account allocation spending

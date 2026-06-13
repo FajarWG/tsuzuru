@@ -125,7 +125,7 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
     setScanStatus("Reading text from receipt image (OCR)...");
 
     try {
-      const worker = await createWorker("eng");
+      const worker = await createWorker("eng+jpn");
       const { data: { text } } = await worker.recognize(file);
       await worker.terminate();
 

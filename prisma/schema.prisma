@@ -39,7 +39,7 @@ model Transaction {
   type        String   // "expense" | "income"
   amount      Float
   currency    String
-  category    String   // "pocket_money" | "shopping" | "income" | "template"
+  category    String   // "pocket_money" | "shopping" | "income" | "adjustment"
   subCategory String?  // "food", "drinks", etc.
   mealNumber  Int?     // 1-4, only for food
   description String?

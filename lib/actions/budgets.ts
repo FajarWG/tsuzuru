@@ -76,7 +76,7 @@ export async function addBudgetLimitAction(label: string, limit: number) {
     .replace(/\s+/g, "_")
     .replace(/[^a-z0-9_]/g, "");
 
-  if (!name || name === "monthly" || name === "income" || name === "template") {
+  if (!name || name === "monthly" || name === "income" || name === "template" || name === "adjustment") {
     return { success: false, error: "Invalid category name. Please choose a different label." };
   }
 

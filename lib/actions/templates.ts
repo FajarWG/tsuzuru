@@ -82,7 +82,7 @@ export async function markTemplatePaidAction(
             type: "expense",
             amount: amountToPay,
             currency: sourceAccount.currency,
-            category: "template", // mark as template/recurring bill
+            category: "adjustment", // mark as adjustment/recurring bill
             description: `CC Payoff: ${ccAccount.name}`,
             isTemplate: true,
             date: new Date(),
@@ -96,7 +96,7 @@ export async function markTemplatePaidAction(
             type: "income",
             amount: amountToPay,
             currency: ccAccount.currency,
-            category: "template",
+            category: "adjustment",
             description: `Payment from ${sourceAccount.name}`,
             isTemplate: true,
             date: new Date(),
@@ -155,7 +155,7 @@ export async function markTemplatePaidAction(
           type: "expense",
           amount: template.amount,
           currency: template.currency,
-          category: "template",
+          category: "adjustment",
           description: template.name,
           isTemplate: true,
           date: new Date(),

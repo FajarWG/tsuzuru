@@ -66,7 +66,6 @@ type TransactionCategory =
   | "pocket_money"
   | "shopping"
   | "income"
-  | "template"
   | "adjustment";
 
 interface TransactionItem {
@@ -121,8 +120,6 @@ const SHOPPING_SUBCATS = [
 function getCategoryIcon(category: string, subCategory: string | null) {
   if (category === "income")
     return <IconTrendingUp className="size-5 text-primary" />;
-  if (category === "template")
-    return <IconTools className="size-5 text-amber-500" />;
   if (category === "adjustment")
     return <IconAdjustments className="size-5 text-blue-500" />;
 
@@ -614,9 +611,6 @@ export default function TransactionsList({
                       <SelectItem value="income" className="text-xs">
                         Income
                       </SelectItem>
-                      <SelectItem value="template" className="text-xs">
-                        Templates
-                      </SelectItem>
                       <SelectItem value="adjustment" className="text-xs">
                         Adjustments
                       </SelectItem>
@@ -757,26 +751,38 @@ export default function TransactionsList({
                       </div>
 
                       {/* Collapsible Items list */}
-                      {tx.isReceipt && isExpanded && (() => {
+                      {tx.isReceipt && (() => {
                         try {
                           const items = tx.receiptItems ? (typeof tx.receiptItems === "string" ? JSON.parse(tx.receiptItems) : tx.receiptItems) : [];
                           if (Array.isArray(items) && items.length > 0) {
                             return (
-                              <div className="w-full pt-2.5 border-t border-border/20 flex flex-col gap-1.5">
-                                <span className="text-[9px] font-bold tracking-wider text-muted-foreground uppercase mb-0.5 px-0.5">
-                                  Items ({items.length})
-                                </span>
-                                <div className="flex flex-col gap-1.5 pl-1.5 pr-0.5">
-                                  {items.map((item: any, idx: number) => (
-                                    <div key={idx} className="flex justify-between items-center text-xs text-muted-foreground">
-                                      <span className="truncate max-w-[220px]">• {item.name}</span>
-                                      <span className="font-sans font-semibold text-foreground shrink-0">
-                                        {formatCurrency(item.price, tx.currency)}
+                              <AnimatePresence initial={false}>
+                                {isExpanded && (
+                                  <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: "auto", opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.25, ease: "easeInOut" }}
+                                    className="overflow-hidden w-full"
+                                  >
+                                    <div className="w-full pt-2.5 border-t border-border/20 flex flex-col gap-1.5 mt-1">
+                                      <span className="text-[9px] font-bold tracking-wider text-muted-foreground uppercase mb-0.5 px-0.5">
+                                        Items ({items.length})
                                       </span>
+                                      <div className="flex flex-col gap-1.5 pl-1.5 pr-0.5">
+                                        {items.map((item: any, idx: number) => (
+                                          <div key={idx} className="flex justify-between items-center text-xs text-muted-foreground">
+                                            <span className="truncate max-w-[220px]">• {item.name}</span>
+                                            <span className="font-sans font-semibold text-foreground shrink-0">
+                                              {formatCurrency(item.price, tx.currency)}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
                                     </div>
-                                  ))}
-                                </div>
-                              </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
                             );
                           }
                         } catch {
@@ -930,9 +936,6 @@ export default function TransactionsList({
                             </SelectItem>
                             <SelectItem value="shopping" className="text-sm">
                               Shopping
-                            </SelectItem>
-                            <SelectItem value="template" className="text-sm">
-                              Template
                             </SelectItem>
                             <SelectItem value="adjustment" className="text-sm">
                               Adjustment
@@ -1193,9 +1196,6 @@ export default function TransactionsList({
                         </SelectItem>
                         <SelectItem value="shopping" className="text-sm">
                           Shopping
-                        </SelectItem>
-                        <SelectItem value="template" className="text-sm">
-                          Template
                         </SelectItem>
                         <SelectItem value="adjustment" className="text-sm">
                           Adjustment
