@@ -45,7 +45,7 @@ export async function createTransactionAction(data: CreateTransactionInput) {
     const newBalance = account.balance + getBalanceDelta(data.type, data.amount);
 
     // Execute database transaction to guarantee consistency
-    await prisma.$transaction([
+    const [newTx] = await prisma.$transaction([
       prisma.transaction.create({
         data: {
           userId: data.userId,
@@ -72,7 +72,7 @@ export async function createTransactionAction(data: CreateTransactionInput) {
     revalidatePath("/transactions");
     revalidatePath("/charts");
 
-    return { success: true };
+    return { success: true, transaction: newTx };
   } catch (error) {
     console.error("Failed to create transaction:", error);
     return { success: false, error: (error as Error).message };

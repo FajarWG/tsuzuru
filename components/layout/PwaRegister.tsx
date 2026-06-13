@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createTransactionAction } from "@/lib/actions/transactions";
+import { createMultipleBillsAction } from "@/lib/actions/bill-friends";
 
 export default function PwaRegister() {
   const router = useRouter();
@@ -47,7 +48,7 @@ export default function PwaRegister() {
         if (!Array.isArray(transactions) || transactions.length === 0) return;
 
         const toastId = toast.loading(
-          `Menyinkronkan ${transactions.length} transaksi offline...`
+          `Syncing ${transactions.length} offline transactions...`
         );
 
         let successCount = 0;
@@ -76,7 +77,7 @@ export default function PwaRegister() {
 
         if (successCount > 0) {
           toast.success(
-            `Sinkronisasi berhasil: ${successCount} transaksi disimpan ke server!`,
+            `Sync successful: ${successCount} transactions saved to server!`,
             { id: toastId }
           );
           router.refresh();
@@ -90,7 +91,7 @@ export default function PwaRegister() {
             JSON.stringify(failedTransactions)
           );
           toast.error(
-            `Gagal menyinkronkan ${failedTransactions.length} transaksi. Akan dicoba kembali nanti.`
+            `Failed to sync ${failedTransactions.length} transactions. Will retry later.`
           );
         } else {
           localStorage.removeItem("tsuzuru_offline_transactions");
@@ -100,10 +101,37 @@ export default function PwaRegister() {
       }
     };
 
+    const syncOfflineBills = async () => {
+      const stored = localStorage.getItem("tsuzuru_offline_bills");
+      if (!stored) return;
+
+      try {
+        const bills = JSON.parse(stored);
+        if (!Array.isArray(bills) || bills.length === 0) return;
+
+        const toastId = toast.loading(
+          `Syncing ${bills.length} offline split bills...`
+        );
+
+        const result = await createMultipleBillsAction(bills);
+        if (result.success) {
+          toast.success("Offline split bills synced successfully!", { id: toastId });
+          localStorage.removeItem("tsuzuru_offline_bills");
+          router.refresh();
+        } else {
+          toast.error("Failed to sync offline split bills: " + result.error, { id: toastId });
+        }
+      } catch (err) {
+        console.error("[Sync] Error parsing offline bills:", err);
+      }
+    };
+
+
     // Listen to network status changes
     const handleOnline = () => {
       console.log("[PWA] Network status: Online. Starting sync.");
       syncOfflineTransactions();
+      syncOfflineBills();
     };
 
     const handleOffline = () => {
@@ -119,6 +147,7 @@ export default function PwaRegister() {
     // Initial check on mount
     if (navigator.onLine) {
       syncOfflineTransactions();
+      syncOfflineBills();
     }
 
     return () => {

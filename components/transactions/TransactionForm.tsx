@@ -4,9 +4,10 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createTransactionAction } from "@/lib/actions/transactions";
 import { checkAiLimitAction, parseReceiptTextAction } from "@/lib/actions/gemini";
+import { getBillFriendsDataAction, createMultipleBillsAction } from "@/lib/actions/bill-friends";
 import { createWorker } from "tesseract.js";
 import { toast } from "sonner";
-import { IconArrowLeft, IconCalendar, IconLoader, IconPlus, IconTrash, IconCamera, IconUpload } from "@tabler/icons-react";
+import { IconArrowLeft, IconCalendar, IconLoader, IconPlus, IconTrash, IconCamera, IconUpload, IconUsers, IconChevronLeft, IconX } from "@tabler/icons-react";
 import { formatInputAmount, parseInputAmount } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -78,6 +79,29 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
   const [scanStatus, setScanStatus] = useState("");
   const [aiLimited, setAiLimited] = useState(false);
   const [aiLimitSeconds, setAiLimitSeconds] = useState(0);
+
+  // Split Bill States
+  const [showSplitPrompt, setShowSplitPrompt] = useState(false);
+  const [isSplitMode, setIsSplitMode] = useState(false);
+  const [splitPeople, setSplitPeople] = useState<string[]>(["Me"]);
+  const [itemAssignments, setItemAssignments] = useState<Record<number, string[]>>({});
+  const [existingFriendNames, setExistingFriendNames] = useState<string[]>([]);
+  const [newPersonInput, setNewPersonInput] = useState("");
+  const [showFriendSuggestions, setShowFriendSuggestions] = useState(false);
+
+  // Fetch existing friend names on mount
+  useEffect(() => {
+    async function fetchFriends() {
+      const res = await getBillFriendsDataAction();
+      if (res.success && res.data && Array.isArray(res.data.bills)) {
+        const names = Array.from(
+          new Set(res.data.bills.map((b: any) => b.personName))
+        ) as string[];
+        setExistingFriendNames(names);
+      }
+    }
+    fetchFriends();
+  }, []);
 
   // Check AI rate limit on mount
   useEffect(() => {
@@ -191,8 +215,118 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
     setMealNumber(sub === "food" ? 1 : null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSplitSave = async (totalAmount: number) => {
+    const friends = splitPeople.filter(p => p !== "Me");
+    const currency = activeAccount?.currency || "JPY";
+    const splitGroupId = "split_" + Math.random().toString(36).substring(2, 15) + "_" + Date.now();
+
+    const billsToCreate: {
+      personName: string;
+      amount: number;
+      currency: string;
+      direction: "i_owe" | "they_owe";
+      description: string;
+    }[] = [];
+
+    friends.forEach((friendName) => {
+      let friendShare = 0;
+      receiptItems.forEach((item, idx) => {
+        const consumers = itemAssignments[idx] || ["Me"];
+        if (consumers.includes(friendName)) {
+          friendShare += item.price / consumers.length;
+        }
+      });
+
+      const finalShare = currency === "JPY" ? Math.round(friendShare) : friendShare;
+
+      if (finalShare > 0) {
+        billsToCreate.push({
+          personName: friendName.trim(),
+          amount: finalShare,
+          currency,
+          direction: "they_owe",
+          description: `[tx_id:${splitGroupId}] Split: ${description.trim() || "Receipt"} (Total: ${currency === "IDR" ? "Rp" : "¥"}${totalAmount.toLocaleString()})`,
+        });
+      }
+    });
+
+    const receiptItemsWithAssignments = receiptItems.map((item, idx) => ({
+      ...item,
+      assigned: itemAssignments[idx] || ["Me"],
+    }));
+
+    const finalDescription = description.trim()
+      ? `${description.trim()} [tx_id:${splitGroupId}]`
+      : `[tx_id:${splitGroupId}]`;
+
+    const transactionPayload = {
+      userId,
+      accountId,
+      type,
+      amount: totalAmount,
+      category: type === "income" ? "income" : category,
+      subCategory: type === "income" ? null : subCategory,
+      mealNumber: type === "expense" && subCategory === "food" ? mealNumber : null,
+      description: finalDescription,
+      date,
+      isReceipt: true,
+      receiptItems: receiptItemsWithAssignments,
+    };
+
+    if (typeof window !== "undefined" && !navigator.onLine) {
+      try {
+        const txStored = localStorage.getItem("tsuzuru_offline_transactions") || "[]";
+        const transactions = JSON.parse(txStored);
+        transactions.push({ ...transactionPayload, date: date.toISOString() });
+        localStorage.setItem("tsuzuru_offline_transactions", JSON.stringify(transactions));
+
+        if (billsToCreate.length > 0) {
+          const billsStored = localStorage.getItem("tsuzuru_offline_bills") || "[]";
+          const bills = JSON.parse(billsStored);
+          bills.push(...billsToCreate);
+          localStorage.setItem("tsuzuru_offline_bills", JSON.stringify(bills));
+        }
+
+        toast.success("Offline: Transaction & split bill saved locally.");
+        window.dispatchEvent(new CustomEvent("transaction-added"));
+        router.push("/");
+        return;
+      } catch (err) {
+        console.error("[Offline Split Save Error]", err);
+        toast.error("Failed to save split bill transaction offline");
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
+    try {
+      const resTx = await createTransactionAction(transactionPayload);
+      if (!resTx.success) {
+        toast.error(resTx.error || "Failed to save transaction");
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (billsToCreate.length > 0) {
+        const resBills = await createMultipleBillsAction(billsToCreate);
+        if (!resBills.success) {
+          toast.error(resBills.error || "Failed to save split bills");
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      toast.success("Transaction & split bills saved successfully");
+      window.dispatchEvent(new CustomEvent("transaction-added"));
+      router.push("/");
+    } catch {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSave = async (bypassSplit = false) => {
     const parsedAmount = isReceipt ? totalReceiptAmount : parseInputAmount(amount);
     if (isReceipt && receiptItems.length === 0) {
       toast.error("Please add at least one item to the receipt");
@@ -212,6 +346,11 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
     }
 
     setIsSubmitting(true);
+
+    if (isReceipt && isSplitMode && !bypassSplit) {
+      await handleSplitSave(parsedAmount);
+      return;
+    }
 
     // If offline, save the transaction payload locally in localStorage queue
     if (typeof window !== "undefined" && !navigator.onLine) {
@@ -235,7 +374,7 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
         transactions.push(payload);
         localStorage.setItem("tsuzuru_offline_transactions", JSON.stringify(transactions));
 
-        toast.success("Offline: Transaksi disimpan secara lokal dan akan disinkronkan saat online.");
+        toast.success("Offline: Transaction saved locally.");
         window.dispatchEvent(new CustomEvent("transaction-added"));
         router.push("/");
         return;
@@ -275,6 +414,15 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isReceipt && !showSplitPrompt && !isSplitMode) {
+      setShowSplitPrompt(true);
+      return;
+    }
+    await handleSave(false);
+  };
+
   const subcatOptions = category === "pocket_money" ? POCKET_MONEY_SUBCATS : SHOPPING_SUBCATS;
 
   return (
@@ -282,20 +430,303 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
       <div className="flex flex-col gap-4">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="p-2 -ml-2 rounded-full hover:bg-muted text-foreground transition-colors"
-          >
-            <IconArrowLeft className="size-5" />
-          </button>
+          {(isSplitMode || showSplitPrompt) ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (isSplitMode) {
+                  setIsSplitMode(false);
+                  setShowSplitPrompt(true);
+                } else {
+                  setShowSplitPrompt(false);
+                }
+              }}
+              className="p-2 -ml-2 rounded-full hover:bg-muted text-foreground transition-colors mr-1 cursor-pointer"
+            >
+              <IconChevronLeft className="size-5" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="p-2 -ml-2 rounded-full hover:bg-muted text-foreground transition-colors mr-1 cursor-pointer"
+            >
+              <IconArrowLeft className="size-5" />
+            </button>
+          )}
           <h1 className="font-sans text-2xl font-bold tracking-wide text-primary">
-            Add Transaction
+            {showSplitPrompt ? "Split Bill?" : isSplitMode ? "Split Bill Details" : "Add Transaction"}
           </h1>
         </div>
 
-        {/* Mode Selector */}
-        <div className="flex gap-2 bg-muted/50 p-1 rounded-xl border border-border/10">
+        <div className="flex-1 flex flex-col gap-4" onClick={() => setShowFriendSuggestions(false)}>
+          {showSplitPrompt ? (
+            <div className="flex flex-col items-center justify-center py-6 px-4 gap-6 text-center">
+              <div className="size-16 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                <IconUsers className="size-8" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <h3 className="text-base font-bold text-foreground">Split Bill with Friends?</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  This transaction was created in Receipt Mode. Would you like to split this bill with your friends?
+                </p>
+              </div>
+              <div className="flex flex-col gap-2.5 w-full mt-2">
+                <Button
+                  type="button"
+                  className="w-full h-11 rounded-xl text-xs font-semibold cursor-pointer"
+                  onClick={() => {
+                    const initial: Record<number, string[]> = {};
+                    receiptItems.forEach((_, idx) => {
+                      initial[idx] = ["Me"];
+                    });
+                    setItemAssignments(initial);
+                    setSplitPeople(["Me"]);
+                    setIsSplitMode(true);
+                    setShowSplitPrompt(false);
+                  }}
+                >
+                  Yes, Split Bill
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full h-11 rounded-xl text-xs font-semibold cursor-pointer"
+                  onClick={async () => {
+                    setShowSplitPrompt(false);
+                    await handleSave(true);
+                  }}
+                  disabled={isSubmitting}
+                >
+                  No, Save Transaction Only
+                </Button>
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:text-foreground font-semibold py-1 transition-colors cursor-pointer"
+                  onClick={() => {
+                    setShowSplitPrompt(false);
+                  }}
+                >
+                  Back to Receipt Details
+                </button>
+              </div>
+            </div>
+          ) : isSplitMode ? (
+            <div className="flex flex-col gap-4 py-1">
+              {/* People Selection */}
+              <div className="flex flex-col gap-2 bg-muted/40 p-4 rounded-2xl border border-border/40">
+                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  People in Split ({splitPeople.length})
+                </Label>
+                
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {splitPeople.map((person) => (
+                    <span
+                      key={person}
+                      className={cn(
+                        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all",
+                        person === "Me"
+                          ? "bg-primary/10 text-primary border-primary/20"
+                          : "bg-white dark:bg-zinc-900 border-border text-foreground"
+                      )}
+                    >
+                      {person}
+                      {person !== "Me" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSplitPeople((prev) => prev.filter((p) => p !== person));
+                            setItemAssignments((prev) => {
+                              const updated = { ...prev };
+                              Object.keys(updated).forEach((k) => {
+                                const idx = Number(k);
+                                updated[idx] = updated[idx].filter((p) => p !== person);
+                                if (updated[idx].length === 0) {
+                                  updated[idx] = ["Me"];
+                                }
+                              });
+                              return updated;
+                            });
+                          }}
+                          className="text-muted-foreground hover:text-red-500 rounded-full p-0.5"
+                        >
+                          <IconX className="size-3" />
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                </div>
+
+                <div className="relative flex gap-2 mt-2 pt-2 border-t border-border/20" onClick={(e) => e.stopPropagation()}>
+                  <div className="relative flex-1">
+                    <Input
+                      type="text"
+                      placeholder="Add friend's name..."
+                      value={newPersonInput}
+                      onChange={(e) => {
+                        setNewPersonInput(e.target.value);
+                        setShowFriendSuggestions(true);
+                      }}
+                      onFocus={() => setShowFriendSuggestions(true)}
+                      className="h-9 text-xs rounded-xl"
+                    />
+                    
+                    {showFriendSuggestions && newPersonInput.trim() !== "" && (
+                      <div className="absolute z-50 left-0 right-0 top-10 bg-white dark:bg-zinc-950 border border-border/80 rounded-xl shadow-lg max-h-[150px] overflow-y-auto p-1 flex flex-col gap-0.5">
+                        {existingFriendNames
+                          .filter((name) => 
+                            name.toLowerCase().includes(newPersonInput.toLowerCase()) &&
+                            !splitPeople.includes(name)
+                          )
+                          .map((name) => (
+                            <button
+                              key={name}
+                              type="button"
+                              className="text-left w-full px-3 py-2 text-xs hover:bg-muted rounded-lg font-medium text-foreground transition-colors cursor-pointer"
+                              onClick={() => {
+                                setSplitPeople((prev) => [...prev, name]);
+                                setNewPersonInput("");
+                                setShowFriendSuggestions(false);
+                              }}
+                            >
+                              {name}
+                            </button>
+                          ))}
+                        {existingFriendNames.filter((name) => 
+                          name.toLowerCase().includes(newPersonInput.toLowerCase()) &&
+                          !splitPeople.includes(name)
+                        ).length === 0 && (
+                          <div className="text-[10px] text-muted-foreground p-2 text-center">
+                            Press '+' to add new "${newPersonInput}"
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-9 w-9 p-0 rounded-xl cursor-pointer"
+                    onClick={() => {
+                      const name = newPersonInput.trim();
+                      if (!name) return;
+                      if (splitPeople.includes(name)) {
+                        toast.error("This name has already been added");
+                        return;
+                      }
+                      setSplitPeople((prev) => [...prev, name]);
+                      setNewPersonInput("");
+                      setShowFriendSuggestions(false);
+                    }}
+                  >
+                    <IconPlus className="size-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Assign Items */}
+              <div className="flex flex-col gap-3">
+                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Allocate Receipt Items
+                </Label>
+                
+                <div className="flex flex-col gap-2 max-h-[260px] overflow-y-auto pr-1">
+                  {receiptItems.map((item, idx) => {
+                    const assigned = itemAssignments[idx] || ["Me"];
+                    const sharedPrice = item.price / assigned.length;
+                    
+                    return (
+                      <div
+                        key={idx}
+                        className="flex flex-col gap-2 bg-white dark:bg-zinc-900 border border-border/30 p-3 rounded-2xl text-xs"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-foreground truncate max-w-[180px]">
+                            {item.name}
+                          </span>
+                          <span className="font-extrabold text-foreground">
+                            {currencySymbol}{item.price.toLocaleString()}
+                            {assigned.length > 1 && (
+                              <span className="text-[10px] font-normal text-muted-foreground block text-right mt-0.5">
+                                ({currencySymbol}{Math.round(sharedPrice).toLocaleString()} / person)
+                              </span>
+                            )}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {splitPeople.map((person) => {
+                            const isSelected = assigned.includes(person);
+                            return (
+                              <button
+                                key={person}
+                                type="button"
+                                onClick={() => {
+                                  setItemAssignments((prev) => {
+                                    const updated = { ...prev };
+                                    const currAssigned = updated[idx] || ["Me"];
+                                    if (currAssigned.includes(person)) {
+                                      if (currAssigned.length === 1) {
+                                        toast.error("At least 1 person must be assigned to this item");
+                                        return prev;
+                                      }
+                                      updated[idx] = currAssigned.filter((p) => p !== person);
+                                    } else {
+                                      updated[idx] = [...currAssigned, person];
+                                    }
+                                    return updated;
+                                  });
+                                }}
+                                className={cn(
+                                  "px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all border cursor-pointer",
+                                  isSelected
+                                    ? "bg-primary/10 text-primary border-primary/20"
+                                    : "bg-muted/30 border-border/40 text-muted-foreground hover:text-foreground"
+                                )}
+                              >
+                                {person}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Summary */}
+              <div className="flex flex-col gap-2 bg-primary/5 p-4 rounded-2xl border border-primary/10 mt-2">
+                <Label className="text-xs font-bold uppercase tracking-wider text-primary">
+                  Split Summary
+                </Label>
+                <div className="flex flex-col gap-1.5 mt-1">
+                  {splitPeople.map((person) => {
+                    let shareTotal = 0;
+                    receiptItems.forEach((item, idx) => {
+                      const assigned = itemAssignments[idx] || ["Me"];
+                      if (assigned.includes(person)) {
+                        shareTotal += item.price / assigned.length;
+                      }
+                    });
+                    
+                    return (
+                      <div key={person} className="flex items-center justify-between text-xs font-semibold">
+                        <span className="text-muted-foreground">{person} {person === "Me" && "(You)"}</span>
+                        <span className="font-bold text-foreground">
+                          {currencySymbol}{Math.round(shareTotal).toLocaleString()}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Mode Selector */}
+              <div className="flex gap-2 bg-muted/50 p-1 rounded-xl border border-border/10">
           <button
             type="button"
             onClick={() => handleModeChange(false)}
@@ -804,25 +1235,32 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
               </Popover>
             </div>
 
+            </>
+          )}
           </>
         )}
+        </div>
       </div>
 
       {/* Save button */}
-      <Button
-        type="submit"
-        className="w-full h-12 rounded-xl text-sm font-semibold tracking-wide mt-4"
-        disabled={isSubmitting}
-      >
-        {isSubmitting ? (
-          <>
-            <IconLoader className="size-4 animate-spin" />
-            Saving...
-          </>
-        ) : (
-          "Save Transaction"
-        )}
-      </Button>
+      {!showSplitPrompt && (
+        <Button
+          type="submit"
+          className="w-full h-12 rounded-xl text-sm font-semibold tracking-wide mt-4"
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <>
+              <IconLoader className="size-4 animate-spin" />
+              Saving...
+            </>
+          ) : isSplitMode ? (
+            "Save Split Bill"
+          ) : (
+            "Save Transaction"
+          )}
+        </Button>
+      )}
     </form>
   );
 }

@@ -175,6 +175,11 @@ function formatCurrency(amount: number, currency: string) {
   return currency === "JPY" ? formatJPY(amount) : formatIDR(amount);
 }
 
+const cleanDescription = (desc: string | null) => {
+  if (!desc) return "";
+  return desc.replace(/\[tx_id:[^\]]+\]/g, "").trim();
+}
+
 export default function TransactionsList({
   userId,
   transactions,
@@ -234,8 +239,59 @@ export default function TransactionsList({
     });
   }, [today]);
 
+  const adjustedTransactions = useMemo(() => {
+    const settlementsMap: Record<string, { total: number; items: any[] }> = {};
+    
+    transactions.forEach((tx) => {
+      if (tx.category === "adjustment" && tx.description && tx.description.includes("[tx_id:")) {
+        const match = tx.description.match(/\[tx_id:([^\]]+)\]/);
+        if (match && match[1]) {
+          const splitGroupId = match[1];
+          if (!settlementsMap[splitGroupId]) {
+            settlementsMap[splitGroupId] = { total: 0, items: [] };
+          }
+          settlementsMap[splitGroupId].total += tx.amount;
+          settlementsMap[splitGroupId].items.push(tx);
+        }
+      }
+    });
+
+    return transactions
+      .filter((tx) => {
+        if (tx.category === "adjustment" && tx.description && tx.description.includes("[tx_id:")) {
+          return false;
+        }
+        return true;
+      })
+      .map((tx) => {
+        const match = tx.description ? tx.description.match(/\[tx_id:([^\]]+)\]/) : null;
+        const splitGroupId = match ? match[1] : null;
+        
+        if (splitGroupId) {
+          const settlements = settlementsMap[splitGroupId];
+          if (settlements && settlements.total > 0) {
+            const adjustedAmount = Math.max(0, tx.amount - settlements.total);
+            return {
+              ...tx,
+              amount: adjustedAmount,
+              originalAmount: tx.amount,
+              settledAmount: settlements.total,
+              settlementsList: settlements.items,
+            };
+          }
+        }
+        
+        return {
+          ...tx,
+          originalAmount: tx.amount,
+          settledAmount: 0,
+          settlementsList: [],
+        };
+      });
+  }, [transactions]);
+
   const filteredTransactions = useMemo(() => {
-    return transactions.filter((tx) => {
+    return adjustedTransactions.filter((tx) => {
       const txDate = new Date(tx.date);
       const txMonthKey = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, "0")}`;
 
@@ -254,7 +310,7 @@ export default function TransactionsList({
       if (search) {
         const needle = search.toLowerCase();
         const haystack = [
-          tx.description,
+          cleanDescription(tx.description),
           tx.category,
           tx.subCategory,
           tx.account.name,
@@ -268,7 +324,7 @@ export default function TransactionsList({
       return true;
     });
   }, [
-    transactions,
+    adjustedTransactions,
     monthFilter,
     typeFilter,
     accountFilter,
@@ -327,12 +383,12 @@ export default function TransactionsList({
 
     setEditing(tx);
     setEditType(nextType);
-    setEditAmount(formatInputAmount(tx.amount));
+    setEditAmount(formatInputAmount((tx as any).originalAmount ?? tx.amount));
     setEditAccountId(tx.account.id);
     setEditCategory(nextCategory);
     setEditSubCategory(tx.subCategory || "");
     setEditMealNumber(tx.mealNumber);
-    setEditDescription(tx.description || "");
+    setEditDescription(cleanDescription(tx.description));
     setEditDate(new Date(tx.date));
     setEditIsReceipt(tx.isReceipt || false);
     try {
@@ -406,6 +462,10 @@ export default function TransactionsList({
     setIsSaving(true);
 
     try {
+      const match = editing.description ? editing.description.match(/\[tx_id:[^\]]+\]/) : null;
+      const tag = match ? ` ${match[0]}` : "";
+      const finalDesc = editDescription.trim() ? `${editDescription.trim()}${tag}` : (tag ? tag.trim() : null);
+
       const res = await updateTransactionAction({
         id: editing.id,
         userId,
@@ -422,7 +482,7 @@ export default function TransactionsList({
           editType === "expense" && editSubCategory === "food"
             ? editMealNumber
             : null,
-        description: editDescription.trim() || null,
+        description: finalDesc,
         date: editDate,
         isReceipt: editIsReceipt,
         receiptItems: editIsReceipt ? editReceiptItems : null,
@@ -714,7 +774,7 @@ export default function TransactionsList({
                           </div>
                           <div className="flex min-w-0 flex-col gap-0.5">
                             <span className="truncate text-xs font-semibold text-foreground leading-tight">
-                              {tx.description || tx.category.replace(/_/g, " ")}
+                              {cleanDescription(tx.description) || tx.category.replace(/_/g, " ")}
                             </span>
                             <span className="truncate text-[10px] text-muted-foreground leading-none">
                               {tx.account.name} · {tx.subCategory || tx.category}
@@ -734,6 +794,11 @@ export default function TransactionsList({
                               {tx.type === "expense" ? "-" : "+"}
                               {formatCurrency(tx.amount, tx.currency)}
                             </span>
+                            {(tx as any).settledAmount > 0 && (
+                              <span className="text-[9px] text-muted-foreground line-through leading-tight block mt-0.5">
+                                {formatCurrency((tx as any).originalAmount, tx.currency)}
+                              </span>
+                            )}
                           </div>
 
                           <Button
@@ -770,15 +835,51 @@ export default function TransactionsList({
                                         Items ({items.length})
                                       </span>
                                       <div className="flex flex-col gap-1.5 pl-1.5 pr-0.5">
-                                        {items.map((item: any, idx: number) => (
-                                          <div key={idx} className="flex justify-between items-center text-xs text-muted-foreground">
-                                            <span className="truncate max-w-[220px]">• {item.name}</span>
-                                            <span className="font-sans font-semibold text-foreground shrink-0">
-                                              {formatCurrency(item.price, tx.currency)}
-                                            </span>
-                                          </div>
-                                        ))}
+                                        {items.map((item: any, idx: number) => {
+                                          const itemAssigned = Array.isArray(item.assigned) ? item.assigned : ["Me"];
+                                          const isItemSplit = itemAssigned.length > 1 || (itemAssigned.length === 1 && !itemAssigned.includes("Me"));
+                                          const friendsSharing = itemAssigned.filter((p: string) => p !== "Me");
+                                          
+                                          return (
+                                            <div key={idx} className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+                                              <div className="flex justify-between items-center">
+                                                <span className="truncate max-w-[220px]">• {item.name}</span>
+                                                <span className="font-sans font-semibold text-foreground shrink-0">
+                                                  {formatCurrency(item.price, tx.currency)}
+                                                </span>
+                                              </div>
+                                              {isItemSplit && (
+                                                <span className="text-[9px] text-muted-foreground/80 pl-2">
+                                                  Shared with: {friendsSharing.join(", ")}
+                                                </span>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
                                       </div>
+
+                                      {/* Settlement List */}
+                                      {Array.isArray((tx as any).settlementsList) && (tx as any).settlementsList.length > 0 && (
+                                        <div className="mt-3 pt-2.5 border-t border-border/10 flex flex-col gap-1.5">
+                                          <span className="text-[9px] font-bold tracking-wider text-primary uppercase mb-0.5 px-0.5">
+                                            Settlements (Paid Back)
+                                          </span>
+                                          <div className="flex flex-col gap-1 pl-1.5 pr-0.5">
+                                            {(tx as any).settlementsList.map((settle: any, sIdx: number) => {
+                                              const cleanSettleDesc = cleanDescription(settle.description)
+                                                .replace(/^Settled Bill with [^:]+:\s*/i, "");
+                                              return (
+                                                <div key={sIdx} className="flex justify-between items-center text-xs text-primary font-medium">
+                                                  <span>✓ {cleanSettleDesc || `Settled share`}</span>
+                                                  <span className="font-sans font-bold">
+                                                    +{formatCurrency(settle.amount, tx.currency)}
+                                                  </span>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
                                   </motion.div>
                                 )}
@@ -1316,7 +1417,7 @@ export default function TransactionsList({
           {deleting && (
             <div className="rounded-2xl border border-border/40 bg-muted/40 p-3">
               <p className="text-sm font-semibold">
-                {deleting.description || deleting.category.replace(/_/g, " ")}
+                {cleanDescription(deleting.description) || deleting.category.replace(/_/g, " ")}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {deleting.account.name} ·{" "}
