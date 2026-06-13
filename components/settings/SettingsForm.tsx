@@ -25,7 +25,10 @@ import {
   IconTrash,
   IconPlus,
   IconWallet,
+  IconChevronDown,
+  IconChevronUp,
 } from "@tabler/icons-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -106,6 +109,11 @@ export default function SettingsForm({
   defaultTab = "templates",
 }: SettingsFormProps) {
   const [budgetOpen, setBudgetOpen] = useState(false);
+
+  // Collapse states for profile tab cards
+  const [showAccounts, setShowAccounts] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [showDangerZone, setShowDangerZone] = useState(false);
   const [monthlyBudget, setMonthlyBudget] = useState(
     formatInputAmount(userSettings.monthlyBudget),
   );
@@ -117,7 +125,6 @@ export default function SettingsForm({
   );
   const [isSavingBudget, setIsSavingBudget] = useState(false);
   const [budgetSuccess, setBudgetSuccess] = useState(false);
-  const [budgetError, setBudgetError] = useState<string | null>(null);
 
   // Main Currency state
   const [mainCurrency, setMainCurrency] = useState(userSettings.budgetCurrency || "JPY");
@@ -167,7 +174,6 @@ export default function SettingsForm({
   const [addAccType, setAddAccType] = useState("bank");
   const [addAccBalance, setAddAccBalance] = useState("");
   const [isAddingAcc, setIsAddingAcc] = useState(false);
-  const [addAccError, setAddAccError] = useState<string | null>(null);
 
   // Edit Account Dialog state
   const [editingAccount, setEditingAccount] = useState<AccountItem | null>(
@@ -179,14 +185,12 @@ export default function SettingsForm({
   const [editAccBalance, setEditAccBalance] = useState("");
   const [editAccIsActive, setEditAccIsActive] = useState(true);
   const [isSavingAcc, setIsSavingAcc] = useState(false);
-  const [editAccError, setEditAccError] = useState<string | null>(null);
 
   // Delete Account Dialog state
   const [deletingAccount, setDeletingAccount] = useState<AccountItem | null>(
     null,
   );
   const [isDeletingAcc, setIsDeletingAcc] = useState(false);
-  const [deleteAccError, setDeleteAccError] = useState<string | null>(null);
 
   const handleSaveBudget = async () => {
     const budgetVal = parseInputAmount(monthlyBudget);
@@ -194,7 +198,6 @@ export default function SettingsForm({
     const shoppingVal = parseInputAmount(shoppingLimit);
 
     setIsSavingBudget(true);
-    setBudgetError(null);
 
     try {
       const res = await updateUserSettingsAction({
@@ -211,10 +214,10 @@ export default function SettingsForm({
           setBudgetOpen(false);
         }, 1000);
       } else {
-        setBudgetError(res.error || "Failed to save");
+        toast.error(res.error || "Failed to save");
       }
     } catch {
-      setBudgetError("An unexpected error occurred");
+      toast.error("An unexpected error occurred");
     } finally {
       setIsSavingBudget(false);
     }
@@ -223,13 +226,12 @@ export default function SettingsForm({
   // --- Add Account Handler ---
   const handleAddAccount = async () => {
     if (!addAccName.trim()) {
-      setAddAccError("Please enter account name");
+      toast.error("Please enter account name");
       return;
     }
     const parsedBalance = parseInputAmount(addAccBalance);
 
     setIsAddingAcc(true);
-    setAddAccError(null);
 
     try {
       const res = await createAccountAction({
@@ -252,10 +254,10 @@ export default function SettingsForm({
         setAddAccCurrency("JPY");
         setAddAccType("bank");
       } else {
-        setAddAccError(res.error || "Failed to create account");
+        toast.error(res.error || "Failed to create account");
       }
     } catch {
-      setAddAccError("An unexpected error occurred");
+      toast.error("An unexpected error occurred");
     } finally {
       setIsAddingAcc(false);
     }
@@ -269,19 +271,17 @@ export default function SettingsForm({
     setEditAccType(acc.type);
     setEditAccBalance(formatInputAmount(acc.balance));
     setEditAccIsActive(acc.isActive);
-    setEditAccError(null);
   };
 
   const handleSaveAccount = async () => {
     if (!editingAccount) return;
     if (!editAccName.trim()) {
-      setEditAccError("Please enter account name");
+      toast.error("Please enter account name");
       return;
     }
     const parsedBalance = parseInputAmount(editAccBalance);
 
     setIsSavingAcc(true);
-    setEditAccError(null);
 
     try {
       const res = await updateAccountAction(editingAccount.id, {
@@ -303,10 +303,10 @@ export default function SettingsForm({
         );
         setEditingAccount(null);
       } else {
-        setEditAccError(res.error || "Failed to update account");
+        toast.error(res.error || "Failed to update account");
       }
     } catch {
-      setEditAccError("An unexpected error occurred");
+      toast.error("An unexpected error occurred");
     } finally {
       setIsSavingAcc(false);
     }
@@ -317,7 +317,6 @@ export default function SettingsForm({
     if (!deletingAccount) return;
 
     setIsDeletingAcc(true);
-    setDeleteAccError(null);
 
     try {
       const res = await deleteAccountAction(deletingAccount.id);
@@ -329,10 +328,10 @@ export default function SettingsForm({
         );
         setDeletingAccount(null);
       } else {
-        setDeleteAccError(res.error || "Failed to delete account");
+        toast.error(res.error || "Failed to delete account");
       }
     } catch {
-      setDeleteAccError("An unexpected error occurred");
+      toast.error("An unexpected error occurred");
     } finally {
       setIsDeletingAcc(false);
     }
@@ -419,7 +418,6 @@ export default function SettingsForm({
                   setPocketMoneyLimit(formatInputAmount(userSettings.pocketMoneyLimit));
                   setShoppingLimit(formatInputAmount(userSettings.shoppingLimit));
                   setBudgetOpen(true);
-                  setBudgetError(null);
                   setBudgetSuccess(false);
                 }}
                 aria-label="Edit budget settings"
@@ -491,164 +489,243 @@ export default function SettingsForm({
         <TabsContent value="profile" className="mt-0 flex flex-col gap-4">
           {/* Accounts Card */}
           <section className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
-            <div className="flex items-center justify-between pb-2 border-b border-border/20">
+            <div 
+              className={cn(
+                "flex items-center justify-between cursor-pointer select-none transition-all",
+                showAccounts ? "pb-2 border-b border-border/20" : ""
+              )}
+              onClick={() => setShowAccounts((v) => !v)}
+            >
               <div className="flex items-center gap-2">
                 <IconWallet className="size-4 text-primary" />
-                <h2 className="text-sm font-bold text-foreground">Accounts</h2>
+                <h2 className="text-sm font-bold text-foreground">Financial Accounts</h2>
+                {showAccounts && (
+                  <IconChevronUp className="size-4 text-muted-foreground" />
+                )}
               </div>
-              <Button
-                variant="outline"
-                size="icon-xs"
-                onClick={() => {
-                  setAddAccName("");
-                  setAddAccBalance("");
-                  setAddAccCurrency("JPY");
-                  setAddAccType("bank");
-                  setAddAccError(null);
-                  setAddAccountOpen(true);
-                }}
-                aria-label="Add financial account"
-                className="cursor-pointer size-8 rounded-lg"
-              >
-                <IconPlus className="size-3.5" />
-              </Button>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              {accountList.length === 0 ? (
-                <p className="text-xs text-muted-foreground text-center py-4">
-                  No accounts added yet.
-                </p>
-              ) : (
-                accountList.map((acc) => (
-                  <div
-                    key={acc.id}
-                    className={cn(
-                      "flex items-center justify-between gap-3 p-3 bg-muted/40 border border-border/25 rounded-xl hover:bg-muted/70 transition-colors",
-                      !acc.isActive && "opacity-60",
-                    )}
+              <div className="flex items-center gap-2">
+                {showAccounts ? (
+                  <Button
+                    variant="outline"
+                    size="icon-xs"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setAddAccName("");
+                      setAddAccBalance("");
+                      setAddAccCurrency("JPY");
+                      setAddAccType("bank");
+                      setAddAccountOpen(true);
+                    }}
+                    aria-label="Add financial account"
+                    className="cursor-pointer size-8 rounded-lg"
                   >
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <div className="p-2 bg-white dark:bg-zinc-800 rounded-lg shadow-2xs text-primary/80 border border-border/20">
-                        <IconCreditCard className="size-4" />
-                      </div>
-                      <div className="flex min-w-0 flex-col gap-0.5">
-                        <span className="truncate text-xs font-semibold text-foreground leading-tight">
-                          {acc.name}
-                        </span>
-                        <span className="truncate text-[10px] text-muted-foreground leading-none capitalize">
-                          {acc.type} · {acc.currency}{" "}
-                          {!acc.isActive && "· Inactive"}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex shrink-0 items-center gap-2">
-                      <span className="text-xs font-sans font-bold text-foreground mr-1">
-                        {formatCurrency(acc.balance, acc.currency)}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => openEditAccount(acc)}
-                        aria-label="Edit account"
-                        className="cursor-pointer"
-                      >
-                        <IconEdit className="size-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ))
-              )}
+                    <IconPlus className="size-3.5" />
+                  </Button>
+                ) : (
+                  <IconChevronDown className="size-4 text-muted-foreground" />
+                )}
+              </div>
             </div>
+
+            <AnimatePresence initial={false}>
+              {showAccounts && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3, ease: [0.25, 1, 0.5, 1] }}
+                  className="overflow-hidden"
+                >
+                  <div className="flex flex-col gap-2 pt-2">
+                    {accountList.length === 0 ? (
+                      <p className="text-xs text-muted-foreground text-center py-4">
+                        No accounts added yet.
+                      </p>
+                    ) : (
+                      accountList.map((acc) => (
+                        <div
+                          key={acc.id}
+                          className={cn(
+                            "flex items-center justify-between gap-3 p-3 bg-muted/40 border border-border/25 rounded-xl hover:bg-muted/70 transition-colors",
+                            !acc.isActive && "opacity-60",
+                          )}
+                        >
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            <div className="p-2 bg-white dark:bg-zinc-800 rounded-lg shadow-2xs text-primary/80 border border-border/20">
+                              <IconCreditCard className="size-4" />
+                            </div>
+                            <div className="flex min-w-0 flex-col gap-0.5">
+                              <span className="truncate text-xs font-semibold text-foreground leading-tight">
+                                {acc.name}
+                              </span>
+                              <span className="truncate text-[10px] text-muted-foreground leading-none capitalize">
+                                {acc.type} · {acc.currency}{" "}
+                                {!acc.isActive && "· Inactive"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span className="text-xs font-sans font-bold text-foreground mr-1">
+                              {formatCurrency(acc.balance, acc.currency)}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              onClick={() => openEditAccount(acc)}
+                              aria-label="Edit account"
+                              className="cursor-pointer"
+                            >
+                              <IconEdit className="size-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </section>
           {/* Profile Card */}
           <section className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
-            <div className="flex items-center gap-2 pb-2 border-b border-border/20">
-              <IconUser className="size-4 text-primary" />
-              <h2 className="text-sm font-bold text-foreground">Profile</h2>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {profile.image && (
-                <img
-                  src={profile.image}
-                  alt="Avatar"
-                  className="size-11 rounded-full border shadow-sm"
-                />
+            <div 
+              className={cn(
+                "flex items-center justify-between cursor-pointer select-none transition-all",
+                showProfile ? "pb-2 border-b border-border/20" : ""
               )}
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="truncate text-sm font-bold text-foreground leading-tight">
-                  {profile.name || "Google User"}
-                </span>
-                <span className="truncate text-xs text-muted-foreground leading-none">
-                  {profile.email || "No email linked"}
-                </span>
-              </div>
-            </div>
-
-            {/* Main Currency Setting */}
-            <div className="flex flex-col gap-2 pt-4 border-t border-border/20">
-              <Label className="text-xs font-semibold">Main Currency</Label>
-              <div className="flex gap-2">
-                <Select value={mainCurrency} onValueChange={setMainCurrency}>
-                  <SelectTrigger className="h-10 text-xs font-semibold flex-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="JPY" className="text-xs">
-                      JPY (¥)
-                    </SelectItem>
-                    <SelectItem value="IDR" className="text-xs">
-                      IDR (Rp)
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button
-                  size="sm"
-                  onClick={handleSaveCurrency}
-                  disabled={isSavingCurrency}
-                  className="h-10 min-w-[72px] text-xs font-medium cursor-pointer"
-                >
-                  {isSavingCurrency ? (
-                    <IconLoader className="size-3.5 animate-spin" />
-                  ) : currencySuccess ? (
-                    <IconCheck className="size-3.5" />
-                  ) : (
-                    "Save"
-                  )}
-                </Button>
-              </div>
-              <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
-                This sets your base budget currency. Dashboard widgets will format and track limits in this currency.
-              </p>
-            </div>
-
-            {/* Danger Zone */}
-            <div className="flex flex-col gap-2 pt-4 border-t border-border/20">
-              <Label className="text-xs font-semibold text-destructive">Danger Zone</Label>
-              <p className="text-[10px] text-muted-foreground leading-relaxed">
-                Permanently delete all accounts, transactions, bills, and reset settings.
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setResetDialogOpen(true)}
-                className="w-full gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/80 transition-colors cursor-pointer"
-              >
-                <IconTrash className="size-4" />
-                Reset Account Data
-              </Button>
-            </div>
-
-            <Button
-              variant="destructive"
-              onClick={() => signOut({ callbackUrl: "/login" })}
-              className="w-full gap-2 cursor-pointer mt-2"
+              onClick={() => setShowProfile((v) => !v)}
             >
-              <IconLogout className="size-4" />
-              Sign Out
-            </Button>
+              <div className="flex items-center gap-2">
+                <IconUser className="size-4 text-primary" />
+                <h2 className="text-sm font-bold text-foreground">Profile</h2>
+              </div>
+              {showProfile ? (
+                <IconChevronUp className="size-4 text-muted-foreground" />
+              ) : (
+                <IconChevronDown className="size-4 text-muted-foreground" />
+              )}
+            </div>
+
+            <AnimatePresence initial={false}>
+              {showProfile && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3, ease: [0.25, 1, 0.5, 1] }}
+                  className="overflow-hidden"
+                >
+                  <div className="flex flex-col gap-4 pt-2">
+                    <div className="flex items-center gap-3">
+                      {profile.image && (
+                        <img
+                          src={profile.image}
+                          alt="Avatar"
+                          className="size-11 rounded-full border shadow-sm"
+                        />
+                      )}
+                      <div className="flex min-w-0 flex-col gap-0.5">
+                        <span className="truncate text-sm font-bold text-foreground leading-tight">
+                          {profile.name || "Google User"}
+                        </span>
+                        <span className="truncate text-xs text-muted-foreground leading-none">
+                          {profile.email || "No email linked"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Main Currency Setting */}
+                    <div className="flex flex-col gap-2 pt-4 border-t border-border/20">
+                      <Label className="text-xs font-semibold">Main Currency</Label>
+                      <div className="flex gap-2">
+                        <Select value={mainCurrency} onValueChange={setMainCurrency}>
+                          <SelectTrigger className="h-10 text-xs font-semibold flex-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="JPY" className="text-xs">
+                              JPY (¥)
+                            </SelectItem>
+                            <SelectItem value="IDR" className="text-xs">
+                              IDR (Rp)
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          onClick={handleSaveCurrency}
+                          disabled={isSavingCurrency}
+                          className="h-10 min-w-[72px] text-xs font-medium cursor-pointer"
+                        >
+                          {isSavingCurrency ? (
+                            <IconLoader className="size-3.5 animate-spin" />
+                          ) : currencySuccess ? (
+                            <IconCheck className="size-3.5" />
+                          ) : (
+                            "Save"
+                          )}
+                        </Button>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
+                        This sets your base budget currency. Dashboard widgets will format and track limits in this currency.
+                      </p>
+                    </div>
+
+                    {/* Danger Zone */}
+                    <div className="flex flex-col gap-2 pt-4 border-t border-border/20">
+                      <div 
+                        className="flex items-center justify-between cursor-pointer select-none"
+                        onClick={() => setShowDangerZone((v) => !v)}
+                      >
+                        <Label className="text-xs font-semibold text-destructive cursor-pointer">Danger Zone</Label>
+                        {showDangerZone ? (
+                          <IconChevronUp className="size-4 text-destructive" />
+                        ) : (
+                          <IconChevronDown className="size-4 text-destructive" />
+                        )}
+                      </div>
+                      
+                      <AnimatePresence initial={false}>
+                        {showDangerZone && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.3, ease: [0.25, 1, 0.5, 1] }}
+                            className="overflow-hidden"
+                          >
+                            <div className="flex flex-col gap-2 pt-2">
+                              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                                Permanently delete all accounts, transactions, bills, and reset settings.
+                              </p>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setResetDialogOpen(true)}
+                                className="w-full gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/80 transition-colors cursor-pointer"
+                              >
+                                <IconTrash className="size-4" />
+                                Reset Account Data
+                              </Button>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    <Button
+                      variant="destructive"
+                      onClick={() => signOut({ callbackUrl: "/login" })}
+                      className="w-full gap-2 cursor-pointer mt-2"
+                    >
+                      <IconLogout className="size-4" />
+                      Sign Out
+                    </Button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </section>
         </TabsContent>
       </Tabs>
@@ -670,13 +747,6 @@ export default function SettingsForm({
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
-              {budgetError && (
-                <Alert variant="destructive" className="py-2">
-                  <AlertDescription className="text-xs">
-                    {budgetError}
-                  </AlertDescription>
-                </Alert>
-              )}
 
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs font-semibold">
@@ -785,13 +855,6 @@ export default function SettingsForm({
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
-              {addAccError && (
-                <Alert variant="destructive" className="py-2">
-                  <AlertDescription className="text-xs">
-                    {addAccError}
-                  </AlertDescription>
-                </Alert>
-              )}
 
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs font-semibold">Account Name</Label>
@@ -910,13 +973,6 @@ export default function SettingsForm({
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
-              {editAccError && (
-                <Alert variant="destructive" className="py-2">
-                  <AlertDescription className="text-xs">
-                    {editAccError}
-                  </AlertDescription>
-                </Alert>
-              )}
 
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs font-semibold">Account Name</Label>
@@ -1075,13 +1131,6 @@ export default function SettingsForm({
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-4 min-h-0">
-              {deleteAccError && (
-                <Alert variant="destructive" className="py-2">
-                  <AlertDescription className="text-xs">
-                    {deleteAccError}
-                  </AlertDescription>
-                </Alert>
-              )}
             </div>
 
             <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2 mt-2">

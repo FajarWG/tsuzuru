@@ -72,7 +72,6 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
   const [description, setDescription] = useState("");
   const [date, setDate] = useState(() => new Date());
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const activeAccount = accounts.find((a) => a.id === accountId);
   const currencySymbol = activeAccount?.currency === "IDR" ? "Rp" : "¥";
@@ -87,7 +86,6 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
     setMealNumber(null);
     setDescription("");
     setDate(new Date());
-    setError(null);
   };
 
   const handleOpen = () => {
@@ -110,16 +108,15 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
     e.preventDefault();
     const parsedAmount = parseInputAmount(amount);
     if (!amount || parsedAmount <= 0) {
-      setError("Please enter a valid amount");
+      toast.error("Please enter a valid amount");
       return;
     }
     if (type === "expense" && !subCategory) {
-      setError("Please select a sub-category");
+      toast.error("Please select a sub-category");
       return;
     }
 
     setIsSubmitting(true);
-    setError(null);
 
     // If offline, save the transaction payload locally in localStorage queue
     if (typeof window !== "undefined" && !navigator.onLine) {
@@ -142,11 +139,12 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
         localStorage.setItem("tsuzuru_offline_transactions", JSON.stringify(transactions));
 
         toast.success("Offline: Transaksi disimpan secara lokal dan akan disinkronkan saat online.");
+        window.dispatchEvent(new CustomEvent("transaction-added"));
         setOpen(false);
         return;
       } catch (err) {
         console.error("[Offline] Failed to save transaction locally:", err);
-        setError("Failed to save transaction locally when offline");
+        toast.error("Failed to save transaction locally when offline");
         setIsSubmitting(false);
         return;
       }
@@ -167,13 +165,14 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
 
       if (res.success) {
         toast.success("Transaction added successfully");
+        window.dispatchEvent(new CustomEvent("transaction-added"));
         setOpen(false);
         router.refresh();
       } else {
-        setError(res.error || "Failed to save transaction");
+        toast.error(res.error || "Failed to save transaction");
       }
     } catch {
-      setError("An unexpected error occurred");
+      toast.error("An unexpected error occurred");
     } finally {
       setIsSubmitting(false);
     }
@@ -200,11 +199,6 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-4 py-3">
-              {error && (
-                <Alert variant="destructive" className="py-2">
-                  <AlertDescription className="text-xs">{error}</AlertDescription>
-                </Alert>
-              )}
 
               {/* Expense / Income toggle */}
               <div className="flex bg-muted p-1 rounded-lg border border-border/20">
