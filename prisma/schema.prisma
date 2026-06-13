@@ -61,13 +61,14 @@ model MonthlyTemplate {
 }
 
 model UserSettings {
-  id               String @id @default(cuid())
-  userId           String @unique
-  monthlyBudget    Float  @default(0)
-  pocketMoneyLimit Float  @default(0)
-  shoppingLimit    Float  @default(0)
-  budgetCurrency   String @default("JPY")
-  user             User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String  @id @default(cuid())
+  userId           String  @unique
+  monthlyBudget    Float   @default(0)
+  pocketMoneyLimit Float   @default(0)
+  shoppingLimit    Float   @default(0)
+  budgetCurrency   String  @default("JPY")
+  isOnboarded      Boolean @default(false)
+  user             User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model BillFriend {
