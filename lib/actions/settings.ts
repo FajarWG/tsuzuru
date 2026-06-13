@@ -230,12 +230,40 @@ export async function getUserSettingsDataAction() {
       orderBy: { name: "asc" },
     });
 
+    let budgetLimits = await prisma.budgetLimit.findMany({
+      where: { userId },
+      orderBy: { createdAt: "asc" },
+    });
+
+    if (budgetLimits.length === 0) {
+      const defaultLimits = [
+        { name: "monthly", label: "Monthly Expected Budget", limit: userSettings.monthlyBudget || 150000 },
+        { name: "pocket_money", label: "Pocket Money", limit: userSettings.pocketMoneyLimit || 40000 },
+        { name: "shopping", label: "Shopping", limit: userSettings.shoppingLimit || 60000 },
+      ];
+
+      await prisma.budgetLimit.createMany({
+        data: defaultLimits.map((dl) => ({
+          userId,
+          name: dl.name,
+          label: dl.label,
+          limit: dl.limit,
+        })),
+      });
+
+      budgetLimits = await prisma.budgetLimit.findMany({
+        where: { userId },
+        orderBy: { createdAt: "asc" },
+      });
+    }
+
     return {
       success: true,
       data: {
         userSettings,
         accounts,
         templates,
+        budgetLimits,
         profile: {
           name: session.user.name || null,
           email: session.user.email || null,

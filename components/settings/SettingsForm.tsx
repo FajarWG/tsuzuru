@@ -11,6 +11,11 @@ import {
   updateAccountAction,
   deleteAccountAction,
 } from "@/lib/actions/accounts";
+import {
+  addBudgetLimitAction,
+  updateBudgetLimitAction,
+  deleteBudgetLimitAction,
+} from "@/lib/actions/budgets";
 import TemplatesConfigList from "@/components/templates/TemplatesConfigList";
 import {
   IconCalendarRepeat,
@@ -83,11 +88,19 @@ interface TemplateItem {
   intervalMonths: number;
 }
 
+interface BudgetLimitItem {
+  id: string;
+  name: string;
+  label: string;
+  limit: number;
+}
+
 interface SettingsFormProps {
   userId: string;
   userSettings: UserSettingsData;
   accounts: AccountItem[];
   templates: TemplateItem[];
+  budgetLimits: BudgetLimitItem[];
   profile: {
     name?: string | null;
     email?: string | null;
@@ -102,31 +115,79 @@ function formatCurrency(amount: number, currency: string) {
     : `Rp${Number(amount).toLocaleString("id-ID")}`;
 }
 
+function getBudgetStyle(name: string, index: number) {
+  if (name === "monthly") {
+    return {
+      icon: IconCurrencyYen,
+      bgClass: "bg-primary/10 text-primary",
+      description: "Main spending limit for the entire month across all financial accounts. Used to calculate overall remaining balance."
+    };
+  }
+  if (name === "pocket_money") {
+    return {
+      icon: IconWallet,
+      bgClass: "bg-primary/15 text-primary/80",
+      description: "Allowance allocated for daily items, snacks, transport, and other flexible pocket money expenses."
+    };
+  }
+  if (name === "shopping") {
+    return {
+      icon: IconCreditCard,
+      bgClass: "bg-amber-500/10 text-amber-600 dark:text-amber-500",
+      description: "Allocation designated for non-daily purchases like clothing, electronics, and household goods."
+    };
+  }
+  
+  const colors = [
+    { bgClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500" },
+    { bgClass: "bg-blue-500/10 text-blue-600 dark:text-blue-500" },
+    { bgClass: "bg-rose-500/10 text-rose-600 dark:text-rose-500" },
+    { bgClass: "bg-violet-500/10 text-violet-600 dark:text-violet-500" },
+    { bgClass: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-500" },
+  ];
+  const color = colors[index % colors.length];
+  return {
+    icon: IconWallet,
+    bgClass: color.bgClass,
+    description: `Budget limit category for ${name.replace(/_/g, " ")} transactions.`
+  };
+}
+
 export default function SettingsForm({
   userId,
   userSettings,
   accounts,
   templates,
+  budgetLimits,
   profile,
   defaultTab = "templates",
 }: SettingsFormProps) {
-  const [budgetOpen, setBudgetOpen] = useState(false);
+  // Budget Limits CRUD states
+  const [addBudgetOpen, setAddBudgetOpen] = useState(false);
+  const [addBudgetLabel, setAddBudgetLabel] = useState("");
+  const [addBudgetLimit, setAddBudgetLimit] = useState("");
+  const [isAddingBudget, setIsAddingBudget] = useState(false);
+
+  const [editBudgetOpen, setEditBudgetOpen] = useState(false);
+  const [editingBudget, setEditingBudget] = useState<BudgetLimitItem | null>(null);
+  const [editBudgetLabel, setEditBudgetLabel] = useState("");
+  const [editBudgetLimit, setEditBudgetLimit] = useState("");
+  const [isUpdatingBudget, setIsUpdatingBudget] = useState(false);
+
+  const [deleteBudgetOpen, setDeleteBudgetOpen] = useState(false);
+  const [deletingBudget, setDeletingBudget] = useState<BudgetLimitItem | null>(null);
+  const [isDeletingBudget, setIsDeletingBudget] = useState(false);
+
+  // Recommendation Calculator state
+  const [recommendationOpen, setRecommendationOpen] = useState(false);
+  const [salaryInput, setSalaryInput] = useState("");
+  const [savingsRate, setSavingsRate] = useState<"20" | "30">("20");
+  const [isApplyingRecommendation, setIsApplyingRecommendation] = useState(false);
 
   // Collapse states for profile tab cards
   const [showAccounts, setShowAccounts] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showDangerZone, setShowDangerZone] = useState(false);
-  const [monthlyBudget, setMonthlyBudget] = useState(
-    formatInputAmount(userSettings.monthlyBudget),
-  );
-  const [pocketMoneyLimit, setPocketMoneyLimit] = useState(
-    formatInputAmount(userSettings.pocketMoneyLimit),
-  );
-  const [shoppingLimit, setShoppingLimit] = useState(
-    formatInputAmount(userSettings.shoppingLimit),
-  );
-  const [isSavingBudget, setIsSavingBudget] = useState(false);
-  const [budgetSuccess, setBudgetSuccess] = useState(false);
 
   // Main Currency state
   const [mainCurrency, setMainCurrency] = useState(userSettings.budgetCurrency || "JPY");
@@ -141,11 +202,15 @@ export default function SettingsForm({
   const handleSaveCurrency = async () => {
     setIsSavingCurrency(true);
     try {
+      const monthlyLimit = budgetLimits.find((b) => b.name === "monthly")?.limit || userSettings.monthlyBudget;
+      const pocketLimit = budgetLimits.find((b) => b.name === "pocket_money")?.limit || userSettings.pocketMoneyLimit;
+      const shoppingLimitVal = budgetLimits.find((b) => b.name === "shopping")?.limit || userSettings.shoppingLimit;
+
       const res = await updateUserSettingsAction({
         userId,
-        monthlyBudget: parseInputAmount(monthlyBudget),
-        pocketMoneyLimit: parseInputAmount(pocketMoneyLimit),
-        shoppingLimit: parseInputAmount(shoppingLimit),
+        monthlyBudget: monthlyLimit,
+        pocketMoneyLimit: pocketLimit,
+        shoppingLimit: shoppingLimitVal,
         budgetCurrency: mainCurrency,
       });
 
@@ -195,35 +260,124 @@ export default function SettingsForm({
   );
   const [isDeletingAcc, setIsDeletingAcc] = useState(false);
 
-  const handleSaveBudget = async () => {
-    const budgetVal = parseInputAmount(monthlyBudget);
-    const pocketVal = parseInputAmount(pocketMoneyLimit);
-    const shoppingVal = parseInputAmount(shoppingLimit);
+  // --- Budget CRUD Handlers ---
+  const handleAddBudget = async () => {
+    const limitVal = parseInputAmount(addBudgetLimit);
+    if (!addBudgetLabel.trim()) {
+      toast.error("Category label is required");
+      return;
+    }
+    if (isNaN(limitVal) || limitVal < 0) {
+      toast.error("Please enter a valid limit amount");
+      return;
+    }
 
-    setIsSavingBudget(true);
-
+    setIsAddingBudget(true);
     try {
-      const res = await updateUserSettingsAction({
-        userId,
-        monthlyBudget: budgetVal,
-        pocketMoneyLimit: pocketVal,
-        shoppingLimit: shoppingVal,
-      });
-
+      const res = await addBudgetLimitAction(addBudgetLabel, limitVal);
       if (res.success) {
-        setBudgetSuccess(true);
-        setTimeout(() => {
-          setBudgetSuccess(false);
-          setBudgetOpen(false);
-        }, 1000);
+        toast.success("Budget limit card added successfully");
+        setAddBudgetOpen(false);
+        setAddBudgetLabel("");
+        setAddBudgetLimit("");
         window.dispatchEvent(new CustomEvent("transaction-added"));
       } else {
-        toast.error(res.error || "Failed to save");
+        toast.error(res.error || "Failed to add budget limit card");
       }
     } catch {
       toast.error("An unexpected error occurred");
     } finally {
-      setIsSavingBudget(false);
+      setIsAddingBudget(false);
+    }
+  };
+
+  const handleUpdateBudget = async () => {
+    if (!editingBudget) return;
+    const limitVal = parseInputAmount(editBudgetLimit);
+    if (!editBudgetLabel.trim()) {
+      toast.error("Category label is required");
+      return;
+    }
+    if (isNaN(limitVal) || limitVal < 0) {
+      toast.error("Please enter a valid limit amount");
+      return;
+    }
+
+    setIsUpdatingBudget(true);
+    try {
+      const res = await updateBudgetLimitAction(editingBudget.id, editBudgetLabel, limitVal);
+      if (res.success) {
+        toast.success("Budget limit updated successfully");
+        setEditBudgetOpen(false);
+        setEditingBudget(null);
+        window.dispatchEvent(new CustomEvent("transaction-added"));
+      } else {
+        toast.error(res.error || "Failed to update budget limit");
+      }
+    } catch {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsUpdatingBudget(false);
+    }
+  };
+
+  const handleDeleteBudget = async () => {
+    if (!deletingBudget) return;
+
+    setIsDeletingBudget(true);
+    try {
+      const res = await deleteBudgetLimitAction(deletingBudget.id);
+      if (res.success) {
+        toast.success("Budget limit card deleted successfully");
+        setDeleteBudgetOpen(false);
+        setDeletingBudget(null);
+        window.dispatchEvent(new CustomEvent("transaction-added"));
+      } else {
+        toast.error(res.error || "Failed to delete budget limit");
+      }
+    } catch {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsDeletingBudget(false);
+    }
+  };
+
+  const handleApplyRecommendation = async () => {
+    const salaryVal = parseInputAmount(salaryInput);
+    if (isNaN(salaryVal) || salaryVal <= 0) {
+      toast.error("Please enter a valid salary amount");
+      return;
+    }
+
+    const isSavings30 = savingsRate === "30";
+    const monthlyRec = Math.round(salaryVal * 0.50);
+    const pocketRec = Math.round(salaryVal * (isSavings30 ? 0.15 : 0.20));
+    const shoppingRec = Math.round(salaryVal * (isSavings30 ? 0.05 : 0.10));
+
+    const monthlyId = budgetLimits.find((b) => b.name === "monthly")?.id;
+    const pocketId = budgetLimits.find((b) => b.name === "pocket_money")?.id;
+    const shoppingId = budgetLimits.find((b) => b.name === "shopping")?.id;
+
+    setIsApplyingRecommendation(true);
+    try {
+      if (monthlyId) {
+        await updateBudgetLimitAction(monthlyId, "Monthly Expected Budget", monthlyRec);
+      }
+      if (pocketId) {
+        await updateBudgetLimitAction(pocketId, "Pocket Money", pocketRec);
+      }
+      if (shoppingId) {
+        await updateBudgetLimitAction(shoppingId, "Shopping", shoppingRec);
+      }
+
+      toast.success("Recommended budget limits applied successfully");
+      setRecommendationOpen(false);
+      setSalaryInput("");
+      window.dispatchEvent(new CustomEvent("transaction-added"));
+    } catch {
+      toast.error("An error occurred while applying recommendations");
+    } finally {
+      setIsApplyingRecommendation(false);
     }
   };
 
@@ -432,76 +586,90 @@ export default function SettingsForm({
               </div>
               <Button
                 variant="outline"
-                size="icon-xs"
+                size="sm"
                 onClick={() => {
-                  setMonthlyBudget(formatInputAmount(userSettings.monthlyBudget));
-                  setPocketMoneyLimit(formatInputAmount(userSettings.pocketMoneyLimit));
-                  setShoppingLimit(formatInputAmount(userSettings.shoppingLimit));
-                  setBudgetOpen(true);
-                  setBudgetSuccess(false);
+                  setAddBudgetLabel("");
+                  setAddBudgetLimit("");
+                  setAddBudgetOpen(true);
                 }}
-                aria-label="Edit budget settings"
-                className="cursor-pointer size-8 rounded-lg"
+                className="cursor-pointer gap-1 text-xs px-2.5 h-8 rounded-lg"
               >
-                <IconSettings className="size-3.5" />
+                <IconPlus className="size-3.5" /> Add Budget Card
               </Button>
             </div>
 
             <div className="flex flex-col gap-4">
-              <div className="flex items-start gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
-                <div className="p-2 bg-primary/10 text-primary rounded-lg shrink-0">
-                  <IconCurrencyYen className="size-4" />
-                </div>
-                <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-                    Monthly Expected Budget
-                  </span>
-                  <span className="text-sm font-bold text-foreground mt-0.5">
-                    {formatCurrency(userSettings.monthlyBudget, userSettings.budgetCurrency)}
-                  </span>
-                  <p className="text-[10px] text-muted-foreground leading-relaxed mt-1">
-                    Main spending limit for the entire month across all
-                    financial accounts. Used to calculate overall remaining
-                    balance.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
-                <div className="p-2 bg-primary/15 text-primary/80 rounded-lg shrink-0">
-                  <IconWallet className="size-4" />
-                </div>
-                <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-                    Pocket Money Limit
-                  </span>
-                  <span className="text-sm font-bold text-foreground mt-0.5">
-                    {formatCurrency(userSettings.pocketMoneyLimit, userSettings.budgetCurrency)}
-                  </span>
-                  <p className="text-[10px] text-muted-foreground leading-relaxed mt-1">
-                    Allowance allocated for daily items, snacks, transport, and
-                    other flexible pocket money expenses.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
-                <div className="p-2 bg-amber-500/10 text-amber-600 dark:text-amber-500 rounded-lg shrink-0">
-                  <IconCreditCard className="size-4" />
-                </div>
-                <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-                    Shopping Limit
-                  </span>
-                  <span className="text-sm font-bold text-foreground mt-0.5">
-                    {formatCurrency(userSettings.shoppingLimit, userSettings.budgetCurrency)}
-                  </span>
-                  <p className="text-[10px] text-muted-foreground leading-relaxed mt-1">
-                    Allocation designated for non-daily purchases like buying
-                    clothing, electronics, and household goods.
-                  </p>
-                </div>
-              </div>
+              {budgetLimits.map((item, idx) => {
+                const style = getBudgetStyle(item.name, idx);
+                const BudgetIcon = style.icon;
+                return (
+                  <div key={item.id} className="flex items-center justify-between gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <div className={cn("p-2 rounded-lg shrink-0", style.bgClass)}>
+                        <BudgetIcon className="size-4" />
+                      </div>
+                      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                        <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                          {item.label}
+                        </span>
+                        <span className="text-sm font-bold text-foreground mt-0.5">
+                          {formatCurrency(item.limit, userSettings.budgetCurrency)}
+                        </span>
+                        <p className="text-[10px] text-muted-foreground leading-relaxed mt-1">
+                          {style.description}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setEditingBudget(item);
+                          setEditBudgetLabel(item.label);
+                          setEditBudgetLimit(formatInputAmount(item.limit));
+                          setEditBudgetOpen(true);
+                        }}
+                        className="size-8 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
+                        title="Edit budget"
+                      >
+                        <IconEdit className="size-4" />
+                      </Button>
+                      
+                      {item.name !== "monthly" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setDeletingBudget(item);
+                            setDeleteBudgetOpen(true);
+                          }}
+                          className="size-8 rounded-lg text-destructive hover:bg-destructive/10 hover:text-destructive cursor-pointer"
+                          title="Delete budget"
+                        >
+                          <IconTrash className="size-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            <div className="pt-2 border-t border-border/20 flex justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSalaryInput("");
+                  setSavingsRate("20");
+                  setRecommendationOpen(true);
+                }}
+                className="cursor-pointer gap-1.5 text-xs font-semibold"
+              >
+                <IconActivity className="size-3.5 text-primary" />
+                Calculate Recommendation
+              </Button>
             </div>
           </section>
         </TabsContent>
@@ -759,28 +927,36 @@ export default function SettingsForm({
       </Tabs>
       </motion.div>
 
-      {/* Budget Settings Dialog */}
+      {/* Add Custom Budget Dialog */}
       <Dialog
-        open={budgetOpen}
+        open={addBudgetOpen}
         onOpenChange={(open) => {
-          if (!isSavingBudget) setBudgetOpen(open);
+          if (!isAddingBudget) setAddBudgetOpen(open);
         }}
       >
         <DialogContent className="max-w-[360px] rounded-2xl p-0">
-          <div className="flex flex-col max-h-[85vh] p-5">
+          <div className="flex flex-col p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-sans">Budget Settings</DialogTitle>
+              <DialogTitle className="font-sans">Add Budget Card</DialogTitle>
               <DialogDescription className="text-xs">
-                Set your monthly spending limits in {userSettings.budgetCurrency}.
+                Create a new customizable budget category limit.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
+            <div className="flex flex-col gap-4 py-4">
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Category Label</Label>
+                <Input
+                  value={addBudgetLabel}
+                  onChange={(e) => setAddBudgetLabel(e.target.value)}
+                  className="h-10 font-semibold"
+                  placeholder="e.g. Food, Subscriptions"
+                  required
+                />
+              </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold">
-                  Monthly Expected Budget
-                </Label>
+                <Label className="text-xs font-semibold">Limit Amount</Label>
                 <div className="relative flex items-center">
                   <span className="absolute left-3 text-sm font-bold text-muted-foreground">
                     {budgetCurrencySymbol}
@@ -788,50 +964,12 @@ export default function SettingsForm({
                   <Input
                     type="text"
                     inputMode="numeric"
-                    value={monthlyBudget}
-                    onChange={(e) => setMonthlyBudget(formatInputAmount(e.target.value))}
+                    value={addBudgetLimit}
+                    onChange={(e) => setAddBudgetLimit(formatInputAmount(e.target.value))}
                     className={cn(budgetCurrencyPadding, "h-10 font-semibold")}
-                    placeholder="150,000"
+                    placeholder="10,000"
+                    required
                   />
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <Label className="text-xs font-semibold">
-                    Pocket Money Limit
-                  </Label>
-                  <div className="relative flex items-center">
-                    <span className="absolute left-3 text-sm font-bold text-muted-foreground">
-                      {budgetCurrencySymbol}
-                    </span>
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      value={pocketMoneyLimit}
-                      onChange={(e) => setPocketMoneyLimit(formatInputAmount(e.target.value))}
-                      className={cn(budgetCurrencyPadding, "h-10 font-semibold")}
-                      placeholder="40,000"
-                    />
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label className="text-xs font-semibold">Shopping Limit</Label>
-                  <div className="relative flex items-center">
-                    <span className="absolute left-3 text-sm font-bold text-muted-foreground">
-                      {budgetCurrencySymbol}
-                    </span>
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      value={shoppingLimit}
-                      onChange={(e) => setShoppingLimit(formatInputAmount(e.target.value))}
-                      className={cn(budgetCurrencyPadding, "h-10 font-semibold")}
-                      placeholder="60,000"
-                    />
-                  </div>
                 </div>
               </div>
             </div>
@@ -840,26 +978,288 @@ export default function SettingsForm({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setBudgetOpen(false)}
-                disabled={isSavingBudget}
+                onClick={() => setAddBudgetOpen(false)}
+                disabled={isAddingBudget}
                 className="cursor-pointer"
               >
                 Cancel
               </Button>
               <Button
                 size="sm"
-                onClick={handleSaveBudget}
-                disabled={isSavingBudget}
+                onClick={handleAddBudget}
+                disabled={isAddingBudget}
                 className="min-w-[72px] cursor-pointer"
               >
-                {isSavingBudget ? (
+                {isAddingBudget ? (
                   <IconLoader className="size-4 animate-spin" />
-                ) : budgetSuccess ? (
-                  <>
-                    <IconCheck className="size-4" /> Saved
-                  </>
+                ) : (
+                  "Add Card"
+                )}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Budget Dialog */}
+      <Dialog
+        open={editBudgetOpen}
+        onOpenChange={(open) => {
+          if (!isUpdatingBudget) setEditBudgetOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-[360px] rounded-2xl p-0">
+          <div className="flex flex-col p-5">
+            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
+              <DialogTitle className="font-sans">Edit Budget Limit</DialogTitle>
+              <DialogDescription className="text-xs">
+                Modify the limit or label for this budget category.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex flex-col gap-4 py-4">
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Category Label</Label>
+                <Input
+                  value={editBudgetLabel}
+                  onChange={(e) => setEditBudgetLabel(e.target.value)}
+                  className="h-10 font-semibold"
+                  placeholder="e.g. Food"
+                  disabled={editingBudget ? ["monthly", "pocket_money", "shopping"].includes(editingBudget.name) : false}
+                  required
+                />
+                {editingBudget && ["monthly", "pocket_money", "shopping"].includes(editingBudget.name) && (
+                  <span className="text-[10px] text-muted-foreground">
+                    System category labels cannot be changed.
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Limit Amount</Label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-3 text-sm font-bold text-muted-foreground">
+                    {budgetCurrencySymbol}
+                  </span>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={editBudgetLimit}
+                    onChange={(e) => setEditBudgetLimit(formatInputAmount(e.target.value))}
+                    className={cn(budgetCurrencyPadding, "h-10 font-semibold")}
+                    placeholder="20,000"
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setEditBudgetOpen(false)}
+                disabled={isUpdatingBudget}
+                className="cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleUpdateBudget}
+                disabled={isUpdatingBudget}
+                className="min-w-[72px] cursor-pointer"
+              >
+                {isUpdatingBudget ? (
+                  <IconLoader className="size-4 animate-spin" />
                 ) : (
                   "Save"
+                )}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Budget Dialog */}
+      <Dialog
+        open={deleteBudgetOpen}
+        onOpenChange={(open) => {
+          if (!isDeletingBudget) setDeleteBudgetOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-[360px] rounded-2xl p-0">
+          <div className="flex flex-col p-5">
+            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
+              <DialogTitle className="font-sans text-destructive">Delete Budget Card</DialogTitle>
+              <DialogDescription className="text-xs">
+                This action will delete the budget category limit.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="py-4">
+              <p className="text-xs text-muted-foreground">
+                Are you sure you want to delete the budget limit card for{" "}
+                <strong className="text-foreground">{deletingBudget?.label}</strong>? Transactions under this category will no longer have a dedicated progress bar.
+              </p>
+            </div>
+
+            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDeleteBudgetOpen(false)}
+                disabled={isDeletingBudget}
+                className="cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleDeleteBudget}
+                disabled={isDeletingBudget}
+                className="min-w-[72px] cursor-pointer"
+              >
+                {isDeletingBudget ? (
+                  <IconLoader className="size-4 animate-spin" />
+                ) : (
+                  "Delete"
+                )}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Recommendation Calculator Dialog */}
+      <Dialog
+        open={recommendationOpen}
+        onOpenChange={(open) => {
+          if (!isApplyingRecommendation) setRecommendationOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-[360px] rounded-2xl p-0">
+          <div className="flex flex-col p-5">
+            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
+              <DialogTitle className="font-sans">Budget Recommendation</DialogTitle>
+              <DialogDescription className="text-xs">
+                Calculate recommended budget limits based on your monthly income.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex flex-col gap-4 py-4">
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Monthly Income / Salary</Label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-3 text-sm font-bold text-muted-foreground">
+                    {budgetCurrencySymbol}
+                  </span>
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    value={salaryInput}
+                    onChange={(e) => setSalaryInput(formatInputAmount(e.target.value))}
+                    className={cn(budgetCurrencyPadding, "h-10 font-semibold")}
+                    placeholder="200,000"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Savings Target</Label>
+                <Select
+                  value={savingsRate}
+                  onValueChange={(val) => setSavingsRate(val as "20" | "30")}
+                >
+                  <SelectTrigger className="h-10 text-xs font-semibold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="20" className="text-xs">
+                      20% Savings (Standard)
+                    </SelectItem>
+                    <SelectItem value="30" className="text-xs">
+                      30% Savings (Aggressive)
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {parseInputAmount(salaryInput) > 0 && (() => {
+                const parsedSalary = parseInputAmount(salaryInput);
+                const isSavings30 = savingsRate === "30";
+                const monthlyPercent = 50;
+                const pocketPercent = isSavings30 ? 15 : 20;
+                const shoppingPercent = isSavings30 ? 5 : 10;
+                const savingsPercent = isSavings30 ? 30 : 20;
+
+                const recommendedMonthly = Math.round(parsedSalary * (monthlyPercent / 100));
+                const recommendedPocket = Math.round(parsedSalary * (pocketPercent / 100));
+                const recommendedShopping = Math.round(parsedSalary * (shoppingPercent / 100));
+                const recommendedSavings = Math.round(parsedSalary * (savingsPercent / 100));
+
+                return (
+                  <div className="flex flex-col gap-2 p-3 bg-primary/5 border border-primary/10 rounded-xl mt-1">
+                    <span className="text-[10px] text-primary font-bold uppercase tracking-wider">
+                      Recommended Allocation:
+                    </span>
+                    
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-muted-foreground">Monthly Budget (Needs: {monthlyPercent}%)</span>
+                      <span className="font-bold text-foreground">
+                        {formatCurrency(recommendedMonthly, userSettings.budgetCurrency)}
+                      </span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-muted-foreground">Pocket Money (Wants: {pocketPercent}%)</span>
+                      <span className="font-bold text-foreground">
+                        {formatCurrency(recommendedPocket, userSettings.budgetCurrency)}
+                      </span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-muted-foreground">Shopping (Wants: {shoppingPercent}%)</span>
+                      <span className="font-bold text-foreground">
+                        {formatCurrency(recommendedShopping, userSettings.budgetCurrency)}
+                      </span>
+                    </div>
+
+                    <Separator className="my-1 opacity-50" />
+
+                    <div className="flex justify-between items-center text-xs font-semibold text-emerald-600 dark:text-emerald-500">
+                      <span>Target Savings ({savingsPercent}%)</span>
+                      <span>
+                        {formatCurrency(recommendedSavings, userSettings.budgetCurrency)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setRecommendationOpen(false)}
+                disabled={isApplyingRecommendation}
+                className="cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleApplyRecommendation}
+                disabled={isApplyingRecommendation || !salaryInput || parseInputAmount(salaryInput) <= 0}
+                className="min-w-[72px] cursor-pointer"
+              >
+                {isApplyingRecommendation ? (
+                  <IconLoader className="size-4 animate-spin" />
+                ) : (
+                  "Apply"
                 )}
               </Button>
             </DialogFooter>

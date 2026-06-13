@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { AnimatePresence } from "framer-motion";
 import LoadingScreen from "./LoadingScreen";
+import { cn } from "@/lib/utils";
 
 interface LoadingProviderProps {
   children: React.ReactNode;
@@ -43,11 +44,10 @@ export default function LoadingProvider({ children }: LoadingProviderProps) {
         )}
       </AnimatePresence>
       <div
-        className={
-          mounted && isLoading
-            ? "pointer-events-none overflow-hidden h-screen select-none"
-            : ""
-        }
+        className={cn(
+          "min-h-screen flex flex-col w-full bg-background",
+          mounted && isLoading && "pointer-events-none overflow-hidden h-screen select-none"
+        )}
       >
         {children}
       </div>

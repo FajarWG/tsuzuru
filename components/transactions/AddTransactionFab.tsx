@@ -40,6 +40,7 @@ interface AccountItem {
 interface AddTransactionFabProps {
   userId: string;
   accounts: AccountItem[];
+  budgetCategories?: { name: string; label: string }[];
 }
 
 const POCKET_MONEY_SUBCATS = [
@@ -58,15 +59,22 @@ const SHOPPING_SUBCATS = [
   { value: "others", label: "Others" },
 ];
 
-export default function AddTransactionFab({ userId, accounts }: AddTransactionFabProps) {
+export default function AddTransactionFab({ userId, accounts, budgetCategories }: AddTransactionFabProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+
+  const categoriesToUse = budgetCategories && budgetCategories.length > 0
+    ? budgetCategories
+    : [
+        { name: "pocket_money", label: "Pocket Money" },
+        { name: "shopping", label: "Shopping" }
+      ];
 
   // Form state
   const [type, setType] = useState<"expense" | "income">("expense");
   const [amount, setAmount] = useState("");
   const [accountId, setAccountId] = useState(accounts[0]?.id || "");
-  const [category, setCategory] = useState<"pocket_money" | "shopping">("pocket_money");
+  const [category, setCategory] = useState<string>("pocket_money");
   const [subCategory, setSubCategory] = useState("");
   const [mealNumber, setMealNumber] = useState<number | null>(null);
   const [description, setDescription] = useState("");
@@ -75,13 +83,23 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
 
   const activeAccount = accounts.find((a) => a.id === accountId);
   const currencySymbol = activeAccount?.currency === "IDR" ? "Rp" : "¥";
-  const subcatOptions = category === "pocket_money" ? POCKET_MONEY_SUBCATS : SHOPPING_SUBCATS;
+  const subcatOptions = category === "pocket_money"
+    ? POCKET_MONEY_SUBCATS
+    : category === "shopping"
+    ? SHOPPING_SUBCATS
+    : [
+        { value: "others", label: "Others" },
+        { value: "food", label: "Food" },
+        { value: "transport", label: "Transport" },
+        { value: "shopping", label: "Shopping" },
+        { value: "bills", label: "Bills" }
+      ];
 
   const resetForm = () => {
     setType("expense");
     setAmount("");
     setAccountId(accounts[0]?.id || "");
-    setCategory("pocket_money");
+    setCategory(categoriesToUse[0]?.name || "pocket_money");
     setSubCategory("");
     setMealNumber(null);
     setDescription("");
@@ -93,7 +111,7 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
     setOpen(true);
   };
 
-  const handleCategoryChange = (cat: "pocket_money" | "shopping") => {
+  const handleCategoryChange = (cat: string) => {
     setCategory(cat);
     setSubCategory("");
     setMealNumber(null);
@@ -261,20 +279,20 @@ export default function AddTransactionFab({ userId, accounts }: AddTransactionFa
               <>
                 <div className="flex flex-col gap-1.5">
                   <Label className="text-xs font-semibold text-muted-foreground">Category</Label>
-                  <div className="flex gap-2">
-                    {(["pocket_money", "shopping"] as const).map((cat) => (
+                  <div className="flex gap-2 flex-wrap">
+                    {categoriesToUse.map((cat) => (
                       <button
-                        key={cat}
+                        key={cat.name}
                         type="button"
-                        onClick={() => handleCategoryChange(cat)}
+                        onClick={() => handleCategoryChange(cat.name)}
                         className={cn(
-                          "flex-1 h-9 rounded-xl border text-xs font-semibold transition-all",
-                          category === cat
+                          "flex-1 min-w-[80px] h-9 rounded-xl border text-xs font-semibold transition-all",
+                          category === cat.name
                             ? "bg-primary text-primary-foreground border-transparent"
                             : "bg-white dark:bg-zinc-900 border-border text-foreground hover:bg-muted"
                         )}
                       >
-                        {cat === "pocket_money" ? "Pocket Money" : "Shopping"}
+                        {cat.label}
                       </button>
                     ))}
                   </div>

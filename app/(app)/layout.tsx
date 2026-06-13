@@ -64,6 +64,13 @@ export default async function AppLayout({
     orderBy: { name: "asc" },
   });
 
+  // Fetch active budget categories (excluding monthly) for transaction categories
+  const dbBudgets = await prisma.budgetLimit.findMany({
+    where: { userId: session.user.id, NOT: { name: "monthly" } },
+    select: { name: true, label: true },
+    orderBy: { createdAt: "asc" },
+  });
+
   return (
     <div className="flex-1 w-full max-w-[430px] mx-auto min-h-screen bg-background shadow-2xl border-x border-border/20 relative flex flex-col overflow-x-hidden">
       <OfflineStatusIndicator />
@@ -76,6 +83,7 @@ export default async function AppLayout({
           <AddTransactionFab
             userId={session.user.id}
             accounts={accounts}
+            budgetCategories={dbBudgets}
           />
         }
       />

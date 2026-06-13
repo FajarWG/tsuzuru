@@ -9,7 +9,7 @@ interface CreateTransactionInput {
   accountId: string;
   type: "expense" | "income";
   amount: number;
-  category: "pocket_money" | "shopping" | "income" | "template" | "adjustment";
+  category: string;
   subCategory?: string | null;
   mealNumber?: number | null;
   description?: string | null;
