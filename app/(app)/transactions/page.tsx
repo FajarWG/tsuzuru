@@ -1,7 +1,6 @@
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import TransactionsList from "@/components/transactions/TransactionsList";
+import TransactionsClient from "@/components/transactions/TransactionsClient";
 
 export default async function TransactionsPage() {
   const session = await auth();
@@ -12,34 +11,5 @@ export default async function TransactionsPage() {
 
   const userId = session.user.id;
 
-  // 1. Fetch all transactions for the user, ordered by date descending
-  const transactions = await prisma.transaction.findMany({
-    where: { userId },
-    orderBy: { date: "desc" },
-    include: {
-      account: {
-        select: {
-          id: true,
-          name: true,
-          currency: true,
-        },
-      },
-    },
-  });
-
-  // 2. Fetch all accounts for filters
-  const accounts = await prisma.account.findMany({
-    where: { userId },
-    select: {
-      id: true,
-      name: true,
-      currency: true,
-    },
-  });
-
-  return (
-    <div className="flex flex-col flex-1">
-      <TransactionsList userId={userId} transactions={transactions} accounts={accounts} />
-    </div>
-  );
+  return <TransactionsClient userId={userId} />;
 }
