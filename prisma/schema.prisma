@@ -45,6 +45,8 @@ model Transaction {
   description String?
   date        DateTime @default(now())
   isTemplate  Boolean  @default(false)
+  isReceipt   Boolean  @default(false)
+  receiptItems Json?
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
 }
