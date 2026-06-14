@@ -141,17 +141,21 @@ export async function markTemplatePaidAction(
       return { success: false, error: "Please set an amount before marking as paid" };
     }
 
-    const account = await prisma.account.findUnique({
-      where: { id: template.accountId },
+    const targetAccountId = sourceAccountId || template.accountId;
+    const account = await prisma.account.findFirst({
+      where: { id: targetAccountId, userId },
     });
-    if (!account) return { success: false, error: "Linked account not found" };
-    if (!account.isActive) return { success: false, error: "Linked account is inactive" };
+    if (!account) return { success: false, error: "Paying account not found" };
+    if (!account.isActive) return { success: false, error: "Paying account is inactive" };
+    if (account.currency !== template.currency) {
+      return { success: false, error: "Currency mismatch between paying account and bill" };
+    }
 
     await prisma.$transaction([
       prisma.transaction.create({
         data: {
           userId,
-          accountId: template.accountId,
+          accountId: targetAccountId,
           type: "expense",
           amount: template.amount,
           currency: template.currency,
@@ -162,7 +166,7 @@ export async function markTemplatePaidAction(
         },
       }),
       prisma.account.update({
-        where: { id: template.accountId },
+        where: { id: targetAccountId },
         data: { balance: account.balance - template.amount },
       }),
     ]);

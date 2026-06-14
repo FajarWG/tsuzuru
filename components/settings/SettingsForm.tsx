@@ -76,6 +76,7 @@ interface AccountItem {
   balance: number;
   type: string;
   isActive: boolean;
+  defaultPaymentAccountId?: string | null;
 }
 
 interface TemplateItem {
@@ -253,6 +254,8 @@ export default function SettingsForm({
   const [editAccBalance, setEditAccBalance] = useState("");
   const [editAccIsActive, setEditAccIsActive] = useState(true);
   const [isSavingAcc, setIsSavingAcc] = useState(false);
+  const [addAccDefaultPaymentAccountId, setAddAccDefaultPaymentAccountId] = useState("");
+  const [editAccDefaultPaymentAccountId, setEditAccDefaultPaymentAccountId] = useState("");
 
   // Delete Account Dialog state
   const [deletingAccount, setDeletingAccount] = useState<AccountItem | null>(
@@ -397,6 +400,7 @@ export default function SettingsForm({
         currency: addAccCurrency,
         balance: parsedBalance,
         type: addAccType,
+        defaultPaymentAccountId: addAccType === "credit_card" ? addAccDefaultPaymentAccountId || null : null,
       });
 
       if (res.success && res.account) {
@@ -411,6 +415,7 @@ export default function SettingsForm({
         setAddAccBalance("");
         setAddAccCurrency("JPY");
         setAddAccType("bank");
+        setAddAccDefaultPaymentAccountId("");
         window.dispatchEvent(new CustomEvent("transaction-added"));
       } else {
         toast.error(res.error || "Failed to create account");
@@ -430,6 +435,7 @@ export default function SettingsForm({
     setEditAccType(acc.type);
     setEditAccBalance(formatInputAmount(acc.balance));
     setEditAccIsActive(acc.isActive);
+    setEditAccDefaultPaymentAccountId(acc.defaultPaymentAccountId || "");
   };
 
   const handleSaveAccount = async () => {
@@ -449,6 +455,7 @@ export default function SettingsForm({
         balance: parsedBalance,
         type: editAccType,
         isActive: editAccIsActive,
+        defaultPaymentAccountId: editAccType === "credit_card" ? editAccDefaultPaymentAccountId || null : null,
       });
 
       if (res.success && res.account) {
@@ -527,6 +534,7 @@ export default function SettingsForm({
     balance: a.balance,
     type: a.type,
     isActive: a.isActive,
+    defaultPaymentAccountId: a.defaultPaymentAccountId,
   }));
 
   return (
@@ -1350,7 +1358,7 @@ export default function SettingsForm({
                 </div>
               </div>
 
-              {addAccType !== "credit_card" && (
+              {addAccType !== "credit_card" ? (
                 <div className="flex flex-col gap-1.5">
                   <Label className="text-xs font-semibold">Initial Balance</Label>
                   <Input
@@ -1362,6 +1370,32 @@ export default function SettingsForm({
                     placeholder="0"
                     required
                   />
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1.5 animate-in fade-in-50 duration-200">
+                  <Label className="text-xs font-semibold">Default Payment Source</Label>
+                  <Select
+                    value={addAccDefaultPaymentAccountId}
+                    onValueChange={setAddAccDefaultPaymentAccountId}
+                  >
+                    <SelectTrigger className="h-10 text-sm">
+                      <SelectValue placeholder="Select payment account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accountList
+                        .filter(
+                          (acc) =>
+                            acc.currency === addAccCurrency &&
+                            acc.type !== "credit_card" &&
+                            acc.isActive
+                        )
+                        .map((acc) => (
+                          <SelectItem key={acc.id} value={acc.id} className="text-xs">
+                            {acc.name} ({formatCurrency(acc.balance, acc.currency)})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
             </div>
@@ -1476,7 +1510,7 @@ export default function SettingsForm({
                 </div>
               </div>
 
-              {editAccType !== "credit_card" && (
+              {editAccType !== "credit_card" ? (
                 <div className="flex flex-col gap-1.5">
                   <Label className="text-xs font-semibold">Balance</Label>
                   <Input
@@ -1488,6 +1522,33 @@ export default function SettingsForm({
                     placeholder="0"
                     required
                   />
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1.5 animate-in fade-in-50 duration-200">
+                  <Label className="text-xs font-semibold">Default Payment Source</Label>
+                  <Select
+                    value={editAccDefaultPaymentAccountId}
+                    onValueChange={setEditAccDefaultPaymentAccountId}
+                  >
+                    <SelectTrigger className="h-10 text-sm">
+                      <SelectValue placeholder="Select payment account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {accountList
+                        .filter(
+                          (acc) =>
+                            acc.currency === editAccCurrency &&
+                            acc.id !== editingAccount?.id &&
+                            acc.type !== "credit_card" &&
+                            acc.isActive
+                        )
+                        .map((acc) => (
+                          <SelectItem key={acc.id} value={acc.id} className="text-xs">
+                            {acc.name} ({formatCurrency(acc.balance, acc.currency)})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
 
