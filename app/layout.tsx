@@ -4,7 +4,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 import { SpeedInsights } from "@vercel/speed-insights/next";
-
+import { Analytics } from "@vercel/analytics/next";
 import LoadingProvider from "@/components/layout/LoadingProvider";
 import PwaRegister from "@/components/layout/PwaRegister";
 
@@ -61,6 +61,7 @@ export default function RootLayout({
         <PwaRegister />
         <Toaster />
         <SpeedInsights />
+        <Analytics />
       </body>
     </html>
   );
