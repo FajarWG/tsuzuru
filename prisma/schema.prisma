@@ -21,15 +21,16 @@ model User {
 }
 
 model Account {
-  id           String        @id @default(cuid())
-  userId       String
-  name         String        // "Jago", "Yucho Bank", etc.
-  currency     String        // "IDR" or "JPY"
-  balance      Float         @default(0)
-  type         String        // "bank", "ewallet", "investment"
-  isActive     Boolean       @default(true)
-  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
+  id                      String        @id @default(cuid())
+  userId                  String
+  name                    String        // "Jago", "Yucho Bank", etc.
+  currency                String        // "IDR" or "JPY"
+  balance                 Float         @default(0)
+  type                    String        // "bank", "ewallet", "investment"
+  isActive                Boolean       @default(true)
+  defaultPaymentAccountId String?
+  user                    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions            Transaction[]
 }
 
 model Transaction {

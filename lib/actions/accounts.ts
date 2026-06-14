@@ -83,6 +83,7 @@ export async function createAccountAction(data: {
   currency: string;
   balance: number;
   type: string;
+  defaultPaymentAccountId?: string | null;
 }) {
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Unauthorized" };
@@ -97,6 +98,7 @@ export async function createAccountAction(data: {
         balance: data.balance,
         type: data.type,
         isActive: true,
+        defaultPaymentAccountId: data.type === "credit_card" ? data.defaultPaymentAccountId || null : null,
       },
     });
 
@@ -118,6 +120,7 @@ export async function updateAccountAction(
     balance: number;
     type: string;
     isActive: boolean;
+    defaultPaymentAccountId?: string | null;
   }
 ) {
   const session = await auth();
@@ -133,6 +136,7 @@ export async function updateAccountAction(
         balance: data.balance,
         type: data.type,
         isActive: data.isActive,
+        defaultPaymentAccountId: data.type === "credit_card" ? data.defaultPaymentAccountId || null : null,
       },
     });
 
@@ -157,6 +161,10 @@ export async function deleteAccountAction(accountId: string) {
     await prisma.$transaction([
       prisma.monthlyTemplate.deleteMany({
         where: { accountId, userId },
+      }),
+      prisma.account.updateMany({
+        where: { defaultPaymentAccountId: accountId, userId },
+        data: { defaultPaymentAccountId: null },
       }),
       prisma.account.delete({
         where: { id: accountId, userId },

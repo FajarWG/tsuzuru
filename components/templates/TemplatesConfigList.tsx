@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { formatJPY, formatIDR, formatInputAmount, parseInputAmount } from "@/lib/format";
+import {
+  formatJPY,
+  formatIDR,
+  formatInputAmount,
+  parseInputAmount,
+} from "@/lib/format";
 import {
   markTemplatePaidAction,
   updateTemplateAction,
@@ -59,6 +64,7 @@ interface AccountItem {
   balance: number;
   type: string;
   isActive: boolean;
+  defaultPaymentAccountId?: string | null;
 }
 
 interface TemplatesConfigListProps {
@@ -110,7 +116,10 @@ export default function TemplatesConfigList({
   const [paySuccessId, setPaySuccessId] = useState<string | null>(null);
   const [paySourceAccountId, setPaySourceAccountId] = useState("");
   const [payoffAmount, setPayoffAmount] = useState("");
-  const isPayingItemCc = payingItem && 'isCreditCardBill' in payingItem && (payingItem as any).isCreditCardBill;
+  const isPayingItemCc =
+    payingItem &&
+    "isCreditCardBill" in payingItem &&
+    (payingItem as any).isCreditCardBill;
 
   // --- Create dialog handlers ---
   const handleCreateBill = async () => {
@@ -142,8 +151,8 @@ export default function TemplatesConfigList({
         toast.success("Bill created successfully");
         setItems((prev) =>
           [...prev, res.template as TemplateItem].sort((a, b) =>
-            a.name.localeCompare(b.name)
-          )
+            a.name.localeCompare(b.name),
+          ),
         );
         setCreateOpen(false);
         setCreateName("");
@@ -209,8 +218,8 @@ export default function TemplatesConfigList({
                   isActive: editIsActive,
                   intervalMonths: parseInt(editIntervalMonths),
                 }
-              : t
-          )
+              : t,
+          ),
         );
         closeEdit();
       } else {
@@ -251,15 +260,24 @@ export default function TemplatesConfigList({
   // --- Mark as Paid handlers ---
   const openPay = (item: TemplateItem) => {
     setPayingItem(item);
-    const isCc = 'isCreditCardBill' in item && (item as any).isCreditCardBill;
+    const isCc = "isCreditCardBill" in item && (item as any).isCreditCardBill;
     if (isCc) {
-      const defAcc = accounts.find(
-        (a) => a.currency === item.currency && a.type !== "credit_card" && a.isActive
+      const ccAcc = accounts.find(
+        (a) => a.id === (item as any).creditCardAccountId,
       );
+      const configuredDefaultId = ccAcc?.defaultPaymentAccountId;
+      const defAcc =
+        accounts.find((a) => a.id === configuredDefaultId) ||
+        accounts.find(
+          (a) =>
+            a.currency === item.currency &&
+            a.type !== "credit_card" &&
+            a.isActive,
+        );
       setPaySourceAccountId(defAcc?.id || "");
       setPayoffAmount(formatInputAmount(item.amount));
     } else {
-      setPaySourceAccountId("");
+      setPaySourceAccountId(item.accountId || "");
       setPayoffAmount("");
     }
   };
@@ -273,7 +291,8 @@ export default function TemplatesConfigList({
   const handleMarkPaid = async () => {
     if (!payingItem) return;
 
-    const isCc = 'isCreditCardBill' in payingItem && (payingItem as any).isCreditCardBill;
+    const isCc =
+      "isCreditCardBill" in payingItem && (payingItem as any).isCreditCardBill;
     const customAmount = isCc ? parseInputAmount(payoffAmount) : undefined;
 
     if (isCc && (isNaN(customAmount!) || customAmount! <= 0)) {
@@ -284,7 +303,11 @@ export default function TemplatesConfigList({
     setIsPayingId(payingItem.id);
 
     try {
-      const res = await markTemplatePaidAction(payingItem.id, paySourceAccountId || undefined, customAmount);
+      const res = await markTemplatePaidAction(
+        payingItem.id,
+        paySourceAccountId || undefined,
+        customAmount,
+      );
       if (res.success) {
         toast.success("Bill marked as paid");
         setPaySuccessId(payingItem.id);
@@ -302,14 +325,16 @@ export default function TemplatesConfigList({
   };
 
   // Note: We don't return early if items.length === 0, because we want to allow users to add new bills!
-  
+
   return (
     <div className="flex flex-col gap-1">
       {!hideHeader && (
         <div className="flex justify-between items-center pb-2 border-b border-border/20 mb-4">
           <div className="flex items-center gap-2">
             <IconCalendarRepeat className="size-4 text-primary" />
-            <h2 className="text-sm font-bold text-foreground">Recurring Bills</h2>
+            <h2 className="text-sm font-bold text-foreground">
+              Recurring Bills
+            </h2>
           </div>
           <Button
             onClick={() => {
@@ -333,7 +358,10 @@ export default function TemplatesConfigList({
         {(() => {
           // Generate Credit Card bills dynamically from accounts with debt (balance < 0)
           const ccBills = accounts
-            .filter((acc) => acc.type === "credit_card" && acc.isActive && acc.balance < 0)
+            .filter(
+              (acc) =>
+                acc.type === "credit_card" && acc.isActive && acc.balance < 0,
+            )
             .map((acc) => ({
               id: `cc-bill-${acc.id}`,
               name: `Credit Card Bill: ${acc.name}`,
@@ -346,70 +374,102 @@ export default function TemplatesConfigList({
               creditCardAccountId: acc.id,
             }));
 
-          const allBills = [...items, ...ccBills];
+          const allBills = [...ccBills, ...items];
 
           if (allBills.length === 0) {
             return (
               <div className="text-center text-xs text-muted-foreground py-6">
-                No recurring bills configured. Click &quot;Add Bill&quot; to create one.
+                No recurring bills configured. Click &quot;Add Bill&quot; to
+                create one.
               </div>
             );
           }
 
           return allBills.map((item) => {
-            const isCreditCardBill = 'isCreditCardBill' in item && (item as any).isCreditCardBill;
+            const isCreditCardBill =
+              "isCreditCardBill" in item && (item as any).isCreditCardBill;
             const linkedAccount = accounts.find((a) => a.id === item.accountId);
             const monthlyEquivalent =
-              item.intervalMonths > 1 ? item.amount / item.intervalMonths : null;
+              item.intervalMonths > 1
+                ? item.amount / item.intervalMonths
+                : null;
             const isPaying = isPayingId === item.id;
             const justPaid = paySuccessId === item.id;
 
-            // Find default source account for credit card bill
-            const defaultSourceAccount = isCreditCardBill
-              ? accounts.find(
-                  (a) => a.currency === item.currency && a.type !== "credit_card" && a.isActive
-                )
-              : null;
-
             return (
-              <div key={item.id} className="py-2 flex items-center justify-between gap-3 text-xs">
+              <div
+                key={item.id}
+                className={cn(
+                  "py-2 flex items-center justify-between gap-3 text-xs",
+                  isCreditCardBill &&
+                    "bg-rose-500/[0.03] dark:bg-rose-500/[0.015] px-1 [box-shadow:-3px_0_0_0_rgb(244_63_94_/_0.5)] my-1 first:mt-0 last:mb-0",
+                )}
+              >
                 <div className="flex flex-col gap-0.5 flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-xs font-semibold text-foreground truncate">
                       {item.name}
                     </span>
                     {!item.isActive && (
-                      <Badge variant="secondary" className="text-[8px] h-3.5 px-1 font-normal">
+                      <Badge
+                        variant="secondary"
+                        className="text-[8px] h-3.5 px-1 font-normal"
+                      >
                         Inactive
                       </Badge>
                     )}
                     {item.intervalMonths > 1 && (
-                      <Badge variant="outline" className="text-[8px] h-3.5 px-1 gap-0.5 font-normal">
+                      <Badge
+                        variant="outline"
+                        className="text-[8px] h-3.5 px-1 gap-0.5 font-normal"
+                      >
                         <IconCalendarRepeat className="size-2" />
-                        {INTERVAL_OPTIONS.find((o) => o.value === String(item.intervalMonths))?.label.replace("Every ", "") || `${item.intervalMonths}mo`}
+                        {INTERVAL_OPTIONS.find(
+                          (o) => o.value === String(item.intervalMonths),
+                        )?.label.replace("Every ", "") ||
+                          `${item.intervalMonths}mo`}
                       </Badge>
                     )}
                     {isCreditCardBill && (
-                      <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-rose-500/10 text-rose-600 dark:text-rose-400 border-none font-semibold">
-                        Auto-generated
+                      <Badge
+                        variant="outline"
+                        className="text-[8px] h-3.5 px-1 bg-rose-500/10 text-rose-600 dark:text-rose-400 border-none font-semibold"
+                      >
+                        Auto-generated (
+                        {(() => {
+                          const now = new Date();
+                          const mm = String(now.getMonth() + 1).padStart(
+                            2,
+                            "0",
+                          );
+                          const yy = String(now.getFullYear()).slice(-2);
+                          return `${mm}/${yy}`;
+                        })()}
+                        )
                       </Badge>
                     )}
                   </div>
-                  <span className="text-[10px] text-muted-foreground">
-                    {isCreditCardBill
-                      ? `Pay from: ${defaultSourceAccount?.name || "select when paying"}`
-                      : (linkedAccount?.name || "Unknown account")}
-                  </span>
+                  {!isCreditCardBill && (
+                    <span className="text-[10px] text-muted-foreground">
+                      {linkedAccount?.name || "Unknown account"}
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3 shrink-0">
                   <div className="flex flex-col items-end min-w-0 select-none">
                     <span className="text-xs font-bold font-sans text-foreground">
-                      {item.currency === "JPY" ? formatJPY(item.amount) : formatIDR(item.amount)}
+                      {item.currency === "JPY"
+                        ? formatJPY(item.amount)
+                        : formatIDR(item.amount)}
                     </span>
                     {monthlyEquivalent !== null && (
                       <span className="text-[9px] text-muted-foreground">
-                        ≈ {item.currency === "JPY" ? formatJPY(monthlyEquivalent) : formatIDR(monthlyEquivalent)}/mo
+                        ≈{" "}
+                        {item.currency === "JPY"
+                          ? formatJPY(monthlyEquivalent)
+                          : formatIDR(monthlyEquivalent)}
+                        /mo
                       </span>
                     )}
                   </div>
@@ -421,7 +481,8 @@ export default function TemplatesConfigList({
                         variant="outline"
                         className={cn(
                           "gap-1 cursor-pointer font-semibold",
-                          justPaid && "border-primary/40 text-primary bg-primary/5"
+                          justPaid &&
+                            "border-primary/40 text-primary bg-primary/5",
                         )}
                         onClick={() => openPay(item)}
                         disabled={isPaying || justPaid}
@@ -462,18 +523,22 @@ export default function TemplatesConfigList({
       </div>
 
       {/* ===== Create Dialog ===== */}
-      <Dialog open={createOpen} onOpenChange={(open) => !open && setCreateOpen(false)}>
+      <Dialog
+        open={createOpen}
+        onOpenChange={(open) => !open && setCreateOpen(false)}
+      >
         <DialogContent className="max-w-[360px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-sans">Create Recurring Bill</DialogTitle>
+              <DialogTitle className="font-sans">
+                Create Recurring Bill
+              </DialogTitle>
               <DialogDescription className="text-xs">
                 Add a recurring bill like rent or utilities.
               </DialogDescription>
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
-
               {/* Bill Name */}
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs font-semibold">Bill Name</Label>
@@ -492,7 +557,9 @@ export default function TemplatesConfigList({
                   type="text"
                   inputMode="numeric"
                   value={createAmount}
-                  onChange={(e) => setCreateAmount(formatInputAmount(e.target.value))}
+                  onChange={(e) =>
+                    setCreateAmount(formatInputAmount(e.target.value))
+                  }
                   className="h-10 font-semibold"
                   placeholder="0"
                 />
@@ -500,14 +567,23 @@ export default function TemplatesConfigList({
 
               {/* Interval */}
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold">Billing Frequency</Label>
-                <Select value={createIntervalMonths} onValueChange={setCreateIntervalMonths}>
+                <Label className="text-xs font-semibold">
+                  Billing Frequency
+                </Label>
+                <Select
+                  value={createIntervalMonths}
+                  onValueChange={setCreateIntervalMonths}
+                >
                   <SelectTrigger className="h-10 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {INTERVAL_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value} className="text-sm">
+                      <SelectItem
+                        key={o.value}
+                        value={o.value}
+                        className="text-sm"
+                      >
                         {o.label}
                       </SelectItem>
                     ))}
@@ -519,14 +595,23 @@ export default function TemplatesConfigList({
 
               {/* Account */}
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold">Deduct From Account</Label>
-                <Select value={createAccountId} onValueChange={setCreateAccountId}>
+                <Label className="text-xs font-semibold">
+                  Deduct From Account
+                </Label>
+                <Select
+                  value={createAccountId}
+                  onValueChange={setCreateAccountId}
+                >
                   <SelectTrigger className="h-10 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {accounts.map((acc) => (
-                      <SelectItem key={acc.id} value={acc.id} className="text-sm">
+                      <SelectItem
+                        key={acc.id}
+                        value={acc.id}
+                        className="text-sm"
+                      >
                         {acc.name} ({acc.currency})
                       </SelectItem>
                     ))}
@@ -536,11 +621,26 @@ export default function TemplatesConfigList({
             </div>
 
             <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
-              <Button variant="outline" size="sm" onClick={() => setCreateOpen(false)} disabled={isCreating} className="cursor-pointer">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCreateOpen(false)}
+                disabled={isCreating}
+                className="cursor-pointer"
+              >
                 Cancel
               </Button>
-              <Button size="sm" onClick={handleCreateBill} disabled={isCreating} className="min-w-[72px] cursor-pointer">
-                {isCreating ? <IconLoader className="size-4 animate-spin" /> : "Create"}
+              <Button
+                size="sm"
+                onClick={handleCreateBill}
+                disabled={isCreating}
+                className="min-w-[72px] cursor-pointer"
+              >
+                {isCreating ? (
+                  <IconLoader className="size-4 animate-spin" />
+                ) : (
+                  "Create"
+                )}
               </Button>
             </DialogFooter>
           </div>
@@ -548,7 +648,10 @@ export default function TemplatesConfigList({
       </Dialog>
 
       {/* ===== Edit Dialog ===== */}
-      <Dialog open={!!editingItem} onOpenChange={(open) => !open && closeEdit()}>
+      <Dialog
+        open={!!editingItem}
+        onOpenChange={(open) => !open && closeEdit()}
+      >
         <DialogContent className="max-w-[360px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
@@ -559,7 +662,6 @@ export default function TemplatesConfigList({
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
-
               {/* Bill Name */}
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs font-semibold">Bill Name</Label>
@@ -584,7 +686,9 @@ export default function TemplatesConfigList({
                     type="text"
                     inputMode="numeric"
                     value={editAmount}
-                    onChange={(e) => setEditAmount(formatInputAmount(e.target.value))}
+                    onChange={(e) =>
+                      setEditAmount(formatInputAmount(e.target.value))
+                    }
                     className="pl-8 h-10 font-semibold"
                     placeholder="0"
                   />
@@ -593,44 +697,66 @@ export default function TemplatesConfigList({
 
               {/* Interval */}
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold">Billing Frequency</Label>
-                <Select value={editIntervalMonths} onValueChange={setEditIntervalMonths}>
+                <Label className="text-xs font-semibold">
+                  Billing Frequency
+                </Label>
+                <Select
+                  value={editIntervalMonths}
+                  onValueChange={setEditIntervalMonths}
+                >
                   <SelectTrigger className="h-10 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {INTERVAL_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value} className="text-sm">
+                      <SelectItem
+                        key={o.value}
+                        value={o.value}
+                        className="text-sm"
+                      >
                         {o.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {parseInt(editIntervalMonths) > 1 && parseFloat(editAmount) > 0 && (
-                  <p className="text-[10px] text-muted-foreground pl-1">
-                    Monthly equivalent:{" "}
-                    <span className="font-semibold text-foreground">
-                      {editingItem?.currency === "JPY"
-                        ? formatJPY(parseFloat(editAmount) / parseInt(editIntervalMonths))
-                        : formatIDR(parseFloat(editAmount) / parseInt(editIntervalMonths))}
-                      /mo
-                    </span>
-                  </p>
-                )}
+                {parseInt(editIntervalMonths) > 1 &&
+                  parseFloat(editAmount) > 0 && (
+                    <p className="text-[10px] text-muted-foreground pl-1">
+                      Monthly equivalent:{" "}
+                      <span className="font-semibold text-foreground">
+                        {editingItem?.currency === "JPY"
+                          ? formatJPY(
+                              parseFloat(editAmount) /
+                                parseInt(editIntervalMonths),
+                            )
+                          : formatIDR(
+                              parseFloat(editAmount) /
+                                parseInt(editIntervalMonths),
+                            )}
+                        /mo
+                      </span>
+                    </p>
+                  )}
               </div>
 
               <Separator />
 
               {/* Account */}
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold">Deduct From Account</Label>
+                <Label className="text-xs font-semibold">
+                  Deduct From Account
+                </Label>
                 <Select value={editAccountId} onValueChange={setEditAccountId}>
                   <SelectTrigger className="h-10 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {accounts.map((acc) => (
-                      <SelectItem key={acc.id} value={acc.id} className="text-sm">
+                      <SelectItem
+                        key={acc.id}
+                        value={acc.id}
+                        className="text-sm"
+                      >
                         {acc.name} ({acc.currency})
                       </SelectItem>
                     ))}
@@ -641,7 +767,10 @@ export default function TemplatesConfigList({
               {/* Active */}
               <div className="flex items-center justify-between py-1">
                 <Label className="text-xs font-semibold">Active</Label>
-                <Switch checked={editIsActive} onCheckedChange={setEditIsActive} />
+                <Switch
+                  checked={editIsActive}
+                  onCheckedChange={setEditIsActive}
+                />
               </div>
             </div>
 
@@ -661,11 +790,26 @@ export default function TemplatesConfigList({
                 <IconTrash className="size-4 mr-1" /> Delete
               </Button>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={closeEdit} disabled={isSavingEdit} className="cursor-pointer">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={closeEdit}
+                  disabled={isSavingEdit}
+                  className="cursor-pointer"
+                >
                   Cancel
                 </Button>
-                <Button size="sm" onClick={handleSaveEdit} disabled={isSavingEdit} className="min-w-[72px] cursor-pointer">
-                  {isSavingEdit ? <IconLoader className="size-4 animate-spin" /> : "Save"}
+                <Button
+                  size="sm"
+                  onClick={handleSaveEdit}
+                  disabled={isSavingEdit}
+                  className="min-w-[72px] cursor-pointer"
+                >
+                  {isSavingEdit ? (
+                    <IconLoader className="size-4 animate-spin" />
+                  ) : (
+                    "Save"
+                  )}
                 </Button>
               </div>
             </DialogFooter>
@@ -674,25 +818,37 @@ export default function TemplatesConfigList({
       </Dialog>
 
       {/* ===== Delete Confirm Dialog ===== */}
-      <Dialog open={!!deletingItem} onOpenChange={(open) => !open && setDeletingItem(null)}>
+      <Dialog
+        open={!!deletingItem}
+        onOpenChange={(open) => !open && setDeletingItem(null)}
+      >
         <DialogContent className="max-w-[340px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-sans">Delete Recurring Bill</DialogTitle>
+              <DialogTitle className="font-sans">
+                Delete Recurring Bill
+              </DialogTitle>
               <DialogDescription className="text-sm leading-relaxed">
-                Are you sure you want to delete the recurring bill for <strong>{deletingItem?.name}</strong>?
+                Are you sure you want to delete the recurring bill for{" "}
+                <strong>{deletingItem?.name}</strong>?
                 <br />
                 <span className="text-xs text-muted-foreground mt-1 block">
-                  This template will be permanently removed. History of past paid transactions will not be deleted.
+                  This template will be permanently removed. History of past
+                  paid transactions will not be deleted.
                 </span>
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
-            </div>
+            <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0"></div>
 
             <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
-              <Button variant="outline" size="sm" onClick={() => setDeletingItem(null)} disabled={isDeleting} className="cursor-pointer">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDeletingItem(null)}
+                disabled={isDeleting}
+                className="cursor-pointer"
+              >
                 Cancel
               </Button>
               <Button
@@ -717,7 +873,7 @@ export default function TemplatesConfigList({
       <Dialog open={!!payingItem} onOpenChange={(open) => !open && closePay()}>
         <DialogContent className="max-w-[340px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
-            <DialogHeader className={cn("pb-4 shrink-0", isPayingItemCc && "border-b border-border/20")}>
+            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
               <DialogTitle className="font-sans">Mark as Paid</DialogTitle>
               <DialogDescription className="text-sm leading-relaxed">
                 Record payment of{" "}
@@ -731,50 +887,82 @@ export default function TemplatesConfigList({
                 <span className="text-xs text-muted-foreground mt-1 block">
                   {isPayingItemCc
                     ? "This will pay off the credit card and record a dual-entry transfer transaction."
-                    : "This will deduct the full amount from the linked account and record it in history."}
+                    : "This will deduct the full amount from the selected account and record it in history."}
                 </span>
               </DialogDescription>
             </DialogHeader>
 
-            {isPayingItemCc && (
+            {payingItem && (
               <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
                 <div className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <Label className="text-xs font-semibold">Payoff Amount</Label>
-                    <div className="relative flex items-center">
-                      <span className="absolute left-3 text-sm font-bold text-muted-foreground">
-                        {payingItem.currency === "JPY" ? "¥" : "Rp"}
+                  {isPayingItemCc && (
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs font-semibold">
+                        Payoff Amount
+                      </Label>
+                      <div className="relative flex items-center">
+                        <span className="absolute left-3 text-sm font-bold text-muted-foreground">
+                          {payingItem.currency === "JPY" ? "¥" : "Rp"}
+                        </span>
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          value={payoffAmount}
+                          onChange={(e) =>
+                            setPayoffAmount(formatInputAmount(e.target.value))
+                          }
+                          className={cn(
+                            payingItem.currency === "JPY" ? "pl-7" : "pl-9",
+                            "h-10 font-semibold text-sm",
+                          )}
+                          placeholder="e.g. 500,000"
+                          required
+                        />
+                      </div>
+                      <span className="text-[10px] text-muted-foreground leading-normal">
+                        Default is the current outstanding balance. You can
+                        enter a custom payoff amount (e.g. last month's
+                        statement balance).
                       </span>
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        value={payoffAmount}
-                        onChange={(e) => setPayoffAmount(formatInputAmount(e.target.value))}
-                        className={cn(
-                          payingItem.currency === "JPY" ? "pl-7" : "pl-9",
-                          "h-10 font-semibold text-sm"
-                        )}
-                        placeholder="e.g. 500,000"
-                        required
-                      />
                     </div>
-                    <span className="text-[10px] text-muted-foreground leading-normal">
-                      Default is the current outstanding balance. You can enter a custom payoff amount (e.g. last month's statement balance).
-                    </span>
-                  </div>
+                  )}
 
                   <div className="flex flex-col gap-1.5">
-                    <Label className="text-xs font-semibold">Deduct payment from account</Label>
-                    <Select value={paySourceAccountId} onValueChange={setPaySourceAccountId}>
+                    <Label className="text-xs font-semibold">
+                      {isPayingItemCc
+                        ? "Deduct payment from account"
+                        : "Pay from account"}
+                    </Label>
+                    <Select
+                      value={paySourceAccountId}
+                      onValueChange={setPaySourceAccountId}
+                    >
                       <SelectTrigger className="h-10 text-sm">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {accounts
-                          .filter((acc) => acc.currency === payingItem.currency && acc.type !== "credit_card" && acc.isActive)
+                          .filter((acc) => {
+                            if (
+                              acc.currency !== payingItem.currency ||
+                              !acc.isActive
+                            )
+                              return false;
+                            if (isPayingItemCc && acc.type === "credit_card")
+                              return false;
+                            return true;
+                          })
                           .map((acc) => (
-                            <SelectItem key={acc.id} value={acc.id} className="text-xs">
-                              {acc.name} ({acc.currency === "JPY" ? formatJPY(acc.balance) : formatIDR(acc.balance)})
+                            <SelectItem
+                              key={acc.id}
+                              value={acc.id}
+                              className="text-xs"
+                            >
+                              {acc.name} (
+                              {acc.currency === "JPY"
+                                ? formatJPY(acc.balance)
+                                : formatIDR(acc.balance)}
+                              )
                             </SelectItem>
                           ))}
                       </SelectContent>
@@ -784,14 +972,24 @@ export default function TemplatesConfigList({
               </div>
             )}
 
-            <DialogFooter className={cn("shrink-0 pt-4 gap-2", isPayingItemCc && "border-t border-border/20")}>
-              <Button variant="outline" size="sm" onClick={closePay} disabled={!!isPayingId} className="cursor-pointer">
+            <DialogFooter className="shrink-0 pt-4 gap-2 border-t border-border/20">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={closePay}
+                disabled={!!isPayingId}
+                className="cursor-pointer"
+              >
                 Cancel
               </Button>
               <Button
                 size="sm"
                 onClick={handleMarkPaid}
-                disabled={!!isPayingId || (isPayingItemCc && (!paySourceAccountId || !payoffAmount))}
+                disabled={
+                  !!isPayingId ||
+                  !paySourceAccountId ||
+                  (isPayingItemCc && !payoffAmount)
+                }
                 className="min-w-[100px] cursor-pointer"
               >
                 {isPayingId ? (

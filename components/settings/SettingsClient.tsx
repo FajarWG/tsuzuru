@@ -20,6 +20,7 @@ interface AccountItem {
   balance: number;
   type: string;
   isActive: boolean;
+  defaultPaymentAccountId?: string | null;
 }
 
 interface TemplateItem {
