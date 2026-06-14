@@ -109,6 +109,23 @@ export default function BillFriendsClient({ userId }: BillFriendsClientProps) {
     syncDataRef.current();
   }, [isMounted]);
 
+  // 3.5. Trigger sync on focus / visibility change
+  useEffect(() => {
+    if (!isMounted) return;
+
+    const handleFocus = () => {
+      syncDataRef.current();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+    };
+  }, [isMounted]);
+
   // 4. Trigger sync on bill-updated event
   useEffect(() => {
     if (!isMounted) return;

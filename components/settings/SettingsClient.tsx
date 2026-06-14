@@ -107,10 +107,27 @@ export default function SettingsClient({ userId, defaultTab = "templates" }: Set
     };
   }, [data]);
 
-  // 3. Trigger sync on mount
+  // 3. Trigger sync on mount and defaultTab change
   useEffect(() => {
     if (!isMounted) return;
     syncDataRef.current();
+  }, [isMounted, defaultTab]);
+
+  // 3.5. Trigger sync on focus / visibility change
+  useEffect(() => {
+    if (!isMounted) return;
+
+    const handleFocus = () => {
+      syncDataRef.current();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+    };
   }, [isMounted]);
 
   // 4. Trigger sync on custom events (such as adding transaction or editing bills)
@@ -161,6 +178,7 @@ export default function SettingsClient({ userId, defaultTab = "templates" }: Set
         budgetLimits={budgetLimits}
         profile={profile}
         defaultTab={defaultTab}
+        onRefresh={() => syncDataRef.current()}
       />
     </div>
   );

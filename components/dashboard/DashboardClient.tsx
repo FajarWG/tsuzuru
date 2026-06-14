@@ -238,6 +238,23 @@ export default function DashboardClient() {
     syncDataRef.current();
   }, [isMounted]);
 
+  // 3.5. Trigger sync on focus / visibility change
+  useEffect(() => {
+    if (!isMounted) return;
+
+    const handleFocus = () => {
+      syncDataRef.current();
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+    };
+  }, [isMounted]);
+
   // 4. Trigger sync on transaction-added event
   useEffect(() => {
     if (!isMounted) return;
