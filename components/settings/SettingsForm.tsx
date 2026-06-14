@@ -108,6 +108,7 @@ interface SettingsFormProps {
     image?: string | null;
   };
   defaultTab?: string;
+  onRefresh?: () => void;
 }
 
 function formatCurrency(amount: number, currency: string) {
@@ -162,6 +163,7 @@ export default function SettingsForm({
   budgetLimits,
   profile,
   defaultTab = "templates",
+  onRefresh,
 }: SettingsFormProps) {
   // Budget Limits CRUD states
   const [addBudgetOpen, setAddBudgetOpen] = useState(false);
@@ -182,7 +184,8 @@ export default function SettingsForm({
   // Recommendation Calculator state
   const [recommendationOpen, setRecommendationOpen] = useState(false);
   const [salaryInput, setSalaryInput] = useState("");
-  const [savingsRate, setSavingsRate] = useState<"20" | "30">("20");
+  const [savingsType, setSavingsType] = useState<"percentage" | "nominal">("percentage");
+  const [savingsValue, setSavingsValue] = useState("20");
   const [isApplyingRecommendation, setIsApplyingRecommendation] = useState(false);
 
   // Collapse states for profile tab cards
@@ -352,10 +355,31 @@ export default function SettingsForm({
       return;
     }
 
-    const isSavings30 = savingsRate === "30";
-    const monthlyRec = Math.round(salaryVal * 0.50);
-    const pocketRec = Math.round(salaryVal * (isSavings30 ? 0.15 : 0.20));
-    const shoppingRec = Math.round(salaryVal * (isSavings30 ? 0.05 : 0.10));
+    let recSavings = 0;
+    if (savingsType === "percentage") {
+      const pct = parseFloat(savingsValue) || 0;
+      const cappedPct = Math.min(Math.max(pct, 0), 100);
+      recSavings = Math.round(salaryVal * (cappedPct / 100));
+    } else {
+      const nominal = parseInputAmount(savingsValue) || 0;
+      recSavings = Math.min(Math.max(nominal, 0), salaryVal);
+    }
+
+    const rem = salaryVal - recSavings;
+    let monthlyRec = 0;
+    let pocketRec = 0;
+    let shoppingRec = 0;
+
+    if (rem >= salaryVal * 0.5) {
+      monthlyRec = Math.round(salaryVal * 0.5);
+      const wants = rem - monthlyRec;
+      pocketRec = Math.round(wants * (2 / 3));
+      shoppingRec = Math.round(wants * (1 / 3));
+    } else {
+      monthlyRec = Math.max(rem, 0);
+      pocketRec = 0;
+      shoppingRec = 0;
+    }
 
     const monthlyId = budgetLimits.find((b) => b.name === "monthly")?.id;
     const pocketId = budgetLimits.find((b) => b.name === "pocket_money")?.id;
@@ -558,7 +582,7 @@ export default function SettingsForm({
         transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.1 }}
         className="flex flex-col gap-4 flex-1"
       >
-        <Tabs key={defaultTab} defaultValue={defaultTab} className="gap-4">
+        <Tabs key={defaultTab} defaultValue={defaultTab} className="gap-4" onValueChange={() => onRefresh?.()}>
         <TabsList className="grid h-auto w-full grid-cols-3 rounded-2xl">
           <TabsTrigger value="templates" className="text-[10px] cursor-pointer">
             <IconCalendarRepeat className="size-3.5" />
@@ -670,7 +694,8 @@ export default function SettingsForm({
                 variant="outline"
                 onClick={() => {
                   setSalaryInput("");
-                  setSavingsRate("20");
+                  setSavingsType("percentage");
+                  setSavingsValue("20");
                   setRecommendationOpen(true);
                 }}
                 className="cursor-pointer gap-1.5 text-xs font-semibold"
@@ -1147,8 +1172,8 @@ export default function SettingsForm({
           if (!isApplyingRecommendation) setRecommendationOpen(open);
         }}
       >
-        <DialogContent className="max-w-[360px] rounded-2xl p-0">
-          <div className="flex flex-col p-5">
+        <DialogContent className="max-w-[360px] rounded-2xl p-0 max-h-[85vh] flex flex-col overflow-hidden">
+          <div className="flex flex-col flex-1 min-h-0 p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
               <DialogTitle className="font-sans">Budget Recommendation</DialogTitle>
               <DialogDescription className="text-xs">
@@ -1156,7 +1181,7 @@ export default function SettingsForm({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex flex-col gap-4 py-4">
+            <div className="flex-1 overflow-y-auto py-4 pr-1 flex flex-col gap-4 min-h-0">
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs font-semibold">Monthly Income / Salary</Label>
                 <div className="relative flex items-center">
@@ -1176,71 +1201,147 @@ export default function SettingsForm({
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold">Savings Target</Label>
-                <Select
-                  value={savingsRate}
-                  onValueChange={(val) => setSavingsRate(val as "20" | "30")}
-                >
-                  <SelectTrigger className="h-10 text-xs font-semibold">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="20" className="text-xs">
-                      20% Savings (Standard)
-                    </SelectItem>
-                    <SelectItem value="30" className="text-xs">
-                      30% Savings (Aggressive)
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label className="text-xs font-semibold">Savings Target Type</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSavingsType("percentage");
+                      setSavingsValue("20");
+                    }}
+                    className={cn(
+                      "h-9 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                      savingsType === "percentage"
+                        ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                        : "bg-background text-muted-foreground border-border hover:text-foreground"
+                    )}
+                  >
+                    Percentage (%)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSavingsType("nominal");
+                      const parsedSalary = parseInputAmount(salaryInput) || 0;
+                      setSavingsValue(formatInputAmount(Math.round(parsedSalary * 0.2).toString()));
+                    }}
+                    className={cn(
+                      "h-9 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                      savingsType === "nominal"
+                        ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                        : "bg-background text-muted-foreground border-border hover:text-foreground"
+                    )}
+                  >
+                    Nominal Amount
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">
+                  {savingsType === "percentage" ? "Savings Percentage" : "Savings Amount"}
+                </Label>
+                <div className="relative flex items-center">
+                  {savingsType === "percentage" ? (
+                    <>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={savingsValue}
+                        onChange={(e) => setSavingsValue(e.target.value)}
+                        className="h-10 font-semibold pr-8"
+                        placeholder="20"
+                        required
+                      />
+                      <span className="absolute right-3 text-sm font-bold text-muted-foreground">
+                        %
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="absolute left-3 text-sm font-bold text-muted-foreground">
+                        {budgetCurrencySymbol}
+                      </span>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={savingsValue}
+                        onChange={(e) => setSavingsValue(formatInputAmount(e.target.value))}
+                        className={cn(budgetCurrencyPadding, "h-10 font-semibold")}
+                        placeholder="40,000"
+                        required
+                      />
+                    </>
+                  )}
+                </div>
               </div>
 
               {parseInputAmount(salaryInput) > 0 && (() => {
                 const parsedSalary = parseInputAmount(salaryInput);
-                const isSavings30 = savingsRate === "30";
-                const monthlyPercent = 50;
-                const pocketPercent = isSavings30 ? 15 : 20;
-                const shoppingPercent = isSavings30 ? 5 : 10;
-                const savingsPercent = isSavings30 ? 30 : 20;
+                let parsedSavings = 0;
+                if (savingsType === "percentage") {
+                  const pct = parseFloat(savingsValue) || 0;
+                  parsedSavings = Math.round(parsedSalary * (pct / 100));
+                } else {
+                  parsedSavings = parseInputAmount(savingsValue) || 0;
+                }
 
-                const recommendedMonthly = Math.round(parsedSalary * (monthlyPercent / 100));
-                const recommendedPocket = Math.round(parsedSalary * (pocketPercent / 100));
-                const recommendedShopping = Math.round(parsedSalary * (shoppingPercent / 100));
-                const recommendedSavings = Math.round(parsedSalary * (savingsPercent / 100));
+                const rem = parsedSalary - parsedSavings;
+                let recMonthly = 0;
+                let recPocket = 0;
+                let recShopping = 0;
+
+                if (rem >= parsedSalary * 0.5) {
+                  recMonthly = Math.round(parsedSalary * 0.5);
+                  const wants = rem - recMonthly;
+                  recPocket = Math.round(wants * (2 / 3));
+                  recShopping = Math.round(wants * (1 / 3));
+                } else {
+                  recMonthly = Math.max(rem, 0);
+                  recPocket = 0;
+                  recShopping = 0;
+                }
+
+                const getPercentLabel = (val: number) => {
+                  if (!parsedSalary) return "0%";
+                  const pct = (val / parsedSalary) * 100;
+                  return pct % 1 === 0 ? `${pct}%` : `${pct.toFixed(1)}%`;
+                };
 
                 return (
-                  <div className="flex flex-col gap-2 p-3 bg-primary/5 border border-primary/10 rounded-xl mt-1">
-                    <span className="text-[10px] text-primary font-bold uppercase tracking-wider">
+                  <div className="flex flex-col gap-2 p-3 bg-primary/5 border border-primary/10 rounded-xl mt-1 shrink-0">
+                    <span className="text-[10px] text-primary font-bold uppercase tracking-wider font-sans">
                       Recommended Allocation:
                     </span>
                     
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-muted-foreground">Monthly Budget (Needs: {monthlyPercent}%)</span>
+                      <span className="text-muted-foreground">Monthly Expected Budget (Needs: {getPercentLabel(recMonthly)})</span>
                       <span className="font-bold text-foreground">
-                        {formatCurrency(recommendedMonthly, userSettings.budgetCurrency)}
+                        {formatCurrency(recMonthly, userSettings.budgetCurrency)}
                       </span>
                     </div>
                     
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-muted-foreground">Pocket Money (Wants: {pocketPercent}%)</span>
+                      <span className="text-muted-foreground">Pocket Money Limit (Wants: {getPercentLabel(recPocket)})</span>
                       <span className="font-bold text-foreground">
-                        {formatCurrency(recommendedPocket, userSettings.budgetCurrency)}
+                        {formatCurrency(recPocket, userSettings.budgetCurrency)}
                       </span>
                     </div>
                     
                     <div className="flex justify-between items-center text-xs">
-                      <span className="text-muted-foreground">Shopping (Wants: {shoppingPercent}%)</span>
+                      <span className="text-muted-foreground">Shopping Limit (Wants: {getPercentLabel(recShopping)})</span>
                       <span className="font-bold text-foreground">
-                        {formatCurrency(recommendedShopping, userSettings.budgetCurrency)}
+                        {formatCurrency(recShopping, userSettings.budgetCurrency)}
                       </span>
                     </div>
 
-                    <Separator className="my-1 opacity-50" />
+                    <div className="h-px bg-border my-1 opacity-50" />
 
                     <div className="flex justify-between items-center text-xs font-semibold text-emerald-600 dark:text-emerald-500">
-                      <span>Target Savings ({savingsPercent}%)</span>
+                      <span>Target Savings ({getPercentLabel(parsedSavings)})</span>
                       <span>
-                        {formatCurrency(recommendedSavings, userSettings.budgetCurrency)}
+                        {formatCurrency(parsedSavings, userSettings.budgetCurrency)}
                       </span>
                     </div>
                   </div>
@@ -1697,7 +1798,7 @@ export default function SettingsForm({
             <div className="flex-1 py-4 flex flex-col gap-4 min-h-0">
               <Input
                 value={resetConfirmText}
-                onChange={(e) => setResetConfirmText(e.target.value)}
+                onChange={(e) => setResetConfirmText(e.target.value.toUpperCase())}
                 placeholder="RESET"
                 className="h-10 text-center font-mono font-bold uppercase tracking-widest text-destructive"
               />

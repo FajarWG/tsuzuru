@@ -35,6 +35,9 @@ export const settingsRepository = {
       prisma.account.deleteMany({
         where: { userId },
       }),
+      prisma.budgetLimit.deleteMany({
+        where: { userId },
+      }),
       prisma.userSettings.update({
         where: { userId },
         data: {

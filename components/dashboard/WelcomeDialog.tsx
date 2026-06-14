@@ -30,6 +30,7 @@ import {
   IconPlus,
   IconTrash,
   IconBulb,
+  IconX,
 } from "@tabler/icons-react";
 import { completeOnboardingAction } from "@/lib/actions/settings";
 import { cn } from "@/lib/utils";
@@ -123,6 +124,15 @@ export default function WelcomeDialog({
 
   // Configuration States
   const [currency, setCurrency] = useState<"JPY" | "IDR">("JPY");
+  const budgetCurrencySymbol = currency === "JPY" ? "¥" : "Rp";
+  const budgetCurrencyPadding = currency === "JPY" ? "pl-7" : "pl-9";
+
+  const formatCurrency = (amount: number, curr: string) => {
+    return curr === "JPY"
+      ? `¥${Number(amount).toLocaleString()}`
+      : `Rp${Number(amount).toLocaleString("id-ID")}`;
+  };
+
   const [accounts, setAccounts] = useState<AccountOnboardingItem[]>([]);
   const [templates, setTemplates] = useState<TemplateOnboardingItem[]>([]);
 
@@ -156,6 +166,13 @@ export default function WelcomeDialog({
     useState<string[]>([]);
 
   const [showBudgetTips, setShowBudgetTips] = useState(false);
+  const [showRecommendationCalculator, setShowRecommendationCalculator] =
+    useState(false);
+  const [salaryInput, setSalaryInput] = useState("");
+  const [savingsType, setSavingsType] = useState<"percentage" | "nominal">(
+    "percentage",
+  );
+  const [savingsValue, setSavingsValue] = useState("20");
 
   useEffect(() => {
     if (!isOnboarded) {
@@ -385,18 +402,46 @@ export default function WelcomeDialog({
     toast.success("Bill templates selection updated!");
   };
 
-  const handleApplyBudgetRecommendations = () => {
-    if (currency === "JPY") {
-      setMonthlyBudget("150,000");
-      setPocketMoneyLimit("40,000");
-      setShoppingLimit("60,000");
-    } else {
-      setMonthlyBudget("10,000,000");
-      setPocketMoneyLimit("3,000,000");
-      setShoppingLimit("4,000,000");
+  const handleApplyOnboardingRecommendation = () => {
+    const salaryVal = parseInputAmount(salaryInput);
+    if (isNaN(salaryVal) || salaryVal <= 0) {
+      toast.error("Please enter a valid salary amount");
+      return;
     }
-    setShowBudgetTips(false);
-    toast.success("Recommended budget limits applied!");
+
+    let recSavings = 0;
+    if (savingsType === "percentage") {
+      const pct = parseFloat(savingsValue) || 0;
+      const cappedPct = Math.min(Math.max(pct, 0), 100);
+      recSavings = Math.round(salaryVal * (cappedPct / 100));
+    } else {
+      const nominal = parseInputAmount(savingsValue) || 0;
+      recSavings = Math.min(Math.max(nominal, 0), salaryVal);
+    }
+
+    const rem = salaryVal - recSavings;
+    let monthlyRec = 0;
+    let pocketRec = 0;
+    let shoppingRec = 0;
+
+    if (rem >= salaryVal * 0.5) {
+      monthlyRec = Math.round(salaryVal * 0.5);
+      const wants = rem - monthlyRec;
+      pocketRec = Math.round(wants * (2 / 3));
+      shoppingRec = Math.round(wants * (1 / 3));
+    } else {
+      monthlyRec = Math.max(rem, 0);
+      pocketRec = 0;
+      shoppingRec = 0;
+    }
+
+    setMonthlyBudget(formatInputAmount(monthlyRec.toString()));
+    setPocketMoneyLimit(formatInputAmount(pocketRec.toString()));
+    setShoppingLimit(formatInputAmount(shoppingRec.toString()));
+
+    toast.success("Recommended budget limits calculated and applied!");
+    setShowRecommendationCalculator(false);
+    setSalaryInput("");
   };
 
   const handleSubmit = async () => {
@@ -637,7 +682,7 @@ export default function WelcomeDialog({
 
                     <div className="flex flex-col gap-2">
                       {accounts.length === 0 ? (
-                        <div className="text-center py-6 border border-dashed border-border rounded-2xl bg-muted/10">
+                        <div className="text-center px-4 py-6 border border-dashed border-border rounded-2xl bg-muted/10">
                           <p className="text-[11px] text-muted-foreground font-semibold">
                             No accounts added yet.
                           </p>
@@ -726,25 +771,26 @@ export default function WelcomeDialog({
                           <IconPlus className="size-3.5" /> Add Custom Account
                         </Button>
                       ) : (
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-2 gap-1.5">
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             onClick={handleAddAccountClick}
-                            className="text-[10px] font-semibold tracking-wide border-dashed border-primary/40 text-primary hover:bg-primary/5 h-9 rounded-xl cursor-pointer flex items-center justify-center gap-1.5"
+                            className="text-[10px] font-semibold tracking-wide border-dashed border-primary/40 text-primary hover:bg-primary/5 h-9 rounded-xl cursor-pointer flex items-center justify-center gap-1 px-1.5 min-w-0"
                           >
-                            <IconPlus className="size-3.5" /> Add Custom
+                            <IconPlus className="size-3.5 shrink-0" />{" "}
+                            <span className="truncate">Add Custom</span>
                           </Button>
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
                             onClick={handleSelectRecommendationsClick}
-                            className="text-[10px] font-semibold tracking-wide border-dashed border-primary/40 text-primary hover:bg-primary/5 h-9 rounded-xl cursor-pointer flex items-center justify-center gap-1.5"
+                            className="text-[10px] font-semibold tracking-wide border-dashed border-primary/40 text-primary hover:bg-primary/5 h-9 rounded-xl cursor-pointer flex items-center justify-center gap-1 px-1.5 min-w-0"
                           >
-                            <IconCheck className="size-3.5" /> Select
-                            Recommendation
+                            <IconCheck className="size-3.5 shrink-0" />{" "}
+                            <span className="truncate">Recommendations</span>
                           </Button>
                         </div>
                       )}
@@ -877,20 +923,22 @@ export default function WelcomeDialog({
                     Explanation
                   </button>
 
-                  {/* Tip banner to fill empty space */}
-                  <div className="p-3 bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 rounded-2xl flex gap-2.5 items-start mt-2">
-                    <IconBulb className="size-5 text-amber-500 shrink-0 mt-0.5" />
-                    <div className="flex flex-col gap-0.5 text-left">
-                      <span className="text-[11px] font-bold text-foreground font-sans">
-                        Budget Planning Tip
-                      </span>
-                      <p className="text-[10px] text-muted-foreground leading-normal font-sans">
-                        Setting budget limits helps you track spending
-                        categories. You can apply our default balanced
-                        guidelines by clicking "See Explanation" above.
-                      </p>
-                    </div>
-                  </div>
+                  {/* Calculate Recommendation Button */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSalaryInput("");
+                      setSavingsType("percentage");
+                      setSavingsValue("20");
+                      setShowRecommendationCalculator(true);
+                    }}
+                    className="w-full text-[10px] font-semibold tracking-wide border-dashed border-primary/40 text-primary hover:bg-primary/5 h-9 rounded-xl cursor-pointer flex items-center justify-center gap-1.5 mt-2"
+                  >
+                    <IconActivity className="size-3.5 text-primary" /> Calculate
+                    Recommendation
+                  </Button>
                 </div>
 
                 <div className="pt-4 border-t border-border/20 flex gap-2.5 shrink-0">
@@ -1033,24 +1081,26 @@ export default function WelcomeDialog({
                       <IconPlus className="size-3.5" /> Add Custom Bill
                     </Button>
                   ) : (
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-1.5">
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         onClick={handleAddBillClick}
-                        className="text-[10px] font-semibold tracking-wide border-dashed border-primary/40 text-primary hover:bg-primary/5 h-9 rounded-xl cursor-pointer flex items-center justify-center gap-1.5"
+                        className="text-[10px] font-semibold tracking-wide border-dashed border-primary/40 text-primary hover:bg-primary/5 h-9 rounded-xl cursor-pointer flex items-center justify-center gap-1 px-1.5 min-w-0"
                       >
-                        <IconPlus className="size-3.5" /> Add Custom
+                        <IconPlus className="size-3.5 shrink-0" />{" "}
+                        <span className="truncate">Add Custom</span>
                       </Button>
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         onClick={handleSelectBillRecommendationsClick}
-                        className="text-[10px] font-semibold tracking-wide border-dashed border-primary/40 text-primary hover:bg-primary/5 h-9 rounded-xl cursor-pointer flex items-center justify-center gap-1.5"
+                        className="text-[10px] font-semibold tracking-wide border-dashed border-primary/40 text-primary hover:bg-primary/5 h-9 rounded-xl cursor-pointer flex items-center justify-center gap-1 px-1.5 min-w-0"
                       >
-                        <IconCheck className="size-3.5" /> Select Recommendation
+                        <IconCheck className="size-3.5 shrink-0" />{" "}
+                        <span className="truncate">Recommendations</span>
                       </Button>
                     </div>
                   )}
@@ -1363,76 +1413,290 @@ export default function WelcomeDialog({
 
           {/* Sub-dialog absolute overlay for See Tips & Recommendations */}
           {showBudgetTips && (
-            <div className="absolute inset-0 bg-black/40 z-30 flex items-center justify-center p-4 backdrop-blur-xs">
-              <div className="bg-background w-full rounded-2xl p-5 border border-border/80 shadow-2xl flex flex-col gap-4 animate-in zoom-in-95 duration-200 max-h-[90%] overflow-y-auto">
-                <div className="pb-1 border-b border-border/20">
-                  <h4 className="text-sm font-bold text-primary">
-                    Budget Recommendations
+            <div className="absolute inset-0 bg-black/40 z-30 flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in duration-200">
+              <div className="bg-background w-full rounded-2xl p-5 border border-border/80 shadow-2xl flex flex-col gap-3.5 animate-in zoom-in-95 duration-200 max-h-[90%] overflow-y-auto max-w-[360px]">
+                <div className="pb-2 border-b border-border/20 flex justify-between items-center shrink-0">
+                  <h4 className="text-sm font-bold text-primary font-sans">
+                    Monthly Budget Limits
                   </h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowBudgetTips(false)}
+                    className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                    title="Close"
+                  >
+                    <IconX className="size-4 shrink-0" />
+                  </button>
                 </div>
 
-                <div className="flex flex-col gap-3 text-xs text-muted-foreground">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="font-bold text-foreground font-sans">
+                <div className="flex flex-col gap-2.5 text-xs text-muted-foreground mt-0.5">
+                  <div className="flex flex-col">
+                    <span className="font-bold text-foreground font-sans text-[11px] leading-tight">
                       Monthly Expected Budget
                     </span>
-                    <p className="text-[10px] leading-relaxed">
+                    <p className="text-[10px] leading-relaxed mt-0.5">
                       Main spending limit for the entire month across all
                       financial accounts. Used to calculate overall remaining
                       balance.
                     </p>
-                    <span className="text-[9px] font-bold text-primary uppercase mt-0.5">
-                      Recommended:{" "}
-                      {currency === "JPY"
-                        ? "¥150,000 JPY"
-                        : "Rp 10.000.000 IDR"}
-                    </span>
                   </div>
 
-                  <div className="flex flex-col gap-0.5 border-t border-border/10 pt-2.5">
-                    <span className="font-bold text-foreground font-sans">
+                  <div className="flex flex-col border-t border-border/10 pt-2">
+                    <span className="font-bold text-foreground font-sans text-[11px] leading-tight">
                       Pocket Money Limit
                     </span>
-                    <p className="text-[10px] leading-relaxed">
+                    <p className="text-[10px] leading-relaxed mt-0.5">
                       Allowance allocated for daily items, snacks, transport,
                       and other flexible pocket money expenses.
                     </p>
-                    <span className="text-[9px] font-bold text-primary uppercase mt-0.5">
-                      Recommended:{" "}
-                      {currency === "JPY" ? "¥40,000 JPY" : "Rp 3.000.000 IDR"}
-                    </span>
                   </div>
 
-                  <div className="flex flex-col gap-0.5 border-t border-border/10 pt-2.5">
-                    <span className="font-bold text-foreground font-sans">
+                  <div className="flex flex-col border-t border-border/10 pt-2">
+                    <span className="font-bold text-foreground font-sans text-[11px] leading-tight">
                       Shopping Limit
                     </span>
-                    <p className="text-[10px] leading-relaxed">
+                    <p className="text-[10px] leading-relaxed mt-0.5">
                       Allocation designated for non-daily purchases like buying
                       clothing, electronics, and household goods.
                     </p>
-                    <span className="text-[9px] font-bold text-primary uppercase mt-0.5">
-                      Recommended:{" "}
-                      {currency === "JPY" ? "¥60,000 JPY" : "Rp 4.000.000 IDR"}
+                  </div>
+
+                  <div className="flex flex-col gap-1 border-t border-border/10 pt-2 bg-primary/5 p-2 rounded-xl border border-primary/10 mt-1">
+                    <span className="font-bold text-primary font-sans text-[10px] uppercase tracking-wider leading-tight">
+                      Adding Custom Limits
                     </span>
+                    <p className="text-[10px] leading-relaxed mt-0.5">
+                      In addition to these three core budgets, you can freely
+                      create and configure your own custom budget
+                      categories/limits later from the Settings page.
+                    </p>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
 
-                <div className="flex flex-col gap-2 mt-1">
-                  <Button
-                    type="button"
-                    onClick={handleApplyBudgetRecommendations}
-                    className="w-full h-10 rounded-xl font-medium text-xs tracking-wider cursor-pointer"
-                  >
-                    Apply Recommended Limits
-                  </Button>
+          {/* Sub-dialog absolute overlay for custom budget recommendation calculator */}
+          {showRecommendationCalculator && (
+            <div className="absolute inset-0 bg-black/40 z-30 flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in duration-200">
+              <div className="bg-background w-full rounded-2xl p-5 border border-border/80 shadow-2xl flex flex-col gap-4 animate-in zoom-in-95 duration-200 max-w-[360px] max-h-[90%] overflow-hidden">
+                <div className="pb-3 border-b border-border/20 shrink-0">
+                  <h4 className="text-sm font-bold text-primary font-sans">
+                    Budget Recommendation
+                  </h4>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 font-sans">
+                    Calculate recommended budget limits based on your monthly
+                    income.
+                  </p>
+                </div>
+
+                <div className="flex-1 overflow-y-auto py-2 pr-1 flex flex-col gap-4 min-h-0">
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs font-semibold">
+                      Monthly Income / Salary
+                    </Label>
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3 text-sm font-bold text-muted-foreground">
+                        {budgetCurrencySymbol}
+                      </span>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        value={salaryInput}
+                        onChange={(e) =>
+                          setSalaryInput(formatInputAmount(e.target.value))
+                        }
+                        className={cn(
+                          budgetCurrencyPadding,
+                          "h-10 font-semibold",
+                        )}
+                        placeholder="200,000"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs font-semibold">
+                      Savings Target Type
+                    </Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSavingsType("percentage");
+                          setSavingsValue("20");
+                        }}
+                        className={cn(
+                          "h-9 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                          savingsType === "percentage"
+                            ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                            : "bg-background text-muted-foreground border-border hover:text-foreground",
+                        )}
+                      >
+                        Percentage (%)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSavingsType("nominal");
+                          const parsedSalary =
+                            parseInputAmount(salaryInput) || 0;
+                          setSavingsValue(
+                            formatInputAmount(
+                              Math.round(parsedSalary * 0.2).toString(),
+                            ),
+                          );
+                        }}
+                        className={cn(
+                          "h-9 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
+                          savingsType === "nominal"
+                            ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                            : "bg-background text-muted-foreground border-border hover:text-foreground",
+                        )}
+                      >
+                        Nominal Amount
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs font-semibold">
+                      {savingsType === "percentage"
+                        ? "Savings Percentage"
+                        : "Savings Amount"}
+                    </Label>
+                    <div className="relative flex items-center">
+                      {savingsType === "percentage" ? (
+                        <>
+                          <Input
+                            type="number"
+                            min="0"
+                            max="100"
+                            value={savingsValue}
+                            onChange={(e) => setSavingsValue(e.target.value)}
+                            className="h-10 font-semibold pr-8"
+                            placeholder="20"
+                            required
+                          />
+                          <span className="absolute right-3 text-sm font-bold text-muted-foreground">
+                            %
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="absolute left-3 text-sm font-bold text-muted-foreground">
+                            {budgetCurrencySymbol}
+                          </span>
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            value={savingsValue}
+                            onChange={(e) =>
+                              setSavingsValue(formatInputAmount(e.target.value))
+                            }
+                            className={cn(
+                              budgetCurrencyPadding,
+                              "h-10 font-semibold",
+                            )}
+                            placeholder="40,000"
+                            required
+                          />
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {parseInputAmount(salaryInput) > 0 && (() => {
+                    const parsedSalary = parseInputAmount(salaryInput);
+                    let parsedSavings = 0;
+                    if (savingsType === "percentage") {
+                      const pct = parseFloat(savingsValue) || 0;
+                      parsedSavings = Math.round(parsedSalary * (pct / 100));
+                    } else {
+                      parsedSavings = parseInputAmount(savingsValue) || 0;
+                    }
+
+                    const rem = parsedSalary - parsedSavings;
+                    let recMonthly = 0;
+                    let recPocket = 0;
+                    let recShopping = 0;
+
+                    if (rem >= parsedSalary * 0.5) {
+                      recMonthly = Math.round(parsedSalary * 0.5);
+                      const wants = rem - recMonthly;
+                      recPocket = Math.round(wants * (2 / 3));
+                      recShopping = Math.round(wants * (1 / 3));
+                    } else {
+                      recMonthly = Math.max(rem, 0);
+                      recPocket = 0;
+                      recShopping = 0;
+                    }
+
+                    const getPercentLabel = (val: number) => {
+                      if (!parsedSalary) return "0%";
+                      const pct = (val / parsedSalary) * 100;
+                      return pct % 1 === 0 ? `${pct}%` : `${pct.toFixed(1)}%`;
+                    };
+
+                    return (
+                      <div className="flex flex-col gap-2 p-3 bg-primary/5 border border-primary/10 rounded-xl mt-1 shrink-0">
+                        <span className="text-[10px] text-primary font-bold uppercase tracking-wider font-sans">
+                          Recommended Allocation:
+                        </span>
+                        
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-muted-foreground">Monthly Expected Budget (Needs: {getPercentLabel(recMonthly)})</span>
+                          <span className="font-bold text-foreground">
+                            {formatCurrency(recMonthly, currency)}
+                          </span>
+                        </div>
+                        
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-muted-foreground">Pocket Money Limit (Wants: {getPercentLabel(recPocket)})</span>
+                          <span className="font-bold text-foreground">
+                            {formatCurrency(recPocket, currency)}
+                          </span>
+                        </div>
+                        
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-muted-foreground">Shopping Limit (Wants: {getPercentLabel(recShopping)})</span>
+                          <span className="font-bold text-foreground">
+                            {formatCurrency(recShopping, currency)}
+                          </span>
+                        </div>
+
+                        <div className="h-px bg-border my-1 opacity-50" />
+
+                        <div className="flex justify-between items-center text-xs font-semibold text-emerald-600 dark:text-emerald-500">
+                          <span>Target Savings ({getPercentLabel(parsedSavings)})</span>
+                          <span>
+                            {formatCurrency(parsedSavings, currency)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div className="flex gap-2 pt-3 border-t border-border/20 justify-end shrink-0">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setShowBudgetTips(false)}
-                    className="w-full h-10 rounded-xl font-medium text-xs tracking-wider cursor-pointer"
+                    onClick={() => setShowRecommendationCalculator(false)}
+                    className="h-10 rounded-xl font-medium text-xs tracking-wider cursor-pointer font-sans"
                   >
-                    Close
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleApplyOnboardingRecommendation}
+                    disabled={
+                      !salaryInput || parseInputAmount(salaryInput) <= 0
+                    }
+                    className="h-10 rounded-xl font-medium text-xs tracking-wider cursor-pointer font-sans"
+                  >
+                    Apply
                   </Button>
                 </div>
               </div>
