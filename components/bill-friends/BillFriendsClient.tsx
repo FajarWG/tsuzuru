@@ -25,9 +25,18 @@ interface AccountItem {
   balance: number;
 }
 
+interface TransactionItem {
+  id: string;
+  description: string | null;
+  isReceipt: boolean;
+  receiptItems: any;
+  currency: string;
+}
+
 interface BillFriendsData {
   bills: BillItem[];
   accounts: AccountItem[];
+  transactions: TransactionItem[];
 }
 
 interface BillFriendsClientProps {
@@ -122,10 +131,11 @@ export default function BillFriendsClient({ userId }: BillFriendsClientProps) {
   // Render client list view
   const activeBills = data?.bills || [];
   const activeAccounts = data?.accounts || [];
+  const activeTransactions = data?.transactions || [];
 
   return (
     <div className="flex flex-col flex-1">
-      <BillFriendsList bills={activeBills as any} accounts={activeAccounts} />
+      <BillFriendsList bills={activeBills as any} accounts={activeAccounts} transactions={activeTransactions} />
     </div>
   );
 }

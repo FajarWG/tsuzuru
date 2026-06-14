@@ -15,6 +15,9 @@ import {
   IconUsersGroup,
   IconCoin,
   IconEyeOff,
+  IconReceipt,
+  IconChevronDown,
+  IconChevronUp,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -59,9 +62,18 @@ interface AccountItem {
   balance: number;
 }
 
+interface TransactionItem {
+  id: string;
+  description: string | null;
+  isReceipt: boolean;
+  receiptItems: any;
+  currency: string;
+}
+
 interface BillFriendsListProps {
   bills: BillItem[];
   accounts: AccountItem[];
+  transactions?: TransactionItem[];
 }
 
 const formatAmount = (amount: number, currency: string) =>
@@ -70,6 +82,12 @@ const formatAmount = (amount: number, currency: string) =>
 const cleanDescription = (desc: string | null) => {
   if (!desc) return "";
   return desc.replace(/\[tx_id:[^\]]+\]/g, "").trim();
+};
+
+const extractTxId = (desc: string | null) => {
+  if (!desc) return null;
+  const match = desc.match(/\[tx_id:(split_[^\]]+)\]/);
+  return match ? match[1] : null;
 };
 
 function groupByPerson(bills: BillItem[]) {
@@ -81,9 +99,10 @@ function groupByPerson(bills: BillItem[]) {
   return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
 }
 
-export default function BillFriendsList({ bills: initialBills, accounts = [] }: BillFriendsListProps) {
+export default function BillFriendsList({ bills: initialBills, accounts = [], transactions = [] }: BillFriendsListProps) {
   const [bills, setBills] = useState<BillItem[]>(initialBills);
   const [activeTab, setActiveTab] = useState<"active" | "settled">("active");
+  const [expandedBills, setExpandedBills] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     setBills(initialBills);
@@ -478,67 +497,144 @@ export default function BillFriendsList({ bills: initialBills, accounts = [] }: 
                             const isSettlingThis = settlingId === bill.id;
                             const isDeletingThis = deletingBill?.id === bill.id && isDeleting;
 
+                            // Match details
+                            const txId = extractTxId(bill.description);
+                            const matchingTx = txId ? transactions.find(t => extractTxId(t.description) === txId) : null;
+                            const parsedItems = matchingTx?.receiptItems 
+                              ? (typeof matchingTx.receiptItems === "string" ? JSON.parse(matchingTx.receiptItems) : matchingTx.receiptItems) 
+                              : null;
+                            const assignedItems = Array.isArray(parsedItems) ? parsedItems.filter((item: any) => {
+                              const itemAssigned = Array.isArray(item.assigned) ? item.assigned : ["Me"];
+                              return itemAssigned.includes(bill.personName);
+                            }) : [];
+                            const hasDetails = assignedItems.length > 0;
+                            const isExpanded = !!expandedBills[bill.id];
+
+                            const toggleBillExpand = (billId: string) => {
+                              setExpandedBills((prev) => ({ ...prev, [billId]: !prev[billId] }));
+                            };
+
                             return (
                               <div
                                 key={bill.id}
+                                onClick={() => hasDetails && toggleBillExpand(bill.id)}
                                 className={cn(
-                                  "bg-white dark:bg-zinc-900 border rounded-2xl p-4 flex justify-between items-center gap-3 shadow-xs transition-all",
-                                  bill.isSettled ? "border-border/30 opacity-60" : isOwed ? "border-primary/20" : "border-destructive/20"
+                                  "bg-white dark:bg-zinc-900 border rounded-2xl p-4 flex flex-col gap-3 shadow-xs transition-all select-none relative overflow-hidden",
+                                  hasDetails
+                                    ? "border-emerald-500/30 dark:border-emerald-500/20 cursor-pointer hover:bg-zinc-50/40 dark:hover:bg-zinc-950/20"
+                                    : bill.isSettled ? "border-border/30 opacity-60" : isOwed ? "border-primary/20" : "border-destructive/20"
                                 )}
                               >
-                                <div className="flex items-center gap-3">
-                                  <div className={cn("p-2 rounded-xl shrink-0", bill.isSettled ? "bg-muted" : isOwed ? "bg-primary/10" : "bg-destructive/10")}>
-                                    {bill.isSettled ? (
-                                      <IconCheck className="size-4 text-muted-foreground stroke-[2]" />
-                                    ) : isOwed ? (
-                                      <IconArrowDownLeft className="size-4 text-primary stroke-[2.5]" />
-                                    ) : (
-                                      <IconArrowUpRight className="size-4 text-destructive stroke-[2.5]" />
+                                {hasDetails && (
+                                  <IconReceipt className="absolute -right-4 top-1/2 -translate-y-1/2 size-24 text-emerald-500/[0.05] dark:text-emerald-500/[0.03] pointer-events-none" />
+                                )}
+                                <div className="flex justify-between items-center w-full gap-3 z-10">
+                                  <div className="flex items-center gap-3">
+                                    <div className={cn("p-2 rounded-xl shrink-0 flex items-center justify-center", bill.isSettled ? "bg-muted" : isOwed ? "bg-primary/10" : "bg-destructive/10")}>
+                                      {bill.isSettled ? (
+                                        <IconCheck className="size-4 text-muted-foreground stroke-[2]" />
+                                      ) : isOwed ? (
+                                        <IconArrowDownLeft className="size-4 text-primary stroke-[2.5]" />
+                                      ) : (
+                                        <IconArrowUpRight className="size-4 text-destructive stroke-[2.5]" />
+                                      )}
+                                    </div>
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="text-xs font-semibold text-foreground leading-tight">
+                                        {cleanDescription(bill.description) || (isOwed ? "They owe me" : "I owe them")}
+                                      </span>
+                                      <span className="text-[10px] text-muted-foreground leading-none">
+                                        {bill.isSettled
+                                          ? `Settled ${new Date(bill.settledAt!).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
+                                          : new Date(bill.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <span className={cn(
+                                      "text-sm font-bold font-sans",
+                                      bill.isSettled ? "text-muted-foreground line-through" : isOwed ? "text-primary" : "text-destructive"
+                                    )}>
+                                      {formatAmount(bill.amount, bill.currency)}
+                                    </span>
+
+                                    {!bill.isSettled && (
+                                      <Button
+                                        size="icon-xs"
+                                        variant="ghost"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openSettleDialog(bill);
+                                        }}
+                                        disabled={isSettlingThis || isDeletingThis}
+                                        title="Mark as settled"
+                                        className="text-primary hover:text-primary hover:bg-primary/10"
+                                      >
+                                        {isSettlingThis ? <IconLoader className="size-3 animate-spin" /> : <IconCheck className="size-3 stroke-[2.5]" />}
+                                      </Button>
                                     )}
-                                  </div>
-                                  <div className="flex flex-col gap-0.5">
-                                    <span className="text-xs font-semibold text-foreground leading-tight">
-                                      {cleanDescription(bill.description) || (isOwed ? "They owe me" : "I owe them")}
-                                    </span>
-                                    <span className="text-[10px] text-muted-foreground leading-none">
-                                      {bill.isSettled
-                                        ? `Settled ${new Date(bill.settledAt!).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-                                        : new Date(bill.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  <span className={cn(
-                                    "text-sm font-bold font-sans",
-                                    bill.isSettled ? "text-muted-foreground line-through" : isOwed ? "text-primary" : "text-destructive"
-                                  )}>
-                                    {formatAmount(bill.amount, bill.currency)}
-                                  </span>
-
-                                  {!bill.isSettled && (
                                     <Button
                                       size="icon-xs"
                                       variant="ghost"
-                                      onClick={() => openSettleDialog(bill)}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeletingBill(bill);
+                                      }}
                                       disabled={isSettlingThis || isDeletingThis}
-                                      title="Mark as settled"
-                                      className="text-primary hover:text-primary hover:bg-primary/10"
+                                      title="Delete"
+                                      className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                                     >
-                                      {isSettlingThis ? <IconLoader className="size-3 animate-spin" /> : <IconCheck className="size-3 stroke-[2.5]" />}
+                                      {isDeletingThis ? <IconLoader className="size-3 animate-spin" /> : <IconTrash className="size-3" />}
                                     </Button>
-                                  )}
-                                  <Button
-                                    size="icon-xs"
-                                    variant="ghost"
-                                    onClick={() => setDeletingBill(bill)}
-                                    disabled={isSettlingThis || isDeletingThis}
-                                    title="Delete"
-                                    className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                  >
-                                    {isDeletingThis ? <IconLoader className="size-3 animate-spin" /> : <IconTrash className="size-3" />}
-                                  </Button>
+                                  </div>
                                 </div>
+
+                                {/* Collapsible details for receipt split */}
+                                {hasDetails && (
+                                  <AnimatePresence initial={false}>
+                                    {isExpanded && (
+                                      <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: "auto", opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.25, ease: "easeInOut" }}
+                                        className="overflow-hidden w-full z-10"
+                                      >
+                                        <div className="w-full pt-3 border-t border-border/20 flex flex-col gap-1.5 mt-1">
+                                          <span className="text-[9px] font-bold tracking-wider text-muted-foreground uppercase mb-0.5 px-0.5">
+                                            Split Details ({assignedItems.length} items)
+                                          </span>
+                                          <div className="flex flex-col gap-1.5 pl-1.5 pr-0.5">
+                                            {assignedItems.map((item: any, idx: number) => {
+                                              const itemAssigned = Array.isArray(item.assigned) ? item.assigned : ["Me"];
+                                              const isShared = itemAssigned.length > 1;
+                                              const sharePrice = bill.currency === "JPY" ? Math.round(item.price / itemAssigned.length) : item.price / itemAssigned.length;
+
+                                              return (
+                                                <div key={idx} className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+                                                  <div className="flex justify-between items-center">
+                                                    <span className="truncate max-w-[220px]">
+                                                      • {item.name}{" "}
+                                                      {isShared && (
+                                                        <span className="text-[10px] text-muted-foreground/60 font-medium">
+                                                          (Shared: 1/{itemAssigned.length})
+                                                        </span>
+                                                      )}
+                                                    </span>
+                                                    <span className="font-sans font-semibold text-foreground shrink-0">
+                                                      {formatAmount(sharePrice, bill.currency)}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                )}
                               </div>
                             );
                           })}
