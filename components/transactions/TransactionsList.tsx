@@ -28,6 +28,7 @@ import {
   IconTrendingUp,
   IconWallet,
   IconChevronDown,
+  IconReceipt,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -761,13 +762,16 @@ export default function TransactionsList({
                       key={tx.id}
                       onClick={() => tx.isReceipt && setExpandedReceipts((prev) => ({ ...prev, [tx.id]: !prev[tx.id] }))}
                       className={cn(
-                        "border rounded-2xl p-4 flex flex-col gap-3 shadow-xs transition-all select-none bg-white dark:bg-zinc-900",
+                        "border rounded-2xl p-4 flex flex-col gap-3 shadow-xs transition-all select-none bg-white dark:bg-zinc-900 relative overflow-hidden",
                         tx.isReceipt 
                           ? "border-emerald-500/30 dark:border-emerald-500/20 cursor-pointer hover:bg-zinc-50/40 dark:hover:bg-zinc-950/20" 
                           : "border-border/40"
                       )}
                     >
-                      <div className="flex justify-between items-center w-full gap-3">
+                      {tx.isReceipt && (
+                        <IconReceipt className="absolute -right-4 top-1/2 -translate-y-1/2 size-24 text-emerald-500/[0.05] dark:text-emerald-500/[0.03] pointer-events-none" />
+                      )}
+                      <div className="flex justify-between items-center w-full gap-3 z-10">
                         <div className="flex min-w-0 items-center gap-3 flex-1">
                           <div className="p-2 bg-muted rounded-xl text-primary shrink-0">
                             {getCategoryIcon(tx.category, tx.subCategory)}
@@ -828,37 +832,83 @@ export default function TransactionsList({
                                     animate={{ height: "auto", opacity: 1 }}
                                     exit={{ height: 0, opacity: 0 }}
                                     transition={{ duration: 0.25, ease: "easeInOut" }}
-                                    className="overflow-hidden w-full"
+                                    className="overflow-hidden w-full z-10"
                                   >
-                                    <div className="w-full pt-2.5 border-t border-border/20 flex flex-col gap-1.5 mt-1">
+                                    <div className="w-full pt-2.5 border-t border-border/20 flex flex-col gap-2 mt-1">
                                       <span className="text-[9px] font-bold tracking-wider text-muted-foreground uppercase mb-0.5 px-0.5">
                                         Items ({items.length})
                                       </span>
-                                      <div className="flex flex-col gap-1.5 pl-1.5 pr-0.5">
-                                        {items.map((item: any, idx: number) => {
-                                          const itemAssigned = Array.isArray(item.assigned) ? item.assigned : ["Me"];
-                                          const isItemSplit = itemAssigned.length > 1 || (itemAssigned.length === 1 && !itemAssigned.includes("Me"));
-                                          const friendsSharing = itemAssigned.filter((p: string) => p !== "Me");
-                                          
-                                          return (
-                                            <div key={idx} className="flex flex-col gap-0.5 text-xs text-muted-foreground">
-                                              <div className="flex justify-between items-center">
-                                                <span className="truncate max-w-[220px]">• {item.name}</span>
-                                                <span className="font-sans font-semibold text-foreground shrink-0">
-                                                  {formatCurrency(item.price, tx.currency)}
-                                                </span>
-                                              </div>
-                                              {isItemSplit && (
-                                                <span className="text-[9px] text-muted-foreground/80 pl-2">
-                                                  Shared with: {friendsSharing.join(", ")}
-                                                </span>
-                                              )}
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
+                                      {(() => {
+                                        const sharedItems: any[] = [];
+                                        const singleItemsByPerson: Record<string, any[]> = {};
 
-                                      {/* Settlement List */}
+                                        items.forEach((item: any) => {
+                                          const itemAssigned = Array.isArray(item.assigned) ? item.assigned : ["Me"];
+                                          if (itemAssigned.length > 1) {
+                                            sharedItems.push(item);
+                                          } else {
+                                            const person = itemAssigned[0] || "Me";
+                                            if (!singleItemsByPerson[person]) {
+                                              singleItemsByPerson[person] = [];
+                                            }
+                                            singleItemsByPerson[person].push(item);
+                                          }
+                                        });
+
+                                        return (
+                                          <div className="flex flex-col gap-2.5">
+                                            {sharedItems.length > 0 && (
+                                              <div className="flex flex-col gap-1">
+                                                <span className="text-[9px] font-bold tracking-wider text-muted-foreground/80 uppercase px-0.5">
+                                                  Shared:
+                                                </span>
+                                                <div className="flex flex-col gap-1 pl-1.5 pr-0.5">
+                                                  {sharedItems.map((item: any, idx: number) => {
+                                                    const itemAssigned = Array.isArray(item.assigned) ? item.assigned : ["Me"];
+                                                    return (
+                                                      <div key={`shared-${idx}`} className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+                                                        <div className="flex justify-between items-center">
+                                                          <span className="truncate max-w-[220px]">
+                                                            • {item.name}{" "}
+                                                            <span className="text-[10px] text-muted-foreground/60 font-medium">
+                                                              ({itemAssigned.join(", ")})
+                                                            </span>
+                                                          </span>
+                                                          <span className="font-sans font-semibold text-foreground shrink-0">
+                                                            {formatCurrency(item.price, tx.currency)}
+                                                          </span>
+                                                        </div>
+                                                      </div>
+                                                    );
+                                                  })}
+                                                </div>
+                                              </div>
+                                            )}
+
+                                            {Object.entries(singleItemsByPerson).map(([person, pItems]) => (
+                                              <div key={person} className="flex flex-col gap-1">
+                                                <span className="text-[9px] font-bold tracking-wider text-muted-foreground/80 uppercase px-0.5">
+                                                  {person}:
+                                                </span>
+                                                <div className="flex flex-col gap-1 pl-1.5 pr-0.5">
+                                                  {pItems.map((item: any, idx: number) => (
+                                                    <div key={`single-${person}-${idx}`} className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+                                                      <div className="flex justify-between items-center">
+                                                        <span className="truncate max-w-[220px]">• {item.name}</span>
+                                                        <span className="font-sans font-semibold text-foreground shrink-0">
+                                                          {formatCurrency(item.price, tx.currency)}
+                                                        </span>
+                                                      </div>
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        );
+                                      })()}
+ 
+                                       {/* Settlement List */}
                                       {Array.isArray((tx as any).settlementsList) && (tx as any).settlementsList.length > 0 && (
                                         <div className="mt-3 pt-2.5 border-t border-border/10 flex flex-col gap-1.5">
                                           <span className="text-[9px] font-bold tracking-wider text-primary uppercase mb-0.5 px-0.5">

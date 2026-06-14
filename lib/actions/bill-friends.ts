@@ -110,11 +110,26 @@ export async function getBillFriendsDataAction() {
       orderBy: { name: "asc" },
     });
 
+    const transactions = await prisma.transaction.findMany({
+      where: {
+        userId: session.user.id,
+        isReceipt: true,
+      },
+      select: {
+        id: true,
+        description: true,
+        isReceipt: true,
+        receiptItems: true,
+        currency: true,
+      },
+    });
+
     return {
       success: true,
       data: {
         bills,
         accounts,
+        transactions,
       },
     };
   } catch (err) {

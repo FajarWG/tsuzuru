@@ -83,6 +83,7 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
   const [newItemPrice, setNewItemPrice] = useState("");
   const [isAiImportOpen, setIsAiImportOpen] = useState(false);
   const [isPromptCopied, setIsPromptCopied] = useState(false);
+  const [aiTranslateLang, setAiTranslateLang] = useState<"none" | "id" | "en">("none");
   const [aiImportText, setAiImportText] = useState("");
 
   // Split Bill States
@@ -110,7 +111,13 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
 
   // Copy AI Prompt
   const handleCopyPrompt = () => {
-    const promptText = `Analyze this receipt image. Extract all items and their final prices.\nMake sure the prices returned for each item include any tax, service charge, or fees (distribute them proportionally if listed separately).\nReturn the output STRICTLY in JSON format with this structure:\n{\n  "items": [\n    { "name": "Item Name", "price": 1000 }\n  ]\n}\nReturn only the raw JSON. Do not include markdown code block wrapper (like \`\`\`json) or any extra explanation.`;
+    const promptText = `Analyze this receipt image. Extract all items and their final prices${
+      aiTranslateLang === "id"
+        ? ", translating the item names to Indonesian"
+        : aiTranslateLang === "en"
+        ? ", translating the item names to English"
+        : ""
+    }.\nMake sure the prices returned for each item include any tax, service charge, or fees (distribute them proportionally if listed separately).\nReturn the output STRICTLY in JSON format with this structure:\n{\n  "items": [\n    { "name": "Item Name", "price": 1000 }\n  ]\n}\nReturn only the raw JSON. Do not include markdown code block wrapper (like \`\`\`json) or any extra explanation.`;
     navigator.clipboard.writeText(promptText)
       .then(() => {
         setIsPromptCopied(true);
@@ -1186,116 +1193,170 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
         </Button>
       )}
       <Dialog open={isAiImportOpen} onOpenChange={setIsAiImportOpen}>
-        <DialogContent className="max-w-[440px] rounded-2xl p-6">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
-              <IconSparkles className="size-5 text-primary animate-pulse" />
-              Import Receipt Items by AI
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Follow this tutorial to extract items and prices using an external AI.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-[440px] rounded-2xl p-0">
+          <div className="flex flex-col max-h-[85vh] p-6">
+            <DialogHeader className="shrink-0 pb-2">
+              <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
+                <IconSparkles className="size-5 text-primary animate-pulse" />
+                Import Receipt Items by AI
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Follow this tutorial to extract items and prices using an external AI.
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="flex flex-col gap-4 py-4">
-            {/* Step 1 */}
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2">
-                <span className="flex items-center justify-center size-5 rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                  1
-                </span>
-                <span className="text-xs font-bold text-foreground">
-                  Photo your receipt
-                </span>
+            <div className="flex-1 overflow-y-auto py-4 flex flex-col gap-4 min-h-0 pr-1">
+              {/* Step 1 */}
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center justify-center size-5 rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                    1
+                  </span>
+                  <span className="text-xs font-bold text-foreground">
+                    Photo your receipt
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground pl-7">
+                  Take a clear photo of your shopping receipt with your phone camera, or prepare the receipt image file.
+                </p>
               </div>
-              <p className="text-[11px] text-muted-foreground pl-7">
-                Take a clear photo of your shopping receipt with your phone camera, or prepare the receipt image file.
-              </p>
+
+              {/* Step 2 */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center justify-center size-5 rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                    2
+                  </span>
+                  <span className="text-xs font-bold text-foreground flex-1">
+                    Copy prompt & paste to AI
+                  </span>
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    onClick={handleCopyPrompt}
+                    className="h-7 px-2.5 text-[11px] rounded-lg border-primary/20 text-primary hover:bg-primary/5 gap-1 shrink-0 cursor-pointer"
+                  >
+                    {isPromptCopied ? (
+                      <>
+                        <IconCheck className="size-3" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <IconCopy className="size-3" />
+                        Copy Prompt
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground pl-7 leading-relaxed">
+                  Send the prompt below to any AI model (ChatGPT, Gemini, Claude) along with your receipt photo:
+                </p>
+
+                {/* Translate Option Switch */}
+                <div className="flex flex-col gap-1.5 pl-7 my-1">
+                  <Label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                    Translate item names:
+                  </Label>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setAiTranslateLang("none")}
+                      className={cn(
+                        "px-2.5 py-1 text-[10px] font-semibold rounded-lg border transition-all cursor-pointer",
+                        aiTranslateLang === "none"
+                          ? "bg-primary/10 border-primary/30 text-primary"
+                          : "border-border/40 text-muted-foreground hover:border-border"
+                      )}
+                    >
+                      Original
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAiTranslateLang("en")}
+                      className={cn(
+                        "px-2.5 py-1 text-[10px] font-semibold rounded-lg border transition-all cursor-pointer",
+                        aiTranslateLang === "en"
+                          ? "bg-primary/10 border-primary/30 text-primary"
+                          : "border-border/40 text-muted-foreground hover:border-border"
+                      )}
+                    >
+                      English
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAiTranslateLang("id")}
+                      className={cn(
+                        "px-2.5 py-1 text-[10px] font-semibold rounded-lg border transition-all cursor-pointer",
+                        aiTranslateLang === "id"
+                          ? "bg-primary/10 border-primary/30 text-primary"
+                          : "border-border/40 text-muted-foreground hover:border-border"
+                      )}
+                    >
+                      Indonesian
+                    </button>
+                  </div>
+                </div>
+
+                <div className="ml-7 p-2.5 rounded-xl bg-muted/50 border border-border/40 text-[10px] text-muted-foreground font-mono leading-normal max-h-[80px] overflow-y-auto select-all">
+                  Analyze this receipt image. Extract all items and their final prices{
+                    aiTranslateLang === "id"
+                      ? ", translating the item names to Indonesian"
+                      : aiTranslateLang === "en"
+                      ? ", translating the item names to English"
+                      : ""
+                  }. Make sure the prices returned for each item include any tax, service charge, or fees (distribute them proportionally if listed separately). Return the output STRICTLY in JSON format with this structure: {"{\"items\": [{\"name\": \"Item Name\", \"price\": 1000}]}"}. Return only the raw JSON. Do not include markdown code block wrapper (like \`\`\`json) or any extra explanation.
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center justify-center size-5 rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                    3
+                  </span>
+                  <span className="text-xs font-bold text-foreground">
+                    Paste AI Response
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground pl-7">
+                  Paste the JSON response generated by the AI below:
+                </p>
+                <div className="pl-7">
+                  <textarea
+                    value={aiImportText}
+                    onChange={(e) => setAiImportText(e.target.value)}
+                    placeholder={`e.g.\n{\n  "items": [\n    { "name": "Item A", "price": 100 }\n  ]\n}`}
+                    className="flex min-h-[100px] w-full rounded-xl border border-input bg-transparent px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
+                  />
+                </div>
+              </div>
             </div>
 
-            {/* Step 2 */}
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <span className="flex items-center justify-center size-5 rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                  2
-                </span>
-                <span className="text-xs font-bold text-foreground flex-1">
-                  Copy prompt & paste to AI
-                </span>
-                <Button
-                  type="button"
-                  size="xs"
-                  variant="outline"
-                  onClick={handleCopyPrompt}
-                  className="h-7 px-2.5 text-[11px] rounded-lg border-primary/20 text-primary hover:bg-primary/5 gap-1 shrink-0 cursor-pointer"
-                >
-                  {isPromptCopied ? (
-                    <>
-                      <IconCheck className="size-3" />
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <IconCopy className="size-3" />
-                      Copy Prompt
-                    </>
-                  )}
-                </Button>
-              </div>
-              <p className="text-[11px] text-muted-foreground pl-7 leading-relaxed">
-                Send the prompt below to any AI model (ChatGPT, Gemini, Claude) along with your receipt photo:
-              </p>
-              <div className="ml-7 p-2.5 rounded-xl bg-muted/50 border border-border/40 text-[10px] text-muted-foreground font-mono leading-normal max-h-[80px] overflow-y-auto select-all">
-                Analyze this receipt image. Extract all items and their final prices. Make sure the prices returned for each item include any tax, service charge, or fees (distribute them proportionally if listed separately). Return the output STRICTLY in JSON format with this structure: {"{\"items\": [{\"name\": \"Item Name\", \"price\": 1000}]}"}. Return only the raw JSON. Do not include markdown code block wrapper (like \`\`\`json) or any extra explanation.
-              </div>
-            </div>
-
-            {/* Step 3 */}
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-2">
-                <span className="flex items-center justify-center size-5 rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                  3
-                </span>
-                <span className="text-xs font-bold text-foreground">
-                  Paste AI Response
-                </span>
-              </div>
-              <p className="text-[11px] text-muted-foreground pl-7">
-                Paste the JSON response generated by the AI below:
-              </p>
-              <div className="pl-7">
-                <textarea
-                  value={aiImportText}
-                  onChange={(e) => setAiImportText(e.target.value)}
-                  placeholder={`e.g.\n{\n  "items": [\n    { "name": "Item A", "price": 100 }\n  ]\n}`}
-                  className="flex min-h-[100px] w-full rounded-xl border border-input bg-transparent px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
-                />
-              </div>
-            </div>
+            <DialogFooter className="shrink-0 gap-2 flex flex-row justify-end pt-4 border-t border-border/10">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsAiImportOpen(false);
+                  setAiImportText("");
+                }}
+                className="rounded-xl h-9 text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleImportByAi}
+                className="rounded-xl h-9 text-xs min-w-[90px]"
+              >
+                Import
+              </Button>
+            </DialogFooter>
           </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setIsAiImportOpen(false);
-                setAiImportText("");
-              }}
-              className="rounded-xl h-9 text-xs"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleImportByAi}
-              className="rounded-xl h-9 text-xs min-w-[90px]"
-            >
-              Import
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </form>
