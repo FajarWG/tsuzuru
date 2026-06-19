@@ -62,13 +62,20 @@ const SHOPPING_SUBCATS = [
   { value: "others", label: "Others" },
 ];
 
+const INCOME_SUBCATS = [
+  { value: "salary", label: "Salary" },
+  { value: "bonus", label: "Bonus" },
+  { value: "allowance", label: "Allowance" },
+  { value: "others", label: "Others" },
+];
+
 export default function TransactionForm({ userId, accounts }: TransactionFormProps) {
   const router = useRouter();
 
   const [type, setType] = useState<"expense" | "income">("expense");
   const [amount, setAmount] = useState("");
   const [accountId, setAccountId] = useState(accounts[0]?.id || "");
-  const [category, setCategory] = useState<"pocket_money" | "shopping">("pocket_money");
+  const [category, setCategory] = useState<"pocket_money" | "shopping" | "income">("pocket_money");
   const [subCategory, setSubCategory] = useState("others");
   const [mealNumber, setMealNumber] = useState<number | null>(null);
   const [description, setDescription] = useState("");
@@ -220,6 +227,8 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
       currency: string;
       direction: "i_owe" | "they_owe";
       description: string;
+      category?: string;
+      subCategory?: string | null;
     }[] = [];
 
     friends.forEach((friendName) => {
@@ -240,6 +249,8 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
           currency,
           direction: "they_owe",
           description: `[tx_id:${splitGroupId}] Split: ${description.trim() || "Receipt"} (Total: ${currency === "IDR" ? "Rp" : "¥"}${totalAmount.toLocaleString()})`,
+          category,
+          subCategory,
         });
       }
     });
@@ -355,7 +366,7 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
           type,
           amount: parsedAmount,
           category: type === "income" ? "income" : category,
-          subCategory: type === "income" ? null : subCategory,
+          subCategory,
           mealNumber: type === "expense" && subCategory === "food" ? mealNumber : null,
           description: description.trim() || null,
           date: date.toISOString(),
@@ -387,7 +398,7 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
         type,
         amount: parsedAmount,
         category: type === "income" ? "income" : category,
-        subCategory: type === "income" ? null : subCategory,
+        subCategory,
         mealNumber: type === "expense" && subCategory === "food" ? mealNumber : null,
         description: description.trim() || null,
         date,
@@ -417,7 +428,12 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
     await handleSave(false);
   };
 
-  const subcatOptions = category === "pocket_money" ? POCKET_MONEY_SUBCATS : SHOPPING_SUBCATS;
+  const subcatOptions =
+    type === "income"
+      ? INCOME_SUBCATS
+      : category === "pocket_money"
+      ? POCKET_MONEY_SUBCATS
+      : SHOPPING_SUBCATS;
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5 flex-1 justify-between">
@@ -760,6 +776,11 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
                     setType(t);
                     if (t === "income") {
                       setIsReceipt(false);
+                      setCategory("income");
+                      setSubCategory("salary");
+                    } else {
+                      setCategory("pocket_money");
+                      setSubCategory("others");
                     }
                   }}
                   className={cn(
@@ -892,6 +913,27 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
                   </div>
                 )}
               </>
+            )}
+
+            {/* Income Subcategory fields */}
+            {type === "income" && (
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold tracking-wide text-muted-foreground">
+                  Sub-category
+                </Label>
+                <Select value={subCategory} onValueChange={handleSubCategoryChange}>
+                  <SelectTrigger className="h-12 rounded-2xl text-sm font-semibold px-4">
+                    <SelectValue placeholder="Select sub-category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {subcatOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value} className="text-sm">
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             )}
 
             {/* Description */}

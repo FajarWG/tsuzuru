@@ -1,10 +1,27 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { createTransactionAction } from "@/lib/actions/transactions";
 import { getBillFriendsDataAction, createMultipleBillsAction } from "@/lib/actions/bill-friends";
-import { IconPlus, IconLoader, IconCalendar, IconTrash, IconUsers, IconChevronLeft, IconX, IconSparkles, IconCopy, IconCheck } from "@tabler/icons-react";
+import {
+  IconPlus,
+  IconLoader,
+  IconCalendar,
+  IconTrash,
+  IconUsers,
+  IconChevronLeft,
+  IconX,
+  IconSparkles,
+  IconCopy,
+  IconCheck,
+  IconCamera,
+  IconUpload,
+  IconCreditCard,
+  IconReceipt
+} from "@tabler/icons-react";
+import { checkAiLimitAction, parseReceiptImageAction } from "@/lib/actions/gemini";
 import { formatInputAmount, parseInputAmount } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -63,6 +80,36 @@ const SHOPPING_SUBCATS = [
   { value: "others", label: "Others" },
 ];
 
+const INCOME_SUBCATS = [
+  { value: "salary", label: "Salary" },
+  { value: "bonus", label: "Bonus" },
+  { value: "allowance", label: "Allowance" },
+  { value: "others", label: "Others" },
+];
+
+function fileToBase64(file: File): Promise<{ base64: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      const base64 = dataUrl.split(",")[1];
+      resolve({ base64, mimeType: file.type });
+    };
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function roundAmount(value: number): number {
+  const floorVal = Math.floor(value);
+  const decimal = value - floorVal;
+  if (decimal >= 0.6) {
+    return floorVal + 1;
+  } else {
+    return floorVal;
+  }
+}
+
 export default function AddTransactionFab({ userId, accounts, budgetCategories }: AddTransactionFabProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -73,6 +120,11 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
         { name: "pocket_money", label: "Pocket Money" },
         { name: "shopping", label: "Shopping" }
       ];
+
+  // Flow state
+  const [activeMode, setActiveMode] = useState<"select" | "single" | "receipt">("select");
+  const [aiImportMode, setAiImportMode] = useState<"auto" | "manual">("auto");
+  const [isAiParsing, setIsAiParsing] = useState(false);
 
   // Form state
   const [type, setType] = useState<"expense" | "income">("expense");
@@ -172,7 +224,7 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
         }
         return {
           name: String(item.name).trim(),
-          price: Number(item.price)
+          price: roundAmount(Number(item.price))
         };
       });
 
@@ -195,19 +247,25 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
 
   const activeAccount = accounts.find((a) => a.id === accountId);
   const currencySymbol = activeAccount?.currency === "IDR" ? "Rp" : "¥";
-  const subcatOptions = category === "pocket_money"
-    ? POCKET_MONEY_SUBCATS
-    : category === "shopping"
-    ? SHOPPING_SUBCATS
-    : [
-        { value: "others", label: "Others" },
-        { value: "food", label: "Food" },
-        { value: "transport", label: "Transport" },
-        { value: "shopping", label: "Shopping" },
-        { value: "bills", label: "Bills" }
-      ];
+  const subcatOptions =
+    type === "income"
+      ? INCOME_SUBCATS
+      : category === "pocket_money"
+      ? POCKET_MONEY_SUBCATS
+      : category === "shopping"
+      ? SHOPPING_SUBCATS
+      : [
+          { value: "others", label: "Others" },
+          { value: "food", label: "Food" },
+          { value: "transport", label: "Transport" },
+          { value: "shopping", label: "Shopping" },
+          { value: "bills", label: "Bills" }
+        ];
 
   const resetForm = () => {
+    setActiveMode("select");
+    setAiImportMode("auto");
+    setIsAiParsing(false);
     setType("expense");
     setAmount("");
     setAccountId(accounts[0]?.id || "");
@@ -226,6 +284,52 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
     setItemAssignments({});
     setNewPersonInput("");
     setShowFriendSuggestions(false);
+  };
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const limitRes = await checkAiLimitAction();
+      if (limitRes.limited) {
+        toast.error(`AI is temporarily limited. Try again in ${limitRes.secondsLeft} seconds, or use the manual prompt mode.`);
+        return;
+      }
+    } catch (err) {
+      console.error("Failed to check AI limit:", err);
+    }
+
+    setIsAiParsing(true);
+    const loadingToast = toast.loading("Analyzing receipt photo...");
+
+    try {
+      const { base64, mimeType } = await fileToBase64(file);
+      const res = await parseReceiptImageAction(base64, mimeType);
+
+      if (res.success && res.data && Array.isArray(res.data.items)) {
+        const parsedItems = res.data.items.map((item: any) => ({
+          name: String(item.name).trim(),
+          price: roundAmount(Number(item.price))
+        }));
+
+        if (parsedItems.length > 0) {
+          setReceiptItems((prev) => [...prev, ...parsedItems]);
+          toast.success(`Successfully imported ${parsedItems.length} items from receipt!`, { id: loadingToast });
+          setIsAiImportOpen(false);
+        } else {
+          toast.error("No items could be extracted from the receipt.", { id: loadingToast });
+        }
+      } else {
+        toast.error(res.error || "Failed to analyze receipt", { id: loadingToast });
+      }
+    } catch (err: any) {
+      console.error("Failed to auto-parse receipt image:", err);
+      toast.error(err.message || "Failed to parse receipt image", { id: loadingToast });
+    } finally {
+      setIsAiParsing(false);
+      e.target.value = "";
+    }
   };
 
   const handleOpen = () => {
@@ -268,6 +372,8 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
       currency: string;
       direction: "i_owe" | "they_owe";
       description: string;
+      category?: string;
+      subCategory?: string | null;
     }[] = [];
 
     friends.forEach((friendName) => {
@@ -288,6 +394,8 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
           currency,
           direction: "they_owe",
           description: `[tx_id:${splitGroupId}] Split: ${description.trim() || "Receipt"} (Total: ${currency === "IDR" ? "Rp" : "¥"}${totalAmount.toLocaleString()})`,
+          category,
+          subCategory,
         });
       }
     });
@@ -406,7 +514,7 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
           type,
           amount: parsedAmount,
           category: type === "income" ? "income" : category,
-          subCategory: type === "income" ? null : subCategory,
+          subCategory,
           mealNumber: type === "expense" && subCategory === "food" ? mealNumber : null,
           description: description.trim() || null,
           date: date.toISOString(),
@@ -439,7 +547,7 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
         type,
         amount: parsedAmount,
         category: type === "income" ? "income" : category,
-        subCategory: type === "income" ? null : subCategory,
+        subCategory,
         mealNumber: type === "expense" && subCategory === "food" ? mealNumber : null,
         description: description.trim() || null,
         date,
@@ -486,10 +594,10 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
 
       {/* Dialog */}
       <Dialog open={open} onOpenChange={(v) => { if (!isSubmitting) setOpen(v); }}>
-        <DialogContent className="max-w-[400px] rounded-2xl p-0">
+        <DialogContent className="max-w-[400px] rounded-2xl p-0" layout={false}>
           <form onSubmit={handleSubmit} className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20 flex flex-row items-center gap-3">
-              {(isSplitMode || showSplitPrompt) && (
+              {showSplitPrompt || isSplitMode ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -504,15 +612,41 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
                 >
                   <IconChevronLeft className="size-4" />
                 </button>
-              )}
+              ) : activeMode !== "select" ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveMode("select");
+                  }}
+                  className="p-1 rounded-lg hover:bg-muted text-foreground transition-colors mr-1 cursor-pointer"
+                >
+                  <IconChevronLeft className="size-4" />
+                </button>
+              ) : null}
               <DialogTitle className="font-sans text-xl">
-                {showSplitPrompt ? "Split Bill?" : isSplitMode ? "Split Bill Details" : "Add Transaction"}
+                {showSplitPrompt
+                  ? "Split Bill?"
+                  : isSplitMode
+                  ? "Split Bill Details"
+                  : activeMode === "select"
+                  ? "Select Mode"
+                  : activeMode === "single"
+                  ? "Single Transaction"
+                  : "Receipt Mode"}
               </DialogTitle>
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden px-1 flex flex-col gap-4 py-3" onClick={() => setShowFriendSuggestions(false)}>
-              {showSplitPrompt ? (
-                <div className="flex flex-col items-center justify-center py-6 px-4 gap-6 text-center">
+              <AnimatePresence mode="wait">
+                {showSplitPrompt ? (
+                  <motion.div
+                    key="split-prompt"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.12 }}
+                    className="flex flex-col items-center justify-center py-6 px-4 gap-6 text-center"
+                  >
                   <div className="size-16 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                     <IconUsers className="size-8" />
                   </div>
@@ -561,9 +695,16 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
                       Back to Receipt Details
                     </button>
                   </div>
-                </div>
+                </motion.div>
               ) : isSplitMode ? (
-                <div className="flex flex-col gap-4 py-1">
+                <motion.div
+                  key="split-mode"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.12 }}
+                  className="flex flex-col gap-4 py-1"
+                >
                   {/* People Selection */}
                   <div className="flex flex-col gap-2 bg-muted/40 p-4 rounded-2xl border border-border/40">
                     <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -773,38 +914,73 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
                       })}
                     </div>
                   </div>
-                </div>
-              ) : (
-                <>
-                  {/* Mode Selector */}
-                    <div className="flex gap-2 bg-muted/50 p-1 rounded-xl border border-border/10">
-                <button
-                  type="button"
-                  onClick={() => handleModeChange(false)}
-                  className={cn(
-                    "flex-1 h-8 rounded-lg text-xs font-semibold transition-all cursor-pointer",
-                    !isReceipt
-                      ? "bg-white dark:bg-zinc-800 text-foreground shadow-xs"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
+                </motion.div>
+              ) : activeMode === "select" ? (
+                // === Initial Selection Screen ===
+                <motion.div
+                  key="select-mode"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.12 }}
+                  className="flex flex-col gap-5 py-4 px-2"
                 >
-                  Single Transaction
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleModeChange(true)}
-                  className={cn(
-                    "flex-1 h-8 rounded-lg text-xs font-semibold transition-all cursor-pointer",
-                    isReceipt
-                      ? "bg-white dark:bg-zinc-800 text-foreground shadow-xs"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  Receipt Mode
-                </button>
-              </div>
+                  <div className="text-center flex flex-col gap-1">
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      Choose how you want to record your transaction today.
+                    </p>
+                  </div>
+                  
+                  <div className="flex flex-col gap-3 mt-2">
+                    {/* Option 1: Single Transaction */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveMode("single");
+                        setIsReceipt(false);
+                        handleModeChange(false);
+                      }}
+                      className="group flex items-start gap-4 p-4 rounded-2xl border border-border/50 hover:border-primary/50 hover:bg-muted/30 dark:hover:bg-zinc-800/20 bg-white dark:bg-zinc-900 transition-all duration-200 hover:scale-[1.01] active:scale-95 text-left cursor-pointer"
+                    >
+                      <div className="p-3 rounded-xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors shrink-0">
+                        <IconCreditCard className="size-6 stroke-[2]" />
+                      </div>
+                      <div className="flex flex-col gap-1 min-w-0">
+                        <span className="text-sm font-bold text-foreground">Single Transaction</span>
+                        <span className="text-[11px] text-muted-foreground leading-relaxed">Record a simple manual expense or income transaction.</span>
+                      </div>
+                    </button>
 
-              {!isReceipt ? (
+                    {/* Option 2: Receipt Mode */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveMode("receipt");
+                        setIsReceipt(true);
+                        handleModeChange(true);
+                      }}
+                      className="group flex items-start gap-4 p-4 rounded-2xl border border-border/50 hover:border-emerald-500/50 hover:bg-muted/30 dark:hover:bg-zinc-800/20 bg-white dark:bg-zinc-900 transition-all duration-200 hover:scale-[1.01] active:scale-95 text-left cursor-pointer"
+                    >
+                      <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-500 group-hover:text-white transition-colors shrink-0">
+                        <IconReceipt className="size-6 stroke-[2]" />
+                      </div>
+                      <div className="flex flex-col gap-1 min-w-0">
+                        <span className="text-sm font-bold text-foreground">Receipt Mode</span>
+                        <span className="text-[11px] text-muted-foreground leading-relaxed">List multiple items from a receipt or scan to split with friends.</span>
+                      </div>
+                    </button>
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="form-mode"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.12 }}
+                  className="flex flex-col gap-4"
+                >
+                  {!isReceipt ? (
                 // === Single Transaction Layout ===
                 <>
                   {/* Expense / Income toggle */}
@@ -817,6 +993,11 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
                           setType(t);
                           if (t === "income") {
                             setIsReceipt(false);
+                            setCategory("income");
+                            setSubCategory("salary");
+                          } else {
+                            setCategory("pocket_money");
+                            setSubCategory("others");
                           }
                         }}
                         className={cn(
@@ -942,6 +1123,25 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
                     </>
                   )}
 
+                  {/* Income Subcategory */}
+                  {type === "income" && (
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs font-semibold text-muted-foreground">Sub-category</Label>
+                      <Select value={subCategory} onValueChange={handleSubCategoryChange}>
+                        <SelectTrigger className="h-11 rounded-xl text-sm font-semibold">
+                          <SelectValue placeholder="Select sub-category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {subcatOptions.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value} className="text-sm">
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
                   {/* Description */}
                   <div className="flex flex-col gap-1.5">
                     <Label className="text-xs font-semibold text-muted-foreground">
@@ -1029,12 +1229,37 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
                     {receiptItems.length > 0 ? (
                       <div className="flex flex-col gap-1.5 max-h-[180px] overflow-y-auto overflow-x-hidden pr-1">
                         {receiptItems.map((item, idx) => (
-                          <div key={idx} className="flex items-center justify-between bg-white dark:bg-zinc-900 border border-border/30 px-3 py-1.5 rounded-lg text-xs">
-                            <span className="font-semibold text-foreground truncate max-w-[150px]">{item.name}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-muted-foreground">
-                                {currencySymbol}{item.price.toLocaleString()}
-                              </span>
+                          <div key={idx} className="flex items-center justify-between bg-white dark:bg-zinc-900 border border-border/30 px-3 py-1.5 rounded-lg text-xs gap-2">
+                            <input
+                              type="text"
+                              value={item.name}
+                              onChange={(e) => {
+                                const newName = e.target.value;
+                                setReceiptItems((prev) =>
+                                  prev.map((it, i) => (i === idx ? { ...it, name: newName } : it))
+                                );
+                              }}
+                              className="font-semibold text-foreground bg-transparent focus:outline-none focus:border-b focus:border-primary border-b border-transparent w-[140px] truncate focus:truncate-none min-w-0"
+                              placeholder="Item name"
+                            />
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <div className="flex items-center gap-0.5 font-bold text-muted-foreground">
+                                <span>{currencySymbol}</span>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={item.price === 0 ? "" : item.price}
+                                  onChange={(e) => {
+                                    const val = e.target.value.replace(/[^0-9]/g, "");
+                                    const newPrice = val ? parseInt(val, 10) : 0;
+                                    setReceiptItems((prev) =>
+                                      prev.map((it, i) => (i === idx ? { ...it, price: newPrice } : it))
+                                    );
+                                  }}
+                                  className="w-[70px] text-right font-bold bg-transparent focus:outline-none focus:border-b focus:border-primary border-b border-transparent text-foreground"
+                                  placeholder="0"
+                                />
+                              </div>
                               <button
                                 type="button"
                                 onClick={() => {
@@ -1204,12 +1429,13 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
 
                   </>
                 )}
-                </>
+                </motion.div>
               )}
+              </AnimatePresence>
               </div>
 
             {/* Submit */}
-            {!showSplitPrompt && (
+            {!showSplitPrompt && activeMode !== "select" && (
               <div className="shrink-0 pt-4 mt-auto border-t border-border/20">
                 <Button
                   type="submit"
@@ -1230,8 +1456,8 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isAiImportOpen} onOpenChange={setIsAiImportOpen}>
-        <DialogContent className="max-w-[440px] rounded-2xl p-0">
+      <Dialog open={isAiImportOpen} onOpenChange={(v) => { if (!isAiParsing) setIsAiImportOpen(v); }}>
+        <DialogContent className="max-w-[440px] rounded-2xl p-0" layout={false}>
           <div className="flex flex-col max-h-[85vh] p-6">
             <DialogHeader className="shrink-0 pb-2">
               <DialogTitle className="flex items-center gap-2 text-lg font-bold text-foreground">
@@ -1239,137 +1465,210 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
                 Import Receipt Items by AI
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Follow this tutorial to extract items and prices using an external AI.
+                Automatically scan your receipt or generate prompts for manual parsing.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto py-4 flex flex-col gap-4 min-h-0 pr-1">
-              {/* Step 1 */}
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <span className="flex items-center justify-center size-5 rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                    1
-                  </span>
-                  <span className="text-xs font-bold text-foreground">
-                    Photo your receipt
-                  </span>
-                </div>
-                <p className="text-[11px] text-muted-foreground pl-7">
-                  Take a clear photo of your shopping receipt with your phone camera, or prepare the receipt image file.
-                </p>
-              </div>
+            {/* Mode Tabs */}
+            <div className="flex gap-2 bg-muted/50 p-1 rounded-xl border border-border/10 mb-3 shrink-0 mt-2">
+              <button
+                type="button"
+                onClick={() => setAiImportMode("auto")}
+                className={cn(
+                  "flex-1 h-8 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                  aiImportMode === "auto"
+                    ? "bg-white dark:bg-zinc-800 text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+                disabled={isAiParsing}
+              >
+                Automatic Scan
+              </button>
+              <button
+                type="button"
+                onClick={() => setAiImportMode("manual")}
+                className={cn(
+                  "flex-1 h-8 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                  aiImportMode === "manual"
+                    ? "bg-white dark:bg-zinc-800 text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+                disabled={isAiParsing}
+              >
+                Manual Prompt
+              </button>
+            </div>
 
-              {/* Step 2 */}
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="flex items-center justify-center size-5 rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                    2
-                  </span>
-                  <span className="text-xs font-bold text-foreground flex-1">
-                    Copy prompt & paste to AI
-                  </span>
-                  <Button
-                    type="button"
-                    size="xs"
-                    variant="outline"
-                    onClick={handleCopyPrompt}
-                    className="h-7 px-2.5 text-[11px] rounded-lg border-primary/20 text-primary hover:bg-primary/5 gap-1 shrink-0 cursor-pointer"
-                  >
-                    {isPromptCopied ? (
-                      <>
-                        <IconCheck className="size-3" />
-                        Copied!
-                      </>
-                    ) : (
-                      <>
-                        <IconCopy className="size-3" />
-                        Copy Prompt
-                      </>
-                    )}
-                  </Button>
-                </div>
-                <p className="text-[11px] text-muted-foreground pl-7 leading-relaxed">
-                  Send the prompt below to any AI model (ChatGPT, Gemini, Claude) along with your receipt photo:
-                </p>
-
-                {/* Translate Option Switch */}
-                <div className="flex flex-col gap-1.5 pl-7 my-1">
-                  <Label className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-                    Translate item names:
-                  </Label>
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setAiTranslateLang("none")}
-                      className={cn(
-                        "px-2.5 py-1 text-[10px] font-semibold rounded-lg border transition-all cursor-pointer",
-                        aiTranslateLang === "none"
-                          ? "bg-primary/10 border-primary/30 text-primary"
-                          : "border-border/40 text-muted-foreground hover:border-border"
-                      )}
-                    >
-                      Original
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAiTranslateLang("en")}
-                      className={cn(
-                        "px-2.5 py-1 text-[10px] font-semibold rounded-lg border transition-all cursor-pointer",
-                        aiTranslateLang === "en"
-                          ? "bg-primary/10 border-primary/30 text-primary"
-                          : "border-border/40 text-muted-foreground hover:border-border"
-                      )}
-                    >
-                      English
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAiTranslateLang("id")}
-                      className={cn(
-                        "px-2.5 py-1 text-[10px] font-semibold rounded-lg border transition-all cursor-pointer",
-                        aiTranslateLang === "id"
-                          ? "bg-primary/10 border-primary/30 text-primary"
-                          : "border-border/40 text-muted-foreground hover:border-border"
-                      )}
-                    >
-                      Indonesian
-                    </button>
-                  </div>
-                </div>
-
-                <div className="ml-7 p-2.5 rounded-xl bg-muted/50 border border-border/40 text-[10px] text-muted-foreground font-mono leading-normal max-h-[80px] overflow-y-auto select-all">
-                  Analyze this receipt image. Extract all items and their final prices{
+            {/* Global Language Selector */}
+            <div className="flex flex-col gap-1.5 p-3 mb-3 bg-muted/20 border border-border/40 rounded-xl shrink-0">
+              <Label className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
+                Translate item names:
+              </Label>
+              <div className="flex gap-2 mt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setAiTranslateLang("none")}
+                  className={cn(
+                    "flex-1 py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer text-center",
+                    aiTranslateLang === "none"
+                      ? "bg-primary/10 border-primary/30 text-primary"
+                      : "border-border/40 text-muted-foreground hover:border-border hover:bg-muted/30"
+                  )}
+                  disabled={isAiParsing}
+                >
+                  Original
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAiTranslateLang("en")}
+                  className={cn(
+                    "flex-1 py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer text-center",
+                    aiTranslateLang === "en"
+                      ? "bg-primary/10 border-primary/30 text-primary"
+                      : "border-border/40 text-muted-foreground hover:border-border hover:bg-muted/30"
+                  )}
+                  disabled={isAiParsing}
+                >
+                  English
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAiTranslateLang("id")}
+                  className={cn(
+                    "flex-1 py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer text-center",
                     aiTranslateLang === "id"
-                      ? ", translating the item names to Indonesian"
-                      : aiTranslateLang === "en"
-                      ? ", translating the item names to English"
-                      : ""
-                  }. Make sure the prices returned for each item include any tax, service charge, or fees (distribute them proportionally if listed separately). Return the output STRICTLY in JSON format with this structure: {"{\"items\": [{\"name\": \"Item Name\", \"price\": 1000}]}"}. Return only the raw JSON. Do not include markdown code block wrapper (like \`\`\`json) or any extra explanation.
-                </div>
+                      ? "bg-primary/10 border-primary/30 text-primary"
+                      : "border-border/40 text-muted-foreground hover:border-border hover:bg-muted/30"
+                  )}
+                  disabled={isAiParsing}
+                >
+                  Indonesian
+                </button>
               </div>
+            </div>
 
-              {/* Step 3 */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="flex items-center justify-center size-5 rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                    3
-                  </span>
-                  <span className="text-xs font-bold text-foreground">
-                    Paste AI Response
-                  </span>
-                </div>
-                <p className="text-[11px] text-muted-foreground pl-7">
-                  Paste the JSON response generated by the AI below:
-                </p>
-                <div className="pl-7">
-                  <textarea
-                    value={aiImportText}
-                    onChange={(e) => setAiImportText(e.target.value)}
-                    placeholder={`e.g.\n{\n  "items": [\n    { "name": "Item A", "price": 100 }\n  ]\n}`}
-                    className="flex min-h-[100px] w-full rounded-xl border border-input bg-transparent px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
+            <div className="flex-1 overflow-y-auto py-2 flex flex-col gap-4 min-h-0 pr-1">
+              {aiImportMode === "auto" ? (
+                // === Automatic Scan Layout ===
+                <div className="flex flex-col gap-4 py-2">
+                  <input
+                    type="file"
+                    id="receipt-upload"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageFileChange}
+                    disabled={isAiParsing}
                   />
+                  
+                  <label
+                    htmlFor="receipt-upload"
+                    className={cn(
+                      "flex flex-col items-center justify-center border border-dashed border-border/80 rounded-2xl p-8 bg-muted/10 transition-all text-center group gap-3",
+                      isAiParsing 
+                        ? "cursor-not-allowed opacity-80" 
+                        : "cursor-pointer hover:bg-muted/30 dark:hover:bg-zinc-800/10 hover:border-primary/50"
+                    )}
+                  >
+                    {isAiParsing ? (
+                      <div className="p-3 rounded-full bg-primary/10 text-primary">
+                        <IconLoader className="size-6 animate-spin" />
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-all">
+                        <IconCamera className="size-6" />
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm font-bold text-foreground">
+                        {isAiParsing ? "Analyzing Receipt..." : "Upload Receipt Photo"}
+                      </span>
+                      <span className="text-xs text-muted-foreground max-w-[240px] mx-auto leading-relaxed">
+                        {isAiParsing 
+                          ? "Gemini is extracting receipt items and prices. This may take a few seconds..." 
+                          : "Take a photo or upload receipt image to extract items automatically"}
+                      </span>
+                    </div>
+                  </label>
                 </div>
-              </div>
+              ) : (
+                // === Manual Prompt Layout ===
+                <>
+                  {/* Step 1 */}
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center justify-center size-5 rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                        1
+                      </span>
+                      <span className="text-xs font-bold text-foreground">
+                        Photo your receipt
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground pl-7">
+                      Prepare the receipt photo or image on your device.
+                    </p>
+                  </div>
+
+                  {/* Step 2 */}
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center justify-center size-5 rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                        2
+                      </span>
+                      <span className="text-xs font-bold text-foreground flex-1">
+                        Copy prompt & paste to AI
+                      </span>
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="outline"
+                        onClick={handleCopyPrompt}
+                        className="h-7 px-2.5 text-[11px] rounded-lg border-primary/20 text-primary hover:bg-primary/5 gap-1 shrink-0 cursor-pointer"
+                      >
+                        {isPromptCopied ? (
+                          <>
+                            <IconCheck className="size-3" />
+                            Copied!
+                          </>
+                        ) : (
+                          <>
+                            <IconCopy className="size-3" />
+                            Copy Prompt
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    
+                    <p className="text-[11px] text-muted-foreground pl-7 leading-relaxed">
+                      Click the button above to copy the prompt, send it to ChatGPT/Gemini/Claude with your receipt image.
+                    </p>
+
+
+                  </div>
+
+                  {/* Step 3 */}
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="flex items-center justify-center size-5 rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                        3
+                      </span>
+                      <span className="text-xs font-bold text-foreground">
+                        Paste AI Response
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground pl-7">
+                      Paste the JSON response generated by the AI below:
+                    </p>
+                    <div className="pl-7">
+                      <textarea
+                        value={aiImportText}
+                        onChange={(e) => setAiImportText(e.target.value)}
+                        placeholder={`e.g.\n{\n  "items": [\n    { "name": "Item A", "price": 100 }\n  ]\n}`}
+                        className="flex min-h-[100px] w-full rounded-xl border border-input bg-transparent px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             <DialogFooter className="shrink-0 gap-2 flex flex-row justify-end pt-4 border-t border-border/10">
@@ -1382,17 +1681,20 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
                   setAiImportText("");
                 }}
                 className="rounded-xl h-9 text-xs"
+                disabled={isAiParsing}
               >
                 Cancel
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleImportByAi}
-                className="rounded-xl h-9 text-xs min-w-[90px]"
-              >
-                Import
-              </Button>
+              {aiImportMode === "manual" && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleImportByAi}
+                  className="rounded-xl h-9 text-xs min-w-[90px]"
+                >
+                  Import Items
+                </Button>
+              )}
             </DialogFooter>
           </div>
         </DialogContent>

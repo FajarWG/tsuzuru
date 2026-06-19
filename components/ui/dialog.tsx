@@ -52,9 +52,11 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  layout = "size",
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  layout?: any
 }) {
   return (
     <DialogPortal>
@@ -68,7 +70,7 @@ function DialogContent({
         {...props}
       >
         <motion.div
-          layout
+          layout={layout}
           transition={{ type: "tween", ease: [0.25, 1, 0.5, 1], duration: 0.25 }}
           className={cn(
             "fixed top-1/2 left-1/2 z-50 flex flex-col max-h-[85vh] w-[calc(100%-3rem)] max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-4xl bg-popover p-6 text-sm text-popover-foreground shadow-xl ring-1 ring-foreground/5 duration-200 outline-none sm:max-w-md dark:ring-foreground/10 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",

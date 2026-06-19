@@ -83,6 +83,8 @@ model BillFriend {
   currency    String    // "JPY" | "IDR"
   direction   String    // "i_owe" | "they_owe"
   description String?
+  category    String?   // Original category (e.g. "pocket_money")
+  subCategory String?   // Original subcategory (e.g. "food")
   isSettled   Boolean   @default(false)
   settledAt   DateTime?
   createdAt   DateTime  @default(now())

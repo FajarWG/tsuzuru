@@ -4,6 +4,8 @@ export interface CreateBillInput {
   currency: string;
   direction: "i_owe" | "they_owe";
   description?: string;
+  category?: string | null;
+  subCategory?: string | null;
 }
 
 export interface SettleAllocationInput {

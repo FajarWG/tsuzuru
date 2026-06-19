@@ -59,6 +59,8 @@ export const billFriendRepository = {
       type: "expense" | "income";
       balanceDelta: number;
       currency: string;
+      category: string;
+      subCategory?: string | null;
       description: string;
     }[];
   }) {
@@ -84,7 +86,8 @@ export const billFriendRepository = {
             type: alloc.type,
             amount: alloc.amount,
             currency: alloc.currency,
-            category: "adjustment",
+            category: alloc.category,
+            subCategory: alloc.subCategory || null,
             description: alloc.description,
             date: new Date(),
           },

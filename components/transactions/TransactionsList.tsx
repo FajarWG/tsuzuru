@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { formatJPY, formatIDR, formatInputAmount, parseInputAmount } from "@/lib/format";
@@ -29,6 +29,9 @@ import {
   IconWallet,
   IconChevronDown,
   IconReceipt,
+  IconBriefcase,
+  IconGift,
+  IconCoins,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -58,6 +61,7 @@ import {
 import {
   deleteTransactionAction,
   updateTransactionAction,
+  getPaginatedTransactionsAction,
 } from "@/lib/actions/transactions";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -118,9 +122,26 @@ const SHOPPING_SUBCATS = [
   { value: "others", label: "Others" },
 ];
 
+const INCOME_SUBCATS = [
+  { value: "salary", label: "Salary" },
+  { value: "bonus", label: "Bonus" },
+  { value: "allowance", label: "Allowance" },
+  { value: "others", label: "Others" },
+];
+
 function getCategoryIcon(category: string, subCategory: string | null) {
-  if (category === "income")
-    return <IconTrendingUp className="size-5 text-primary" />;
+  if (category === "income") {
+    switch (subCategory) {
+      case "salary":
+        return <IconBriefcase className="size-5 text-emerald-500" />;
+      case "bonus":
+        return <IconGift className="size-5 text-orange-500" />;
+      case "allowance":
+        return <IconCoins className="size-5 text-teal-500" />;
+      default:
+        return <IconTrendingUp className="size-5 text-emerald-500" />;
+    }
+  }
   if (category === "adjustment")
     return <IconAdjustments className="size-5 text-blue-500" />;
 
@@ -202,6 +223,100 @@ export default function TransactionsList({
   const [monthFilter, setMonthFilter] = useState(currentMonthKey);
   const [startDateFilter, setStartDateFilter] = useState("");
   const [endDateFilter, setEndDateFilter] = useState("");
+
+  const [loadedTransactions, setLoadedTransactions] = useState<TransactionItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [serverSummary, setServerSummary] = useState<{
+    income: { JPY: number; IDR: number };
+    expense: { JPY: number; IDR: number };
+  } | null>(null);
+
+  const loadData = useCallback(async (pageToLoad: number, append = false) => {
+    if (typeof window !== "undefined" && !navigator.onLine) return;
+
+    if (pageToLoad === 1) {
+      setIsLoading(true);
+    } else {
+      setIsLoadingMore(true);
+    }
+
+    try {
+      const res = await getPaginatedTransactionsAction({
+        page: pageToLoad,
+        limit: 20,
+        typeFilter,
+        accountId: accountFilter,
+        categoryFilter,
+        monthFilter,
+        startDateFilter,
+        endDateFilter,
+        search,
+      });
+
+      if (res.success && res.transactions) {
+        const newTxs = res.transactions as unknown as TransactionItem[];
+        setLoadedTransactions((prev) => (append ? [...prev, ...newTxs] : newTxs));
+        setHasMore(res.hasMore ?? false);
+        if (res.summary) {
+          setServerSummary(res.summary);
+        }
+      } else {
+        toast.error(res.error || "Failed to load transactions");
+      }
+    } catch (err) {
+      console.error("Error loading transactions:", err);
+      toast.error("Failed to load transactions");
+    } finally {
+      setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  }, [
+    typeFilter,
+    accountFilter,
+    categoryFilter,
+    monthFilter,
+    startDateFilter,
+    endDateFilter,
+    search,
+  ]);
+
+  // Trigger loadData when online and filters change
+  useEffect(() => {
+    if (typeof window !== "undefined" && navigator.onLine) {
+      setPage(1);
+      loadData(1, false);
+    }
+  }, [
+    typeFilter,
+    accountFilter,
+    categoryFilter,
+    monthFilter,
+    startDateFilter,
+    endDateFilter,
+    search,
+    loadData,
+  ]);
+
+  // Listen for transaction-added event to refresh list
+  useEffect(() => {
+    const handleTransactionAdded = () => {
+      if (typeof window !== "undefined" && navigator.onLine) {
+        setPage(1);
+        loadData(1, false);
+      } else {
+        setPage(1);
+      }
+    };
+    window.addEventListener("transaction-added", handleTransactionAdded);
+    return () => {
+      window.removeEventListener("transaction-added", handleTransactionAdded);
+    };
+  }, [loadData]);
+
+
 
   const [editing, setEditing] = useState<TransactionItem | null>(null);
   const [deleting, setDeleting] = useState<TransactionItem | null>(null);
@@ -335,22 +450,7 @@ export default function TransactionsList({
     search,
   ]);
 
-  const groupedTransactions = useMemo(() => {
-    return filteredTransactions.reduce<Record<string, TransactionItem[]>>(
-      (groups, tx) => {
-        const label = new Date(tx.date).toLocaleDateString("en-US", {
-          weekday: "short",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        });
-        groups[label] = groups[label] || [];
-        groups[label].push(tx);
-        return groups;
-      },
-      {},
-    );
-  }, [filteredTransactions]);
+
 
   const summary = useMemo(() => {
     return filteredTransactions.reduce(
@@ -366,6 +466,46 @@ export default function TransactionsList({
       },
     );
   }, [filteredTransactions]);
+
+  const displayTransactions = useMemo(() => {
+    if (typeof window !== "undefined" && !navigator.onLine) {
+      return filteredTransactions.slice(0, page * 20);
+    }
+    return loadedTransactions;
+  }, [loadedTransactions, filteredTransactions, page]);
+
+  const displaySummary = useMemo(() => {
+    if (typeof window !== "undefined" && !navigator.onLine) {
+      return summary;
+    }
+    return serverSummary || summary;
+  }, [serverSummary, summary]);
+
+  const displayHasMore = useMemo(() => {
+    if (typeof window !== "undefined" && !navigator.onLine) {
+      return page * 20 < filteredTransactions.length;
+    }
+    return hasMore;
+  }, [hasMore, filteredTransactions.length, page]);
+
+  const groupedTransactions = useMemo(() => {
+    return displayTransactions.reduce<Record<string, TransactionItem[]>>(
+      (groups, tx) => {
+        const label = new Date(tx.date).toLocaleDateString("en-US", {
+          weekday: "short",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        });
+        groups[label] = groups[label] || [];
+        groups[label].push(tx);
+        return groups;
+      },
+      {},
+    );
+  }, [displayTransactions]);
+
+
 
   const resetFilters = () => {
     setSearch("");
@@ -420,7 +560,7 @@ export default function TransactionsList({
     setEditType(nextType);
     if (nextType === "income") {
       setEditCategory("income");
-      setEditSubCategory("");
+      setEditSubCategory("salary");
       setEditMealNumber(null);
     } else {
       setEditCategory("pocket_money");
@@ -475,8 +615,9 @@ export default function TransactionsList({
         amount: parsedAmount,
         category: editType === "income" ? "income" : editCategory,
         subCategory:
-          editType === "income" ||
-          !["pocket_money", "shopping"].includes(editCategory)
+          editType === "income"
+            ? editSubCategory
+            : !["pocket_money", "shopping"].includes(editCategory)
             ? null
             : editSubCategory,
         mealNumber:
@@ -528,7 +669,11 @@ export default function TransactionsList({
   };
 
   const editSubcatOptions =
-    editCategory === "shopping" ? SHOPPING_SUBCATS : POCKET_MONEY_SUBCATS;
+    editCategory === "income"
+      ? INCOME_SUBCATS
+      : editCategory === "shopping"
+      ? SHOPPING_SUBCATS
+      : POCKET_MONEY_SUBCATS;
 
   return (
     <div className="flex flex-col gap-5 flex-1">
@@ -708,11 +853,11 @@ export default function TransactionsList({
             Expense
           </p>
           <p className="text-sm font-sans font-bold text-destructive mt-1">
-            {formatJPY(summary.expense.JPY)}
+            {formatJPY(displaySummary.expense.JPY)}
           </p>
-          {summary.expense.IDR > 0 && (
+          {displaySummary.expense.IDR > 0 && (
             <p className="text-xs font-sans font-bold text-destructive mt-0.5">
-              {formatIDR(summary.expense.IDR)}
+              {formatIDR(displaySummary.expense.IDR)}
             </p>
           )}
         </div>
@@ -721,11 +866,11 @@ export default function TransactionsList({
             Income
           </p>
           <p className="text-sm font-sans font-bold text-primary mt-1">
-            {formatJPY(summary.income.JPY)}
+            {formatJPY(displaySummary.income.JPY)}
           </p>
-          {summary.income.IDR > 0 && (
+          {displaySummary.income.IDR > 0 && (
             <p className="text-xs font-sans font-bold text-primary mt-0.5">
-              {formatIDR(summary.income.IDR)}
+              {formatIDR(displaySummary.income.IDR)}
             </p>
           )}
         </div>
@@ -739,214 +884,277 @@ export default function TransactionsList({
         className="flex flex-col gap-5 mt-2"
       >
         {Object.keys(groupedTransactions).length === 0 ? (
-          <div className="bg-white dark:bg-zinc-900 border border-border/40 rounded-2xl p-8 text-center">
-            <p className="text-sm font-semibold text-foreground">
-              No transactions found
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Adjust the filters or add a new transaction from the plus button.
-            </p>
+          <div className="bg-white dark:bg-zinc-900 border border-border/40 rounded-2xl p-8 text-center animate-pulse">
+            {isLoading ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-4">
+                <IconLoader className="size-6 animate-spin text-primary" />
+                <span className="text-xs text-muted-foreground">Fetching transactions...</span>
+              </div>
+            ) : (
+              <>
+                <p className="text-sm font-semibold text-foreground">
+                  No transactions found
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Adjust the filters or add a new transaction from the plus button.
+                </p>
+              </>
+            )}
           </div>
         ) : (
-          Object.entries(groupedTransactions).map(([dateLabel, items]) => (
-            <div key={dateLabel} className="flex flex-col gap-2">
-              <h3 className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase px-1">
-                {dateLabel}
-              </h3>
+          <AnimatePresence mode="popLayout" initial={false}>
+            {Object.entries(groupedTransactions).map(([dateLabel, items]) => (
+              <motion.div
+                key={dateLabel}
+                layout
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.25 }}
+                className="flex flex-col gap-2"
+              >
+                <h3 className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase px-1">
+                  {dateLabel}
+                </h3>
 
-              <div className="flex flex-col gap-2">
-                 {items.map((tx) => {
-                  const isExpanded = !!expandedReceipts[tx.id];
-                  return (
-                    <div
-                      key={tx.id}
-                      onClick={() => tx.isReceipt && setExpandedReceipts((prev) => ({ ...prev, [tx.id]: !prev[tx.id] }))}
-                      className={cn(
-                        "border rounded-2xl p-4 flex flex-col gap-3 shadow-xs transition-all select-none bg-white dark:bg-zinc-900 relative overflow-hidden",
-                        tx.isReceipt 
-                          ? "border-emerald-500/30 dark:border-emerald-500/20 cursor-pointer hover:bg-zinc-50/40 dark:hover:bg-zinc-950/20" 
-                          : "border-border/40"
-                      )}
-                    >
-                      {tx.isReceipt && (
-                        <IconReceipt className="absolute -right-4 top-1/2 -translate-y-1/2 size-24 text-emerald-500/[0.05] dark:text-emerald-500/[0.03] pointer-events-none" />
-                      )}
-                      <div className="flex justify-between items-center w-full gap-3 z-10">
-                        <div className="flex min-w-0 items-center gap-3 flex-1">
-                          <div className="p-2 bg-muted rounded-xl text-primary shrink-0">
-                            {getCategoryIcon(tx.category, tx.subCategory)}
-                          </div>
-                          <div className="flex min-w-0 flex-col gap-0.5">
-                            <span className="truncate text-xs font-semibold text-foreground leading-tight">
-                              {cleanDescription(tx.description) || tx.category.replace(/_/g, " ")}
-                            </span>
-                            <span className="truncate text-[10px] text-muted-foreground leading-none">
-                              {tx.account.name} · {tx.subCategory || tx.category}
-                            </span>
-                          </div>
-                        </div>
+                <div className="flex flex-col gap-2">
+                  <AnimatePresence mode="popLayout" initial={false}>
+                    {items.map((tx) => {
+                      const isExpanded = !!expandedReceipts[tx.id];
+                      return (
+                        <motion.div
+                          key={tx.id}
+                          layout
+                          initial={{ opacity: 0, scale: 0.96, y: 8 }}
+                          animate={{ opacity: 1, scale: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.96, y: -8 }}
+                          transition={{ duration: 0.25, ease: "easeInOut" }}
+                          onClick={() => tx.isReceipt && setExpandedReceipts((prev) => ({ ...prev, [tx.id]: !prev[tx.id] }))}
+                          className={cn(
+                            "border rounded-2xl p-4 flex flex-col gap-3 shadow-xs transition-all select-none bg-white dark:bg-zinc-900 relative overflow-hidden",
+                            tx.isReceipt 
+                              ? "border-emerald-500/30 dark:border-emerald-500/20 cursor-pointer hover:bg-zinc-50/40 dark:hover:bg-zinc-950/20" 
+                              : "border-border/40"
+                          )}
+                        >
+                          {tx.isReceipt && (
+                            <IconReceipt className="absolute -right-4 top-1/2 -translate-y-1/2 size-24 text-emerald-500/[0.05] dark:text-emerald-500/[0.03] pointer-events-none" />
+                          )}
+                          <div className="flex justify-between items-center w-full gap-3 z-10">
+                            <div className="flex min-w-0 items-center gap-3 flex-1">
+                              <div className="p-2 bg-muted rounded-xl text-primary shrink-0">
+                                {getCategoryIcon(tx.category, tx.subCategory)}
+                              </div>
+                              <div className="flex min-w-0 flex-col gap-0.5">
+                                <span className="truncate text-xs font-semibold text-foreground leading-tight">
+                                  {cleanDescription(tx.description) || 
+                                    (tx.category === "income" && tx.subCategory 
+                                      ? tx.subCategory.charAt(0).toUpperCase() + tx.subCategory.slice(1) 
+                                      : tx.category === "income" ? "Income" : tx.category.replace(/_/g, " ")
+                                    )
+                                  }
+                                </span>
+                                <span className="truncate text-[10px] text-muted-foreground leading-none">
+                                  {tx.account.name} · {tx.subCategory || tx.category}
+                                </span>
+                              </div>
+                            </div>
 
-                        <div className="flex shrink-0 items-center gap-2">
-                          <div className="text-right flex flex-col items-end mr-1">
-                            <span
-                              className={`text-xs font-sans font-bold ${
-                                tx.type === "expense"
-                                  ? "text-destructive"
-                                  : "text-primary"
-                              }`}
-                            >
-                              {tx.type === "expense" ? "-" : "+"}
-                              {formatCurrency(tx.amount, tx.currency)}
-                            </span>
-                            {(tx as any).settledAmount > 0 && (
-                              <span className="text-[9px] text-muted-foreground line-through leading-tight block mt-0.5">
-                                {formatCurrency((tx as any).originalAmount, tx.currency)}
-                              </span>
-                            )}
-                          </div>
-
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEdit(tx);
-                            }}
-                            aria-label="Edit transaction"
-                          >
-                            <IconEdit className="size-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-
-                      {/* Collapsible Items list */}
-                      {tx.isReceipt && (() => {
-                        try {
-                          const items = tx.receiptItems ? (typeof tx.receiptItems === "string" ? JSON.parse(tx.receiptItems) : tx.receiptItems) : [];
-                          if (Array.isArray(items) && items.length > 0) {
-                            return (
-                              <AnimatePresence initial={false}>
-                                {isExpanded && (
-                                  <motion.div
-                                    initial={{ height: 0, opacity: 0 }}
-                                    animate={{ height: "auto", opacity: 1 }}
-                                    exit={{ height: 0, opacity: 0 }}
-                                    transition={{ duration: 0.25, ease: "easeInOut" }}
-                                    className="overflow-hidden w-full z-10"
-                                  >
-                                    <div className="w-full pt-2.5 border-t border-border/20 flex flex-col gap-2 mt-1">
-                                      <span className="text-[9px] font-bold tracking-wider text-muted-foreground uppercase mb-0.5 px-0.5">
-                                        Items ({items.length})
-                                      </span>
-                                      {(() => {
-                                        const sharedItems: any[] = [];
-                                        const singleItemsByPerson: Record<string, any[]> = {};
-
-                                        items.forEach((item: any) => {
-                                          const itemAssigned = Array.isArray(item.assigned) ? item.assigned : ["Me"];
-                                          if (itemAssigned.length > 1) {
-                                            sharedItems.push(item);
-                                          } else {
-                                            const person = itemAssigned[0] || "Me";
-                                            if (!singleItemsByPerson[person]) {
-                                              singleItemsByPerson[person] = [];
-                                            }
-                                            singleItemsByPerson[person].push(item);
-                                          }
-                                        });
-
-                                        return (
-                                          <div className="flex flex-col gap-2.5">
-                                            {sharedItems.length > 0 && (
-                                              <div className="flex flex-col gap-1">
-                                                <span className="text-[9px] font-bold tracking-wider text-muted-foreground/80 uppercase px-0.5">
-                                                  Shared:
-                                                </span>
-                                                <div className="flex flex-col gap-1 pl-1.5 pr-0.5">
-                                                  {sharedItems.map((item: any, idx: number) => {
-                                                    const itemAssigned = Array.isArray(item.assigned) ? item.assigned : ["Me"];
-                                                    return (
-                                                      <div key={`shared-${idx}`} className="flex flex-col gap-0.5 text-xs text-muted-foreground">
-                                                        <div className="flex justify-between items-center">
-                                                          <span className="truncate max-w-[220px]">
-                                                            • {item.name}{" "}
-                                                            <span className="text-[10px] text-muted-foreground/60 font-medium">
-                                                              ({itemAssigned.join(", ")})
-                                                            </span>
-                                                          </span>
-                                                          <span className="font-sans font-semibold text-foreground shrink-0">
-                                                            {formatCurrency(item.price, tx.currency)}
-                                                          </span>
-                                                        </div>
-                                                      </div>
-                                                    );
-                                                  })}
-                                                </div>
-                                              </div>
-                                            )}
-
-                                            {Object.entries(singleItemsByPerson).map(([person, pItems]) => (
-                                              <div key={person} className="flex flex-col gap-1">
-                                                <span className="text-[9px] font-bold tracking-wider text-muted-foreground/80 uppercase px-0.5">
-                                                  {person}:
-                                                </span>
-                                                <div className="flex flex-col gap-1 pl-1.5 pr-0.5">
-                                                  {pItems.map((item: any, idx: number) => (
-                                                    <div key={`single-${person}-${idx}`} className="flex flex-col gap-0.5 text-xs text-muted-foreground">
-                                                      <div className="flex justify-between items-center">
-                                                        <span className="truncate max-w-[220px]">• {item.name}</span>
-                                                        <span className="font-sans font-semibold text-foreground shrink-0">
-                                                          {formatCurrency(item.price, tx.currency)}
-                                                        </span>
-                                                      </div>
-                                                    </div>
-                                                  ))}
-                                                </div>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        );
-                                      })()}
- 
-                                       {/* Settlement List */}
-                                      {Array.isArray((tx as any).settlementsList) && (tx as any).settlementsList.length > 0 && (
-                                        <div className="mt-3 pt-2.5 border-t border-border/10 flex flex-col gap-1.5">
-                                          <span className="text-[9px] font-bold tracking-wider text-primary uppercase mb-0.5 px-0.5">
-                                            Settlements (Paid Back)
-                                          </span>
-                                          <div className="flex flex-col gap-1 pl-1.5 pr-0.5">
-                                            {(tx as any).settlementsList.map((settle: any, sIdx: number) => {
-                                              const cleanSettleDesc = cleanDescription(settle.description)
-                                                .replace(/^Settled Bill with [^:]+:\s*/i, "");
-                                              return (
-                                                <div key={sIdx} className="flex justify-between items-center text-xs text-primary font-medium">
-                                                  <span>✓ {cleanSettleDesc || `Settled share`}</span>
-                                                  <span className="font-sans font-bold">
-                                                    +{formatCurrency(settle.amount, tx.currency)}
-                                                  </span>
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </motion.div>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <div className="text-right flex flex-col items-end mr-1">
+                                <span
+                                  className={`text-xs font-sans font-bold ${
+                                    tx.type === "expense"
+                                      ? tx.amount < 0
+                                        ? "text-primary"
+                                        : "text-destructive"
+                                      : "text-primary"
+                                  }`}
+                                >
+                                  {tx.type === "expense" ? (tx.amount < 0 ? "+" : "-") : "+"}
+                                  {formatCurrency(Math.abs(tx.amount), tx.currency)}
+                                </span>
+                                {(tx as any).settledAmount > 0 && (
+                                  <span className="text-[9px] text-muted-foreground line-through leading-tight block mt-0.5">
+                                    {formatCurrency((tx as any).originalAmount, tx.currency)}
+                                  </span>
                                 )}
-                              </AnimatePresence>
-                            );
-                          }
-                        } catch {
-                          return null;
-                        }
-                        return null;
-                      })()}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))
+                              </div>
+
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openEdit(tx);
+                                }}
+                                aria-label="Edit transaction"
+                              >
+                                <IconEdit className="size-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          {/* Collapsible Items list */}
+                          {tx.isReceipt && (() => {
+                            try {
+                              const items = tx.receiptItems ? (typeof tx.receiptItems === "string" ? JSON.parse(tx.receiptItems) : tx.receiptItems) : [];
+                              if (Array.isArray(items) && items.length > 0) {
+                                return (
+                                  <AnimatePresence initial={false}>
+                                    {isExpanded && (
+                                      <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: "auto", opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.25, ease: "easeInOut" }}
+                                        className="overflow-hidden w-full z-10"
+                                      >
+                                        <div className="w-full pt-2.5 border-t border-border/20 flex flex-col gap-2 mt-1">
+                                          <span className="text-[9px] font-bold tracking-wider text-muted-foreground uppercase mb-0.5 px-0.5">
+                                            Items ({items.length})
+                                          </span>
+                                          {(() => {
+                                            const sharedItems: any[] = [];
+                                            const singleItemsByPerson: Record<string, any[]> = {};
+
+                                            items.forEach((item: any) => {
+                                              const itemAssigned = Array.isArray(item.assigned) ? item.assigned : ["Me"];
+                                              if (itemAssigned.length > 1) {
+                                                sharedItems.push(item);
+                                              } else {
+                                                const person = itemAssigned[0] || "Me";
+                                                if (!singleItemsByPerson[person]) {
+                                                  singleItemsByPerson[person] = [];
+                                                }
+                                                singleItemsByPerson[person].push(item);
+                                              }
+                                            });
+
+                                            return (
+                                              <div className="flex flex-col gap-2.5">
+                                                {sharedItems.length > 0 && (
+                                                  <div className="flex flex-col gap-1">
+                                                    <span className="text-[9px] font-bold tracking-wider text-muted-foreground/80 uppercase px-0.5">
+                                                      Shared:
+                                                    </span>
+                                                    <div className="flex flex-col gap-1 pl-1.5 pr-0.5">
+                                                      {sharedItems.map((item: any, idx: number) => {
+                                                        const itemAssigned = Array.isArray(item.assigned) ? item.assigned : ["Me"];
+                                                        return (
+                                                          <div key={`shared-${idx}`} className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+                                                            <div className="flex justify-between items-center">
+                                                              <span className="truncate max-w-[220px]">
+                                                                • {item.name}{" "}
+                                                                <span className="text-[10px] text-muted-foreground/60 font-medium">
+                                                                  ({itemAssigned.join(", ")})
+                                                                </span>
+                                                              </span>
+                                                              <span className="font-sans font-semibold text-foreground shrink-0">
+                                                                {formatCurrency(item.price, tx.currency)}
+                                                              </span>
+                                                            </div>
+                                                          </div>
+                                                        );
+                                                      })}
+                                                    </div>
+                                                  </div>
+                                                )}
+
+                                                {Object.entries(singleItemsByPerson).map(([person, pItems]) => (
+                                                  <div key={person} className="flex flex-col gap-1">
+                                                    <span className="text-[9px] font-bold tracking-wider text-muted-foreground/80 uppercase px-0.5">
+                                                      {person}:
+                                                    </span>
+                                                    <div className="flex flex-col gap-1 pl-1.5 pr-0.5">
+                                                      {pItems.map((item: any, idx: number) => (
+                                                        <div key={`single-${person}-${idx}`} className="flex flex-col gap-0.5 text-xs text-muted-foreground">
+                                                          <div className="flex justify-between items-center">
+                                                            <span className="truncate max-w-[220px]">• {item.name}</span>
+                                                            <span className="font-sans font-semibold text-foreground shrink-0">
+                                                              {formatCurrency(item.price, tx.currency)}
+                                                            </span>
+                                                          </div>
+                                                        </div>
+                                                      ))}
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            );
+                                          })()}
+     
+                                           {/* Settlement List */}
+                                          {Array.isArray((tx as any).settlementsList) && (tx as any).settlementsList.length > 0 && (
+                                            <div className="mt-3 pt-2.5 border-t border-border/10 flex flex-col gap-1.5">
+                                              <span className="text-[9px] font-bold tracking-wider text-primary uppercase mb-0.5 px-0.5">
+                                                Settlements (Paid Back)
+                                              </span>
+                                              <div className="flex flex-col gap-1 pl-1.5 pr-0.5">
+                                                {(tx as any).settlementsList.map((settle: any, sIdx: number) => {
+                                                  const cleanSettleDesc = cleanDescription(settle.description)
+                                                    .replace(/^Settled Bill with [^:]+:\s*/i, "");
+                                                  return (
+                                                    <div key={sIdx} className="flex justify-between items-center text-xs text-primary font-medium">
+                                                      <span>✓ {cleanSettleDesc || `Settled share`}</span>
+                                                      <span className="font-sans font-bold">
+                                                        +{formatCurrency(settle.amount, tx.currency)}
+                                                      </span>
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                );
+                              }
+                            } catch {
+                              return null;
+                            }
+                            return null;
+                          })()}
+                        </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
+                </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        )}
+
+        {/* Load More Button */}
+        {displayHasMore && (
+          <div className="flex justify-center mt-4 pb-6 px-1">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setPage((prev) => {
+                  const nextPage = prev + 1;
+                  if (typeof window !== "undefined" && navigator.onLine) {
+                    loadData(nextPage, true);
+                  }
+                  return nextPage;
+                });
+              }}
+              disabled={isLoadingMore}
+              className="w-full max-w-[280px] h-10 rounded-xl text-xs font-semibold shadow-xs transition-all hover:scale-[1.01] active:scale-95 cursor-pointer"
+            >
+              {isLoadingMore ? (
+                <>
+                  <IconLoader className="size-4 animate-spin mr-2 text-primary" />
+                  Loading...
+                </>
+              ) : (
+                "Load More Transactions"
+              )}
+            </Button>
+          </div>
         )}
       </motion.div>
 
@@ -1151,6 +1359,34 @@ export default function TransactionsList({
                           </div>
                         )}
                     </>
+                  )}
+
+                  {/* Income categories */}
+                  {editType === "income" && (
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs font-semibold text-muted-foreground">
+                        Sub-category
+                      </Label>
+                      <Select
+                        value={editSubCategory}
+                        onValueChange={(value) => setEditSubCategory(value)}
+                      >
+                        <SelectTrigger className="h-11 rounded-xl text-sm font-semibold">
+                          <SelectValue placeholder="Select sub-category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {editSubcatOptions.map((opt) => (
+                            <SelectItem
+                              key={opt.value}
+                              value={opt.value}
+                              className="text-sm"
+                            >
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   )}
 
                   {/* Description */}

@@ -30,3 +30,13 @@ export async function parseReceiptTextCustomAction(text: string, model: string, 
     return { success: false, error: (err as Error).message };
   }
 }
+
+export async function parseReceiptImageAction(base64Data: string, mimeType: string, language?: string) {
+  try {
+    const data = await aiService.parseReceiptImage(base64Data, mimeType, language);
+    return { success: true, data };
+  } catch (err) {
+    console.error("parseReceiptImageAction error:", err);
+    return { success: false, error: (err as Error).message };
+  }
+}

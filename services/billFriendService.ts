@@ -5,7 +5,7 @@ import { CreateBillInput, SettleAllocationInput } from "@/types/billFriend";
 
 export const billFriendService = {
   async createBill(data: CreateBillInput, userId: string) {
-    const { personName, amount, currency, direction, description } = data;
+    const { personName, amount, currency, direction, description, category, subCategory } = data;
 
     if (!personName.trim()) throw new Error("Person name is required");
     if (amount <= 0) throw new Error("Amount must be greater than 0");
@@ -19,6 +19,8 @@ export const billFriendService = {
       currency,
       direction,
       description: description?.trim() || null,
+      category: category || null,
+      subCategory: subCategory || null,
     });
   },
 
@@ -91,15 +93,18 @@ export const billFriendService = {
       }
 
       const isExpense = bill.direction === "i_owe";
-      const type = isExpense ? "expense" : "income" as "expense" | "income";
+      const type = "expense" as "expense" | "income";
+      const amount = isExpense ? alloc.amount : -alloc.amount;
       const balanceDelta = isExpense ? -alloc.amount : alloc.amount;
 
       formattedAllocations.push({
         accountId: alloc.accountId,
-        amount: alloc.amount,
+        amount,
         type,
         balanceDelta,
         currency: bill.currency,
+        category: bill.category || "pocket_money",
+        subCategory: bill.subCategory || "others",
         description: `Settled Bill with ${bill.personName}: ${bill.description || (isExpense ? "I owe them" : "They owe me")}`,
       });
     }
@@ -126,6 +131,8 @@ export const billFriendService = {
         currency: bill.currency,
         direction: bill.direction,
         description: bill.description?.trim() || null,
+        category: bill.category || null,
+        subCategory: bill.subCategory || null,
       };
     });
 
