@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   formatJPY,
   formatIDR,
@@ -71,6 +71,7 @@ interface TemplatesConfigListProps {
   templates: TemplateItem[];
   accounts: AccountItem[];
   hideHeader?: boolean;
+  paidTemplateNamesThisMonth?: string[];
 }
 
 const INTERVAL_OPTIONS = [
@@ -86,8 +87,13 @@ export default function TemplatesConfigList({
   templates,
   accounts,
   hideHeader = false,
+  paidTemplateNamesThisMonth = [],
 }: TemplatesConfigListProps) {
   const [items, setItems] = useState<TemplateItem[]>(templates);
+
+  useEffect(() => {
+    setItems(templates);
+  }, [templates]);
 
   // Create dialog state
   const [createOpen, setCreateOpen] = useState(false);
@@ -354,14 +360,25 @@ export default function TemplatesConfigList({
         </div>
       )}
 
-      <div className="flex flex-col divide-y divide-border/40">
+      <div className="flex flex-col gap-1">
         {(() => {
-          // Generate Credit Card bills dynamically from accounts with debt (balance < 0)
+          const isItemPaid = (item: any) => {
+            if ("isCreditCardBill" in item && item.isCreditCardBill) {
+              const cleanCcName = item.name.replace("Credit Card Bill: ", "");
+              const ccPaidName = `CC Payoff: ${cleanCcName}`;
+              return paidTemplateNamesThisMonth.some(name => name.includes(ccPaidName));
+            }
+            return paidTemplateNamesThisMonth.includes(item.name);
+          };
+
+          // Generate Credit Card bills dynamically from accounts with debt (balance < 0) or paid CC this month
           const ccBills = accounts
-            .filter(
-              (acc) =>
-                acc.type === "credit_card" && acc.isActive && acc.balance < 0,
-            )
+            .filter((acc) => {
+              if (acc.type !== "credit_card" || !acc.isActive) return false;
+              if (acc.balance < 0) return true;
+              const ccPaidName = `CC Payoff: ${acc.name}`;
+              return paidTemplateNamesThisMonth.some(name => name.includes(ccPaidName));
+            })
             .map((acc) => ({
               id: `cc-bill-${acc.id}`,
               name: `Credit Card Bill: ${acc.name}`,
@@ -385,7 +402,10 @@ export default function TemplatesConfigList({
             );
           }
 
-          return allBills.map((item) => {
+          const unpaidBills = allBills.filter((item) => !isItemPaid(item));
+          const paidBills = allBills.filter((item) => isItemPaid(item));
+
+          const renderBillRow = (item: any, isPaid: boolean) => {
             const isCreditCardBill =
               "isCreditCardBill" in item && (item as any).isCreditCardBill;
             const linkedAccount = accounts.find((a) => a.id === item.accountId);
@@ -400,14 +420,18 @@ export default function TemplatesConfigList({
               <div
                 key={item.id}
                 className={cn(
-                  "py-2 flex items-center justify-between gap-3 text-xs",
+                  "py-2 flex items-center justify-between gap-3 text-xs transition-opacity duration-200",
                   isCreditCardBill &&
                     "bg-rose-500/[0.03] dark:bg-rose-500/[0.015] px-1 [box-shadow:-3px_0_0_0_rgb(244_63_94_/_0.5)] my-1 first:mt-0 last:mb-0",
+                  isPaid && "opacity-60"
                 )}
               >
                 <div className="flex flex-col gap-0.5 flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-xs font-semibold text-foreground truncate">
+                    <span className={cn(
+                      "text-xs font-semibold text-foreground truncate",
+                      isPaid && "text-muted-foreground line-through decoration-muted-foreground/30"
+                    )}>
                       {item.name}
                     </span>
                     {!item.isActive && (
@@ -476,34 +500,38 @@ export default function TemplatesConfigList({
 
                   <div className="flex items-center gap-1">
                     {item.isActive && (
-                      <Button
-                        size="xs"
-                        variant="outline"
-                        className={cn(
-                          "gap-1 cursor-pointer font-semibold",
-                          justPaid &&
-                            "border-primary/40 text-primary bg-primary/5",
-                        )}
-                        onClick={() => openPay(item)}
-                        disabled={isPaying || justPaid}
-                      >
-                        {isPaying ? (
-                          <IconLoader className="size-3 animate-spin" />
-                        ) : justPaid ? (
-                          <>
-                            <IconCheck className="size-3" />
-                            Paid!
-                          </>
-                        ) : (
-                          <>
-                            <IconCash className="size-3" />
+                      <>
+                        {isPaid || justPaid ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold px-2 py-1 bg-emerald-500/10 rounded-lg select-none">
+                            <IconCheck className="size-3.5 stroke-[3]" />
                             Paid
-                          </>
+                          </span>
+                        ) : (
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            className={cn(
+                              "gap-1 cursor-pointer font-semibold",
+                              justPaid &&
+                                "border-primary/40 text-primary bg-primary/5",
+                            )}
+                            onClick={() => openPay(item)}
+                            disabled={isPaying}
+                          >
+                            {isPaying ? (
+                              <IconLoader className="size-3 animate-spin" />
+                            ) : (
+                              <>
+                                <IconCash className="size-3" />
+                                Paid
+                              </>
+                            )}
+                          </Button>
                         )}
-                      </Button>
+                      </>
                     )}
 
-                    {!isCreditCardBill && (
+                    {!isCreditCardBill && !isPaid && (
                       <Button
                         size="icon-xs"
                         variant="ghost"
@@ -518,7 +546,39 @@ export default function TemplatesConfigList({
                 </div>
               </div>
             );
-          });
+          };
+
+          return (
+            <div className="flex flex-col gap-1">
+              {/* Unpaid section */}
+              {unpaidBills.length > 0 && (
+                <div className="flex flex-col divide-y divide-border/40">
+                  {unpaidBills.map((item) => renderBillRow(item, false))}
+                </div>
+              )}
+
+              {/* Paid section */}
+              {paidBills.length > 0 && (
+                <div className="mt-4 flex flex-col gap-1">
+                  <div className="flex items-center gap-2 px-1 py-1 border-b border-border/10">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Paid This Month
+                    </span>
+                  </div>
+                  <div className="flex flex-col divide-y divide-border/40">
+                    {paidBills.map((item) => renderBillRow(item, true))}
+                  </div>
+                </div>
+              )}
+
+              {unpaidBills.length === 0 && paidBills.length === 0 && (
+                <div className="text-center text-xs text-muted-foreground py-6">
+                  No recurring bills configured. Click &quot;Add Bill&quot; to
+                  create one.
+                </div>
+              )}
+            </div>
+          );
         })()}
       </div>
 

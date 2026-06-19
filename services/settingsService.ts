@@ -2,6 +2,7 @@ import { settingsRepository } from "@/repositories/settingsRepository";
 import { accountRepository } from "@/repositories/accountRepository";
 import { templateRepository } from "@/repositories/templateRepository";
 import { budgetRepository } from "@/repositories/budgetRepository";
+import { prisma } from "@/lib/prisma";
 import { UpdateUserSettingsInput, OnboardingInput } from "@/types/settings";
 import { AccountUpdateItem } from "@/types/account";
 
@@ -72,12 +73,29 @@ export const settingsService = {
       budgetLimits = await budgetRepository.findMany(userId);
     }
 
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const paidTxs = await prisma.transaction.findMany({
+      where: {
+        userId,
+        date: { gte: startOfMonth },
+        isTemplate: true,
+      },
+      select: {
+        description: true,
+      },
+    });
+    const paidTemplateNamesThisMonth = paidTxs
+      .map((tx) => tx.description)
+      .filter((desc): desc is string => !!desc);
+
     return {
       userSettings,
       accounts,
       templates,
       budgetLimits,
       profile,
+      paidTemplateNamesThisMonth,
     };
   },
 };

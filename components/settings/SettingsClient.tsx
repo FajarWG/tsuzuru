@@ -52,6 +52,7 @@ interface SettingsData {
   templates: TemplateItem[];
   budgetLimits: BudgetLimitItem[];
   profile: ProfileItem;
+  paidTemplateNamesThisMonth?: string[];
 }
 
 interface SettingsClientProps {
@@ -179,6 +180,7 @@ export default function SettingsClient({ userId, defaultTab = "templates" }: Set
         profile={profile}
         defaultTab={defaultTab}
         onRefresh={() => syncDataRef.current()}
+        paidTemplateNamesThisMonth={data?.paidTemplateNamesThisMonth || []}
       />
     </div>
   );

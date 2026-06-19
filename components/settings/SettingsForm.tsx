@@ -109,6 +109,7 @@ interface SettingsFormProps {
   };
   defaultTab?: string;
   onRefresh?: () => void;
+  paidTemplateNamesThisMonth?: string[];
 }
 
 function formatCurrency(amount: number, currency: string) {
@@ -164,6 +165,7 @@ export default function SettingsForm({
   profile,
   defaultTab = "templates",
   onRefresh,
+  paidTemplateNamesThisMonth = [],
 }: SettingsFormProps) {
   // Budget Limits CRUD states
   const [addBudgetOpen, setAddBudgetOpen] = useState(false);
@@ -603,6 +605,7 @@ export default function SettingsForm({
             <TemplatesConfigList
               templates={templates}
               accounts={accountsForTemplates}
+              paidTemplateNamesThisMonth={paidTemplateNamesThisMonth}
             />
           </section>
         </TabsContent>
