@@ -54,10 +54,10 @@ export async function updateTransactionAction(data: UpdateTransactionInput) {
   }
 }
 
-export async function deleteTransactionAction(transactionId: string, userId: string) {
+export async function deleteTransactionAction(transactionId: string) {
   try {
     const session = await auth();
-    if (!session || !session.user || !session.user.id || session.user.id !== userId) {
+    if (!session || !session.user || !session.user.id) {
       return { success: false, error: "Unauthorized" };
     }
 
@@ -185,41 +185,54 @@ export async function getPaginatedTransactionsAction(params: {
         currency: true,
         category: true,
         description: true,
+        splitGroupId: true,
       },
     });
 
-    // Find all [tx_id:split_xxx] in allMatching descriptions
+    /**
+     * Resolve the splitGroupId for a transaction.
+     * New records use the dedicated splitGroupId field.
+     * Legacy records (before this field was added) fall back to regex parsing.
+     */
+    function resolveSplitGroupId(tx: { splitGroupId?: string | null; description?: string | null }): string | null {
+      if (tx.splitGroupId) return tx.splitGroupId;
+      // Backward compat: parse legacy [tx_id:xxx] magic strings from description
+      const match = tx.description ? tx.description.match(/\[tx_id:([^\]]+)\]/) : null;
+      return match ? match[1] : null;
+    }
+
+    // Collect all unique splitGroupIds from the matching set
     const splitGroupIds: string[] = [];
     allMatching.forEach((tx) => {
-      const match = tx.description ? tx.description.match(/\[tx_id:([^\]]+)\]/) : null;
-      if (match && match[1]) {
-        splitGroupIds.push(match[1]);
-      }
+      const id = resolveSplitGroupId(tx);
+      if (id) splitGroupIds.push(id);
     });
 
     let adjustmentsMap: Record<string, number> = {};
     if (splitGroupIds.length > 0) {
+      // Fetch adjustment transactions linked by splitGroupId OR legacy description pattern
       const adjustments = await prisma.transaction.findMany({
         where: {
           userId,
           category: "adjustment",
-          OR: splitGroupIds.map((id) => ({
-            description: { contains: `[tx_id:${id}]` }
-          })),
+          OR: [
+            { splitGroupId: { in: splitGroupIds } },
+            ...splitGroupIds.map((id) => ({
+              description: { contains: `[tx_id:${id}]` },
+            })),
+          ],
         },
         select: {
           amount: true,
           description: true,
+          splitGroupId: true,
         },
       });
 
       adjustments.forEach((tx) => {
-        if (tx.description) {
-          const match = tx.description.match(/\[tx_id:([^\]]+)\]/);
-          if (match && match[1]) {
-            const splitGroupId = match[1];
-            adjustmentsMap[splitGroupId] = (adjustmentsMap[splitGroupId] || 0) + tx.amount;
-          }
+        const id = resolveSplitGroupId(tx);
+        if (id) {
+          adjustmentsMap[id] = (adjustmentsMap[id] || 0) + tx.amount;
         }
       });
     }
@@ -231,8 +244,7 @@ export async function getPaginatedTransactionsAction(params: {
     };
 
     allMatching.forEach((tx) => {
-      const match = tx.description ? tx.description.match(/\[tx_id:([^\]]+)\]/) : null;
-      const splitGroupId = match ? match[1] : null;
+      const splitGroupId = resolveSplitGroupId(tx);
       let finalAmount = tx.amount;
       if (splitGroupId && adjustmentsMap[splitGroupId]) {
         finalAmount = Math.max(0, tx.amount - adjustmentsMap[splitGroupId]);
@@ -266,8 +278,7 @@ export async function getPaginatedTransactionsAction(params: {
 
     // Adjust paginated transactions using the same adjustments map
     const transactions = paginatedRaw.map((tx) => {
-      const match = tx.description ? tx.description.match(/\[tx_id:([^\]]+)\]/) : null;
-      const splitGroupId = match ? match[1] : null;
+      const splitGroupId = resolveSplitGroupId(tx);
       let settledAmount = 0;
       let adjustedAmount = tx.amount;
       if (splitGroupId && adjustmentsMap[splitGroupId]) {

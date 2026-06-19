@@ -113,7 +113,12 @@ export const billFriendService = {
       billId,
       userId,
       settleDate: new Date(),
-      allocations: formattedAllocations,
+      allocations: formattedAllocations.map((alloc) => ({
+        ...alloc,
+        // Use splitGroupId = billId so we can link adjustment transactions
+        // to the source bill without embedding magic strings in description
+        splitGroupId: billId,
+      })),
     });
   },
 

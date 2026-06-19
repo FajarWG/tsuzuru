@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import TransactionsList from "@/components/transactions/TransactionsList";
 import TransactionsLoading from "@/app/(app)/transactions/loading";
@@ -39,110 +39,86 @@ interface TransactionsClientProps {
   userId: string;
 }
 
-let isGloballyMounted = false;
-
 export default function TransactionsClient({ userId }: TransactionsClientProps) {
   const [data, setData] = useState<TransactionsData | null>(() => {
     if (typeof window !== "undefined") {
       try {
         const cached = localStorage.getItem("tsuzuru_transactions_data");
         return cached ? JSON.parse(cached) : null;
-      } catch (e) {
-        console.warn("Failed to load cached transactions data:", e);
+      } catch {
         return null;
       }
     }
     return null;
   });
-  const [isMounted, setIsMounted] = useState(isGloballyMounted);
   const [loading, setLoading] = useState(true);
 
-  // 1. Set mounted state
-  useEffect(() => {
-    setIsMounted(true);
-    isGloballyMounted = true;
+  // Guard: prevents background listeners from firing before the initial fetch is done
+  const hasInitiallyFetched = useRef(false);
+
+  const syncData = useCallback(async () => {
+    try {
+      const res = await getTransactionsDataAction();
+      if (res.success && res.data) {
+        const freshData = res.data as unknown as TransactionsData;
+        setData(freshData);
+        localStorage.setItem("tsuzuru_transactions_data", JSON.stringify(freshData));
+      } else {
+        toast.error(res.error || "Failed to fetch latest transaction records.");
+      }
+    } catch (err) {
+      console.error("Error syncing transactions:", err);
+      toast.error("Failed to sync transactions with server.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  // 2. Stable sync function using ref
-  const syncDataRef = useRef<() => Promise<void>>(async () => {});
-
+  // 1. Initial fetch — runs exactly once on mount
   useEffect(() => {
-    syncDataRef.current = async () => {
-      try {
-        const res = await getTransactionsDataAction();
-        if (res.success && res.data) {
-          const freshData = res.data as unknown as TransactionsData;
+    syncData().then(() => {
+      hasInitiallyFetched.current = true;
+    });
+  }, [syncData]);
 
-          let isDataChanged = false;
-          if (data) {
-            // Compare JPY/IDR transaction counts, IDs or exact JSON representation
-            const oldHash = JSON.stringify(data);
-            const newHash = JSON.stringify(freshData);
-            if (oldHash !== newHash) {
-              isDataChanged = true;
-            }
-          } else {
-            // First load from DB
-            isDataChanged = true;
-          }
-
-          setData(freshData);
-          localStorage.setItem("tsuzuru_transactions_data", JSON.stringify(freshData));
-        } else {
-          toast.error(res.error || "Failed to fetch latest transaction records.");
-        }
-      } catch (err) {
-        console.error("Error syncing transactions:", err);
-        toast.error("Failed to sync transactions with server.");
-      } finally {
-        setLoading(false);
-      }
-    };
-  }, [data]);
-
-  // 3. Trigger sync on mount
+  // 2. Re-fetch when window regains focus (e.g. switching tabs back)
+  //    Guard ensures this does NOT fire during initial page load
   useEffect(() => {
-    if (!isMounted) return;
-    syncDataRef.current();
-  }, [isMounted]);
-
-  // 3.5. Trigger sync on focus / visibility change
-  useEffect(() => {
-    if (!isMounted) return;
-
     const handleFocus = () => {
-      syncDataRef.current();
+      if (hasInitiallyFetched.current) {
+        syncData();
+      }
     };
 
     window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [syncData]);
 
-    return () => {
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleFocus);
-    };
-  }, [isMounted]);
-
-  // 4. Trigger sync on transaction-added event
+  // 3. Re-fetch when tab becomes visible again after being hidden
+  //    Only fires on hidden → visible transition, not on initial load
   useEffect(() => {
-    if (!isMounted) return;
-
-    const handleTransactionAdded = () => {
-      syncDataRef.current();
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && hasInitiallyFetched.current) {
+        syncData();
+      }
     };
 
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [syncData]);
+
+  // 4. Re-fetch when a new transaction is added via the FAB
+  useEffect(() => {
+    const handleTransactionAdded = () => syncData();
     window.addEventListener("transaction-added", handleTransactionAdded);
-    return () => {
-      window.removeEventListener("transaction-added", handleTransactionAdded);
-    };
-  }, [isMounted]);
+    return () => window.removeEventListener("transaction-added", handleTransactionAdded);
+  }, [syncData]);
 
-  // Render Skeleton if first visit and loading
-  if (!isMounted || (!data && loading)) {
+  // Show skeleton on first visit before any data arrives
+  if (!data && loading) {
     return <TransactionsLoading />;
   }
 
-  // Render client list view
   const activeTransactions = data?.transactions || [];
   const activeAccounts = data?.accounts || [];
 

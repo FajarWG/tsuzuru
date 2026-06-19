@@ -1,43 +1,10 @@
 import { budgetRepository } from "@/repositories/budgetRepository";
 import { settingsRepository } from "@/repositories/settingsRepository";
+import { seedBudgetLimitsIfEmpty } from "@/lib/seedBudgetLimits";
 
 export const budgetService = {
   async getBudgetLimits(userId: string) {
-    let limits = await budgetRepository.findMany(userId);
-
-    // If no limits exist yet, seed the default 3 from UserSettings or system defaults
-    if (limits.length === 0) {
-      let settings = await settingsRepository.findUserSettings(userId);
-      if (!settings) {
-        settings = await settingsRepository.createUserSettings({
-          userId,
-          monthlyBudget: 150000,
-          pocketMoneyLimit: 40000,
-          shoppingLimit: 60000,
-          budgetCurrency: "JPY",
-          isOnboarded: false,
-        });
-      }
-
-      const defaultLimits = [
-        { name: "monthly", label: "Monthly Expected Budget", limit: settings.monthlyBudget || 150000 },
-        { name: "pocket_money", label: "Pocket Money", limit: settings.pocketMoneyLimit || 40000 },
-        { name: "shopping", label: "Shopping", limit: settings.shoppingLimit || 60000 },
-      ];
-
-      await budgetRepository.createMany(
-        defaultLimits.map((dl) => ({
-          userId,
-          name: dl.name,
-          label: dl.label,
-          limit: dl.limit,
-        }))
-      );
-
-      limits = await budgetRepository.findMany(userId);
-    }
-
-    return limits;
+    return seedBudgetLimitsIfEmpty(userId);
   },
 
   async addBudgetLimit(label: string, limit: number, userId: string) {

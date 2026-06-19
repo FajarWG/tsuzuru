@@ -8,7 +8,11 @@ import { AccountUpdateItem } from "@/types/account";
 
 export async function updateUserSettingsAction(data: UpdateUserSettingsInput) {
   try {
-    await settingsService.updateUserSettings(data);
+    const session = await auth();
+    if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+    // Always use session userId — never trust client-supplied userId
+    await settingsService.updateUserSettings({ ...data, userId: session.user.id });
 
     revalidatePath("/");
     revalidatePath("/settings");
@@ -21,11 +25,14 @@ export async function updateUserSettingsAction(data: UpdateUserSettingsInput) {
 }
 
 export async function updateAccountsAction(
-  userId: string,
   accounts: AccountUpdateItem[]
 ) {
   try {
-    await settingsService.updateAccounts(userId, accounts);
+    const session = await auth();
+    if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+    // userId always from session — not from client
+    await settingsService.updateAccounts(session.user.id, accounts);
 
     revalidatePath("/");
     revalidatePath("/settings");
@@ -60,7 +67,11 @@ export async function resetUserSettingsAndDataAction() {
 
 export async function completeOnboardingAction(data: OnboardingInput) {
   try {
-    await settingsService.completeOnboarding(data);
+    const session = await auth();
+    if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+    // Override userId with session userId — never trust client-supplied userId
+    await settingsService.completeOnboarding({ ...data, userId: session.user.id });
 
     revalidatePath("/");
     revalidatePath("/settings");

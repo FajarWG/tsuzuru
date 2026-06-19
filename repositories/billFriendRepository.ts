@@ -62,6 +62,7 @@ export const billFriendRepository = {
       category: string;
       subCategory?: string | null;
       description: string;
+      splitGroupId?: string | null;
     }[];
   }) {
     const { billId, userId, settleDate, allocations } = params;
@@ -89,6 +90,7 @@ export const billFriendRepository = {
             category: alloc.category,
             subCategory: alloc.subCategory || null,
             description: alloc.description,
+            splitGroupId: alloc.splitGroupId || null,
             date: new Date(),
           },
         });
@@ -104,3 +106,4 @@ export const billFriendRepository = {
     });
   },
 };
+

@@ -12,22 +12,17 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const session = await auth();
-  console.log("[AppLayout] Session loaded:", session);
 
   if (!session || !session.user) {
-    console.log("[AppLayout] No session or session.user found. Redirecting to /login");
     redirect("/login");
   }
 
-  console.log("[AppLayout] Querying DB for user ID:", session.user.id);
   const dbUser = await prisma.user.findUnique({
     where: { id: session.user.id },
     include: { settings: true },
   });
-  console.log("[AppLayout] Looked up DB User:", dbUser);
 
   if (!dbUser) {
-    console.warn("[AppLayout] User not found in DB! Redirecting to /api/auth/clear");
     redirect("/api/auth/clear");
   }
 

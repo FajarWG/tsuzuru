@@ -1,6 +1,7 @@
 import { dashboardRepository } from "@/repositories/dashboardRepository";
 import { settingsRepository } from "@/repositories/settingsRepository";
 import { budgetRepository } from "@/repositories/budgetRepository";
+import { seedBudgetLimitsIfEmpty } from "@/lib/seedBudgetLimits";
 
 export const dashboardService = {
   async getDashboardData(userId: string, profile: { name: string | null; image: string | null }) {
@@ -38,24 +39,9 @@ export const dashboardService = {
 
     let budgetLimits = raw.budgetLimits;
 
-    // Seeding fallback limits if empty
+    // Seed default limits if none exist (first-time user)
     if (budgetLimits.length === 0) {
-      const defaultLimits = [
-        { name: "monthly", label: "Monthly Expected Budget", limit: userSettings.monthlyBudget || 150000 },
-        { name: "pocket_money", label: "Pocket Money", limit: userSettings.pocketMoneyLimit || 40000 },
-        { name: "shopping", label: "Shopping", limit: userSettings.shoppingLimit || 60000 },
-      ];
-
-      await budgetRepository.createMany(
-        defaultLimits.map((dl) => ({
-          userId,
-          name: dl.name,
-          label: dl.label,
-          limit: dl.limit,
-        }))
-      );
-
-      budgetLimits = await budgetRepository.findMany(userId);
+      budgetLimits = await seedBudgetLimitsIfEmpty(userId);
     }
 
     // Calculate dynamic spent amounts for each budget card

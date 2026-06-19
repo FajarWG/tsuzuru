@@ -651,7 +651,7 @@ export default function TransactionsList({
     setIsDeleting(true);
 
     try {
-      const res = await deleteTransactionAction(deleting.id, userId);
+      const res = await deleteTransactionAction(deleting.id);
 
       if (res.success) {
         toast.success("Transaction deleted successfully");

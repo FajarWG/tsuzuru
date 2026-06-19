@@ -3,6 +3,7 @@ import { accountRepository } from "@/repositories/accountRepository";
 import { templateRepository } from "@/repositories/templateRepository";
 import { budgetRepository } from "@/repositories/budgetRepository";
 import { prisma } from "@/lib/prisma";
+import { seedBudgetLimitsIfEmpty } from "@/lib/seedBudgetLimits";
 import { UpdateUserSettingsInput, OnboardingInput } from "@/types/settings";
 import { AccountUpdateItem } from "@/types/account";
 
@@ -52,26 +53,7 @@ export const settingsService = {
 
     const accounts = await accountRepository.findMany(userId);
     const templates = await templateRepository.findMany(userId);
-    let budgetLimits = await budgetRepository.findMany(userId);
-
-    if (budgetLimits.length === 0) {
-      const defaultLimits = [
-        { name: "monthly", label: "Monthly Expected Budget", limit: userSettings.monthlyBudget || 150000 },
-        { name: "pocket_money", label: "Pocket Money", limit: userSettings.pocketMoneyLimit || 40000 },
-        { name: "shopping", label: "Shopping", limit: userSettings.shoppingLimit || 60000 },
-      ];
-
-      await budgetRepository.createMany(
-        defaultLimits.map((dl) => ({
-          userId,
-          name: dl.name,
-          label: dl.label,
-          limit: dl.limit,
-        }))
-      );
-
-      budgetLimits = await budgetRepository.findMany(userId);
-    }
+    const budgetLimits = await seedBudgetLimitsIfEmpty(userId);
 
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);

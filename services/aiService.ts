@@ -1,39 +1,47 @@
-import fs from "fs";
-import path from "path";
+import { prisma } from "@/lib/prisma";
 
-const STATUS_FILE = path.join(process.cwd(), "prisma/ai-status.json");
-
-interface AIStatus {
-  limitUntil: number;
-}
-
-function getAiStatus(): AIStatus {
+/**
+ * Gets the AI rate-limit status for a specific user from the database.
+ * Per-user tracking replaces the old global filesystem-based approach.
+ */
+async function getAiStatus(userId: string): Promise<{ limitUntil: number }> {
   try {
-    if (fs.existsSync(STATUS_FILE)) {
-      const data = fs.readFileSync(STATUS_FILE, "utf-8");
-      return JSON.parse(data);
-    }
-  } catch (err) {
-    console.error("Failed to read AI status file:", err);
+    const settings = await prisma.userSettings.findUnique({
+      where: { userId },
+      select: { aiLimitUntil: true },
+    });
+    return { limitUntil: settings?.aiLimitUntil ? settings.aiLimitUntil.getTime() : 0 };
+  } catch {
+    return { limitUntil: 0 };
   }
-  return { limitUntil: 0 };
 }
 
-function setAiStatus(status: AIStatus) {
+/**
+ * Sets the AI rate-limit expiry for a specific user in the database.
+ */
+async function setAiLimitUntil(userId: string, limitUntil: number) {
   try {
-    const dir = path.dirname(STATUS_FILE);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(STATUS_FILE, JSON.stringify(status), "utf-8");
+    await prisma.userSettings.upsert({
+      where: { userId },
+      update: { aiLimitUntil: new Date(limitUntil) },
+      create: {
+        userId,
+        monthlyBudget: 0,
+        pocketMoneyLimit: 0,
+        shoppingLimit: 0,
+        budgetCurrency: "JPY",
+        isOnboarded: false,
+        aiLimitUntil: new Date(limitUntil),
+      },
+    });
   } catch (err) {
-    console.error("Failed to write AI status file:", err);
+    console.error("Failed to write AI limit status to DB:", err);
   }
 }
 
 export const aiService = {
-  async checkAiLimit() {
-    const status = getAiStatus();
+  async checkAiLimit(userId: string) {
+    const status = await getAiStatus(userId);
     const now = Date.now();
     if (status.limitUntil > now) {
       return { limited: true, secondsLeft: Math.ceil((status.limitUntil - now) / 1000) };
@@ -41,8 +49,8 @@ export const aiService = {
     return { limited: false };
   },
 
-  async parseReceiptText(text: string) {
-    const statusCheck = await this.checkAiLimit();
+  async parseReceiptText(text: string, userId: string) {
+    const statusCheck = await this.checkAiLimit(userId);
     if (statusCheck.limited) {
       throw new Error(`AI is temporarily limited. Try again in ${statusCheck.secondsLeft} seconds.`);
     }
@@ -68,26 +76,15 @@ Do not include markdown tags, code blocks, or extra text. Return ONLY the raw JS
     try {
       const response = await fetch(url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { text: `${systemPrompt}\n\nOCR Text:\n${text}` }
-              ]
-            }
-          ],
-          generationConfig: {
-            responseMimeType: "application/json"
-          }
-        })
+          contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nOCR Text:\n${text}` }] }],
+          generationConfig: { responseMimeType: "application/json" },
+        }),
       });
 
       if (response.status === 429) {
-        setAiStatus({ limitUntil: Date.now() + 5 * 60 * 1000 });
+        await setAiLimitUntil(userId, Date.now() + 5 * 60 * 1000);
         throw new Error("AI rate limit reached. Auto-parse disabled for 5 minutes.");
       }
 
@@ -98,57 +95,41 @@ Do not include markdown tags, code blocks, or extra text. Return ONLY the raw JS
 
       const resJson = await response.json();
       const replyText = resJson.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!replyText) {
-        throw new Error("Empty response from Gemini API");
-      }
+      if (!replyText) throw new Error("Empty response from Gemini API");
 
       return JSON.parse(replyText.trim());
     } catch (err) {
-      console.error("Gemini API error:", err);
       const errMsg = (err as Error).message;
       if (errMsg.includes("429") || errMsg.toLowerCase().includes("quota") || errMsg.toLowerCase().includes("rate limit")) {
-        setAiStatus({ limitUntil: Date.now() + 5 * 60 * 1000 });
+        await setAiLimitUntil(userId, Date.now() + 5 * 60 * 1000);
       }
       throw err;
     }
   },
 
-  async parseReceiptTextCustom(text: string, model: string, systemPrompt: string) {
-    const statusCheck = await this.checkAiLimit();
+  async parseReceiptTextCustom(text: string, model: string, systemPrompt: string, userId: string) {
+    const statusCheck = await this.checkAiLimit(userId);
     if (statusCheck.limited) {
       throw new Error(`AI is temporarily limited. Try again in ${statusCheck.secondsLeft} seconds.`);
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is not configured");
-    }
+    if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     try {
       const response = await fetch(url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { text: `${systemPrompt}\n\nOCR Text:\n${text}` }
-              ]
-            }
-          ],
-          generationConfig: {
-            responseMimeType: "application/json"
-          }
-        })
+          contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nOCR Text:\n${text}` }] }],
+          generationConfig: { responseMimeType: "application/json" },
+        }),
       });
 
       if (response.status === 429) {
-        setAiStatus({ limitUntil: Date.now() + 5 * 60 * 1000 });
+        await setAiLimitUntil(userId, Date.now() + 5 * 60 * 1000);
         throw new Error("AI rate limit reached. Auto-parse disabled for 5 minutes.");
       }
 
@@ -159,36 +140,31 @@ Do not include markdown tags, code blocks, or extra text. Return ONLY the raw JS
 
       const resJson = await response.json();
       const replyText = resJson.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!replyText) {
-        throw new Error("Empty response from Gemini API");
-      }
+      if (!replyText) throw new Error("Empty response from Gemini API");
 
       return JSON.parse(replyText.trim());
     } catch (err) {
-      console.error("Gemini API error:", err);
       const errMsg = (err as Error).message;
       if (errMsg.includes("429") || errMsg.toLowerCase().includes("quota") || errMsg.toLowerCase().includes("rate limit")) {
-        setAiStatus({ limitUntil: Date.now() + 5 * 60 * 1000 });
+        await setAiLimitUntil(userId, Date.now() + 5 * 60 * 1000);
       }
       throw err;
     }
   },
 
-  async parseReceiptImage(base64Image: string, mimeType: string, language?: string) {
-    const statusCheck = await this.checkAiLimit();
+  async parseReceiptImage(base64Image: string, mimeType: string, userId: string, language?: string) {
+    const statusCheck = await this.checkAiLimit(userId);
     if (statusCheck.limited) {
       throw new Error(`AI is temporarily limited. Try again in ${statusCheck.secondsLeft} seconds.`);
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is not configured");
-    }
+    if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
 
     const model = "gemini-2.5-flash";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-    const translationInst = 
+    const translationInst =
       language === "id"
         ? " Translate the item names to Indonesian."
         : language === "en"
@@ -211,18 +187,11 @@ Do not include markdown tags, code blocks, or extra text. Return ONLY the raw JS
           role: "user",
           parts: [
             { text: systemPrompt },
-            {
-              inlineData: {
-                mimeType: mimeType,
-                data: base64Image
-              }
-            }
-          ]
-        }
+            { inlineData: { mimeType: mimeType, data: base64Image } },
+          ],
+        },
       ],
-      generationConfig: {
-        responseMimeType: "application/json"
-      }
+      generationConfig: { responseMimeType: "application/json" },
     };
 
     const delays = [2000, 4000];
@@ -232,14 +201,12 @@ Do not include markdown tags, code blocks, or extra text. Return ONLY the raw JS
       try {
         const response = await fetch(url, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(requestBody),
         });
 
         if (response.status === 429) {
-          setAiStatus({ limitUntil: Date.now() + 5 * 60 * 1000 });
+          await setAiLimitUntil(userId, Date.now() + 5 * 60 * 1000);
           throw new Error("AI rate limit reached. Auto-parse disabled for 5 minutes.");
         }
 
@@ -251,7 +218,7 @@ Do not include markdown tags, code blocks, or extra text. Return ONLY the raw JS
             await new Promise((resolve) => setTimeout(resolve, delay));
             continue;
           } else {
-            setAiStatus({ limitUntil: Date.now() + 3 * 60 * 1000 });
+            await setAiLimitUntil(userId, Date.now() + 3 * 60 * 1000);
             throw new Error("The AI system is temporarily unavailable due to high demand. Please try again in 3 minutes or use the manual copy-paste mode instead.");
           }
         }
@@ -263,13 +230,10 @@ Do not include markdown tags, code blocks, or extra text. Return ONLY the raw JS
 
         const resJson = await response.json();
         const replyText = resJson.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!replyText) {
-          throw new Error("Empty response from Gemini API");
-        }
+        if (!replyText) throw new Error("Empty response from Gemini API");
 
         return JSON.parse(replyText.trim());
       } catch (err) {
-        console.error(`Gemini API error (attempt ${attempt + 1}):`, err);
         const errMsg = (err as Error).message;
 
         if (errMsg.includes("503") || errMsg.toLowerCase().includes("unavailable")) {
@@ -279,13 +243,13 @@ Do not include markdown tags, code blocks, or extra text. Return ONLY the raw JS
             await new Promise((resolve) => setTimeout(resolve, delay));
             continue;
           } else {
-            setAiStatus({ limitUntil: Date.now() + 3 * 60 * 1000 });
+            await setAiLimitUntil(userId, Date.now() + 3 * 60 * 1000);
             throw new Error("The AI system is temporarily unavailable due to high demand. Please try again in 3 minutes or use the manual copy-paste mode instead.");
           }
         }
 
         if (errMsg.includes("429") || errMsg.toLowerCase().includes("quota") || errMsg.toLowerCase().includes("rate limit")) {
-          setAiStatus({ limitUntil: Date.now() + 5 * 60 * 1000 });
+          await setAiLimitUntil(userId, Date.now() + 5 * 60 * 1000);
         }
         throw err;
       }
