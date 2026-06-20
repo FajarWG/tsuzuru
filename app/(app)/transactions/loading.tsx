@@ -14,19 +14,6 @@ export default function TransactionsLoading() {
         <Skeleton className="h-12 w-12 rounded-2xl shrink-0" />
       </div>
 
-      {/* Type Filter Segmented Control */}
-      <Skeleton className="h-9 w-full rounded-lg" />
-
-      {/* Dropdown Filters (Month, Account, Category) */}
-      <div className="grid grid-cols-3 gap-2">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="flex flex-col gap-1.5">
-            <Skeleton className="h-3 w-10 ml-1" />
-            <Skeleton className="h-10 w-full rounded-xl" />
-          </div>
-        ))}
-      </div>
-
       {/* Summary Cards */}
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-xl border border-border/40 bg-white p-3 dark:bg-zinc-900 flex flex-col gap-2">

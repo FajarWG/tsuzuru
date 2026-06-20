@@ -798,138 +798,130 @@ export default function TransactionsList({
         </div>
       </motion.div>
 
-      {/* Segmented Controls & Dropdown Filters */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.1 }}
-        className="flex flex-col gap-3"
-      >
-        {/* Dropdown Filters (Month, Account, Category, Type) */}
-        <AnimatePresence initial={false}>
-          {showFilters && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.25, ease: "easeInOut" }}
-              className="overflow-hidden flex flex-col gap-3"
-            >
-              {/* Type Filter Segmented Control */}
-              <div className="flex flex-col gap-1">
+      {/* Dropdown Filters (Month, Account, Category, Type) */}
+      <AnimatePresence initial={false}>
+        {showFilters && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            className="overflow-hidden flex flex-col gap-3"
+          >
+            {/* Type Filter Segmented Control */}
+            <div className="flex flex-col gap-1">
+              <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
+                Type
+              </Label>
+              <div className="flex rounded-lg bg-muted p-1 border border-border/10">
+                {(["all", "expense", "income"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTypeFilter(t)}
+                    className={cn(
+                      "flex-1 rounded-md py-1.5 text-center text-xs font-semibold capitalize transition-all cursor-pointer",
+                      typeFilter === t
+                        ? "bg-white text-foreground shadow-xs dark:bg-zinc-800"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {t === "all" ? "All Types" : t}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 pt-1">
+              <div className="flex flex-col gap-1 min-w-0">
                 <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
-                  Type
+                  Month
                 </Label>
-                <div className="flex rounded-lg bg-muted p-1 border border-border/10">
-                  {(["all", "expense", "income"] as const).map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setTypeFilter(t)}
-                      className={cn(
-                        "flex-1 rounded-md py-1.5 text-center text-xs font-semibold capitalize transition-all cursor-pointer",
-                        typeFilter === t
-                          ? "bg-white text-foreground shadow-xs dark:bg-zinc-800"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {t === "all" ? "All Types" : t}
-                    </button>
-                  ))}
-                </div>
+                <Select value={monthFilter} onValueChange={setMonthFilter}>
+                  <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
+                    <SelectValue className="truncate block max-w-full text-left" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-xs">
+                      All Months
+                    </SelectItem>
+                    {monthOptions.map((opt) => (
+                      <SelectItem
+                        key={opt.value}
+                        value={opt.value}
+                        className="text-xs"
+                      >
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 pt-1">
-                <div className="flex flex-col gap-1 min-w-0">
-                  <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
-                    Month
-                  </Label>
-                  <Select value={monthFilter} onValueChange={setMonthFilter}>
-                    <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
-                      <SelectValue className="truncate block max-w-full text-left" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all" className="text-xs">
-                        All Months
+              <div className="flex flex-col gap-1 min-w-0">
+                <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
+                  Account
+                </Label>
+                <Select value={accountFilter} onValueChange={setAccountFilter}>
+                  <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
+                    <SelectValue className="truncate block max-w-full text-left" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-xs">
+                      All Accounts
+                    </SelectItem>
+                    {accounts.map((acc) => (
+                      <SelectItem key={acc.id} value={acc.id} className="text-xs">
+                        {acc.name}
                       </SelectItem>
-                      {monthOptions.map((opt) => (
-                        <SelectItem
-                          key={opt.value}
-                          value={opt.value}
-                          className="text-xs"
-                        >
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex flex-col gap-1 min-w-0">
-                  <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
-                    Account
-                  </Label>
-                  <Select value={accountFilter} onValueChange={setAccountFilter}>
-                    <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
-                      <SelectValue className="truncate block max-w-full text-left" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all" className="text-xs">
-                        All Accounts
-                      </SelectItem>
-                      {accounts.map((acc) => (
-                        <SelectItem key={acc.id} value={acc.id} className="text-xs">
-                          {acc.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex flex-col gap-1 min-w-0">
-                  <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
-                    Category
-                  </Label>
-                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                    <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
-                      <SelectValue className="truncate block max-w-full text-left" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all" className="text-xs">
-                        All Categories
-                      </SelectItem>
-                      <SelectItem value="pocket_money" className="text-xs">
-                        Pocket Money
-                      </SelectItem>
-                      <SelectItem value="shopping" className="text-xs">
-                        Shopping
-                      </SelectItem>
-                      <SelectItem value="income" className="text-xs">
-                        Income
-                      </SelectItem>
-                      <SelectItem value="adjustment" className="text-xs">
-                        Adjustments
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
-              {/* Reset Filters Option */}
-              <div className="flex justify-end px-1 pb-1">
-                <button
-                  type="button"
-                  onClick={resetFilters}
-                  className="text-[10px] font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
-                >
-                  <IconRefresh className="size-3" />
-                  Reset Filters
-                </button>
+              <div className="flex flex-col gap-1 min-w-0">
+                <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
+                  Category
+                </Label>
+                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                  <SelectTrigger className="h-10 rounded-xl text-[10px] font-semibold px-2 w-full overflow-hidden">
+                    <SelectValue className="truncate block max-w-full text-left" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-xs">
+                      All Categories
+                    </SelectItem>
+                    <SelectItem value="pocket_money" className="text-xs">
+                      Pocket Money
+                    </SelectItem>
+                    <SelectItem value="shopping" className="text-xs">
+                      Shopping
+                    </SelectItem>
+                    <SelectItem value="income" className="text-xs">
+                      Income
+                    </SelectItem>
+                    <SelectItem value="adjustment" className="text-xs">
+                      Adjustments
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
+            </div>
+
+            {/* Reset Filters Option */}
+            <div className="flex justify-end px-1 pb-1">
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="text-[10px] font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                <IconRefresh className="size-3" />
+                Reset Filters
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Summary Cards */}
       <motion.div
