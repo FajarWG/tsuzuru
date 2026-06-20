@@ -805,26 +805,7 @@ export default function TransactionsList({
         transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.1 }}
         className="flex flex-col gap-3"
       >
-        {/* Type Filter Segmented Control */}
-        <div className="flex rounded-lg bg-muted p-1 border border-border/10">
-          {(["all", "expense", "income"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTypeFilter(t)}
-              className={cn(
-                "flex-1 rounded-md py-1.5 text-center text-xs font-semibold capitalize transition-all cursor-pointer",
-                typeFilter === t
-                  ? "bg-white text-foreground shadow-xs dark:bg-zinc-800"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {t === "all" ? "All Types" : t}
-            </button>
-          ))}
-        </div>
-
-        {/* Dropdown Filters (Month, Account, Category) */}
+        {/* Dropdown Filters (Month, Account, Category, Type) */}
         <AnimatePresence initial={false}>
           {showFilters && (
             <motion.div
@@ -834,6 +815,30 @@ export default function TransactionsList({
               transition={{ duration: 0.25, ease: "easeInOut" }}
               className="overflow-hidden flex flex-col gap-3"
             >
+              {/* Type Filter Segmented Control */}
+              <div className="flex flex-col gap-1">
+                <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
+                  Type
+                </Label>
+                <div className="flex rounded-lg bg-muted p-1 border border-border/10">
+                  {(["all", "expense", "income"] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setTypeFilter(t)}
+                      className={cn(
+                        "flex-1 rounded-md py-1.5 text-center text-xs font-semibold capitalize transition-all cursor-pointer",
+                        typeFilter === t
+                          ? "bg-white text-foreground shadow-xs dark:bg-zinc-800"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {t === "all" ? "All Types" : t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-3 gap-2 pt-1">
                 <div className="flex flex-col gap-1 min-w-0">
                   <Label className="text-[10px] font-semibold text-muted-foreground tracking-wide pl-1">
@@ -931,34 +936,59 @@ export default function TransactionsList({
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.15 }}
-        className="grid grid-cols-2 gap-2"
+        className={cn(
+          "grid gap-2 transition-all duration-300",
+          typeFilter === "all" ? "grid-cols-2" : "grid-cols-1"
+        )}
       >
-        <div className="rounded-xl border border-border/40 bg-white p-3 dark:bg-zinc-900">
-          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-            Expense
-          </p>
-          <p className="text-sm font-sans font-bold text-destructive mt-1">
-            {formatJPY(displaySummary.expense.JPY)}
-          </p>
-          {displaySummary.expense.IDR > 0 && (
-            <p className="text-xs font-sans font-bold text-destructive mt-0.5">
-              {formatIDR(displaySummary.expense.IDR)}
-            </p>
-          )}
-        </div>
-        <div className="rounded-xl border border-border/40 bg-white p-3 dark:bg-zinc-900">
-          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-            Income
-          </p>
-          <p className="text-sm font-sans font-bold text-primary mt-1">
-            {formatJPY(displaySummary.income.JPY)}
-          </p>
-          {displaySummary.income.IDR > 0 && (
-            <p className="text-xs font-sans font-bold text-primary mt-0.5">
-              {formatIDR(displaySummary.income.IDR)}
-            </p>
-          )}
-        </div>
+        {(typeFilter === "all" || typeFilter === "expense") && (
+          <div className="rounded-xl border border-border/40 bg-white p-3 dark:bg-zinc-900 min-h-[72px] flex flex-col justify-center">
+            {isLoading ? (
+              <div className="flex flex-col gap-2 w-full animate-pulse">
+                <div className="h-3 bg-muted rounded-full w-12" />
+                <div className="h-5 bg-muted rounded-full w-24" />
+              </div>
+            ) : (
+              <>
+                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                  Expense
+                </p>
+                <p className="text-sm font-sans font-bold text-destructive mt-1">
+                  {formatJPY(displaySummary.expense.JPY)}
+                </p>
+                {displaySummary.expense.IDR > 0 && (
+                  <p className="text-xs font-sans font-bold text-destructive mt-0.5">
+                    {formatIDR(displaySummary.expense.IDR)}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        )}
+        {(typeFilter === "all" || typeFilter === "income") && (
+          <div className="rounded-xl border border-border/40 bg-white p-3 dark:bg-zinc-900 min-h-[72px] flex flex-col justify-center">
+            {isLoading ? (
+              <div className="flex flex-col gap-2 w-full animate-pulse">
+                <div className="h-3 bg-muted rounded-full w-12" />
+                <div className="h-5 bg-muted rounded-full w-24" />
+              </div>
+            ) : (
+              <>
+                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                  Income
+                </p>
+                <p className="text-sm font-sans font-bold text-primary mt-1">
+                  {formatJPY(displaySummary.income.JPY)}
+                </p>
+                {displaySummary.income.IDR > 0 && (
+                  <p className="text-xs font-sans font-bold text-primary mt-0.5">
+                    {formatIDR(displaySummary.income.IDR)}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </motion.div>
 
       {/* Transactions List */}
@@ -988,19 +1018,38 @@ export default function TransactionsList({
           </div>
         ) : (
           <AnimatePresence mode="popLayout" initial={false}>
-            {Object.entries(groupedTransactions).map(([dateLabel, items]) => (
-              <motion.div
-                key={dateLabel}
-                layout
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.25 }}
-                className="flex flex-col gap-2"
-              >
-                <h3 className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase px-1">
-                  {dateLabel}
-                </h3>
+            {Object.entries(groupedTransactions).map(([dateLabel, items]) => {
+              const expenseByCurrency: Record<string, number> = {};
+              for (const item of items) {
+                if (item.type === "expense") {
+                  expenseByCurrency[item.currency] = (expenseByCurrency[item.currency] || 0) + item.amount;
+                }
+              }
+              const dailyTotal = Object.entries(expenseByCurrency)
+                .filter(([_, sum]) => sum > 0)
+                .map(([curr, sum]) => `-${formatCurrency(sum, curr)}`)
+                .join(" / ");
+
+              return (
+                <motion.div
+                  key={dateLabel}
+                  layout
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.25 }}
+                  className="flex flex-col gap-2"
+                >
+                  <div className="flex justify-between items-center px-1">
+                    <h3 className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
+                      {dateLabel}
+                    </h3>
+                    {dailyTotal && (
+                      <span className="text-[10px] font-bold text-muted-foreground font-sans">
+                        {dailyTotal}
+                      </span>
+                    )}
+                  </div>
 
                 <div className="flex flex-col gap-2">
                   <AnimatePresence mode="popLayout" initial={false}>
@@ -1208,7 +1257,8 @@ export default function TransactionsList({
                   </AnimatePresence>
                 </div>
               </motion.div>
-            ))}
+            );
+          })}
           </AnimatePresence>
         )}
 
@@ -1260,34 +1310,6 @@ export default function TransactionsList({
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden px-1 flex flex-col gap-4 py-3 min-h-0">
-              {/* Mode Selector */}
-              <div className="flex gap-2 bg-muted/50 p-1 rounded-xl border border-border/10">
-                <button
-                  type="button"
-                  onClick={() => handleEditModeChange(false)}
-                  className={cn(
-                    "flex-1 h-8 rounded-lg text-xs font-semibold transition-all cursor-pointer",
-                    !editIsReceipt
-                      ? "bg-white dark:bg-zinc-800 text-foreground shadow-xs"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  Single Transaction
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleEditModeChange(true)}
-                  className={cn(
-                    "flex-1 h-8 rounded-lg text-xs font-semibold transition-all cursor-pointer",
-                    editIsReceipt
-                      ? "bg-white dark:bg-zinc-800 text-foreground shadow-xs"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  Receipt Mode
-                </button>
-              </div>
-
               {!editIsReceipt ? (
                 <>
                   {/* Type Selector */}
@@ -1532,9 +1554,16 @@ export default function TransactionsList({
 
                   {/* 2. Receipt Items Card */}
                   <div className="flex flex-col gap-3 p-3 bg-muted/40 border border-border/50 rounded-xl">
-                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                      Receipt Items ({editReceiptItems.length})
-                    </Label>
+                    <div className="flex items-baseline justify-between border-b border-border/40 pb-2">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                        Receipt Items ({editReceiptItems.length})
+                      </Label>
+                      {editReceiptItems.length > 0 && totalReceiptAmount < 100000 && (
+                        <span className="text-[11px] font-bold text-primary font-sans">
+                          Total {editing?.currency === "IDR" ? "Rp" : "¥"}{totalReceiptAmount.toLocaleString()}
+                        </span>
+                      )}
+                    </div>
 
                     {/* Items list */}
                     {editReceiptItems.length > 0 ? (
@@ -1558,19 +1587,19 @@ export default function TransactionsList({
                             </div>
                           </div>
                         ))}
-                        {/* Display Total inside Card */}
-                        {editReceiptItems.length > 0 && (
-                          <div className="flex items-center justify-between border-t border-border/40 pt-2.5 mt-2 px-1">
-                            <span className="text-xs font-semibold text-muted-foreground">Total Amount</span>
-                            <span className="text-sm font-bold text-foreground">
-                              {editing?.currency === "IDR" ? "Rp" : "¥"}{totalReceiptAmount.toLocaleString()}
-                            </span>
-                          </div>
-                        )}
                       </div>
                     ) : (
                       <div className="text-center py-4 px-4 text-xs text-muted-foreground bg-white dark:bg-zinc-900 border border-dashed border-border/50 rounded-lg">
                         No items added yet. Add manually below.
+                      </div>
+                    )}
+
+                    {editReceiptItems.length > 0 && totalReceiptAmount >= 100000 && (
+                      <div className="flex items-center justify-between border-t border-border/40 pt-2.5 mt-1 px-1">
+                        <span className="text-xs font-semibold text-muted-foreground">Total Amount</span>
+                        <span className="text-sm font-bold text-foreground">
+                          {editing?.currency === "IDR" ? "Rp" : "¥"}{totalReceiptAmount.toLocaleString()}
+                        </span>
                       </div>
                     )}
 
