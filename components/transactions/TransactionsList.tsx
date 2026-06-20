@@ -746,7 +746,7 @@ export default function TransactionsList({
                     )}
                   </button>
                 </PopoverTrigger>
-                <PopoverContent className="w-56 p-3 rounded-xl border border-border bg-popover text-popover-foreground shadow-md" side="right" align="center">
+                <PopoverContent className="w-56 p-3 rounded-xl border border-border bg-popover text-popover-foreground shadow-md" side="bottom" align="start">
                   <div className="flex flex-col gap-1.5">
                     <p className="text-xs font-semibold">
                       {syncStatus === "syncing" && "Updating data..."}

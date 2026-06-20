@@ -75,6 +75,7 @@ export default function SettingsClient({ userId, defaultTab = "templates" }: Set
     }
     return null;
   });
+  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "success" | "error">("idle");
   const [isMounted, setIsMounted] = useState(isGloballyMounted);
   const [isDataLoading, setIsDataLoading] = useState(true);
 
@@ -89,6 +90,7 @@ export default function SettingsClient({ userId, defaultTab = "templates" }: Set
 
   useEffect(() => {
     syncDataRef.current = async () => {
+      setSyncStatus("syncing");
       try {
         const res = await getUserSettingsDataAction();
         if (res.success && res.data) {
@@ -96,12 +98,16 @@ export default function SettingsClient({ userId, defaultTab = "templates" }: Set
 
           setData(freshData);
           localStorage.setItem("tsuzuru_settings_data", JSON.stringify(freshData));
+          setSyncStatus("success");
+          setTimeout(() => {
+            setSyncStatus("idle");
+          }, 3500);
         } else {
-          toast.error(res.error || "Failed to fetch latest user settings.");
+          setSyncStatus("error");
         }
       } catch (err) {
         console.error("Error syncing settings:", err);
-        toast.error("Failed to sync settings with server.");
+        setSyncStatus("error");
       } finally {
         setIsDataLoading(false);
       }
@@ -180,6 +186,7 @@ export default function SettingsClient({ userId, defaultTab = "templates" }: Set
         profile={profile}
         defaultTab={defaultTab}
         onRefresh={() => syncDataRef.current()}
+        syncStatus={syncStatus}
         paidTemplateNamesThisMonth={data?.paidTemplateNamesThisMonth || []}
       />
     </div>

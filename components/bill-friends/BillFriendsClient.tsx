@@ -58,6 +58,7 @@ export default function BillFriendsClient({ userId }: BillFriendsClientProps) {
     }
     return null;
   });
+  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "success" | "error">("idle");
   const [isMounted, setIsMounted] = useState(isGloballyMounted);
   const [loading, setLoading] = useState(true);
 
@@ -72,6 +73,7 @@ export default function BillFriendsClient({ userId }: BillFriendsClientProps) {
 
   useEffect(() => {
     syncDataRef.current = async () => {
+      setSyncStatus("syncing");
       try {
         const res = await getBillFriendsDataAction();
         if (res.success && res.data) {
@@ -91,12 +93,16 @@ export default function BillFriendsClient({ userId }: BillFriendsClientProps) {
 
           setData(freshData);
           localStorage.setItem("tsuzuru_bill_friends_data", JSON.stringify(freshData));
+          setSyncStatus("success");
+          setTimeout(() => {
+            setSyncStatus("idle");
+          }, 3500);
         } else {
-          toast.error(res.error || "Failed to fetch latest bill records.");
+          setSyncStatus("error");
         }
       } catch (err) {
         console.error("Error syncing bills:", err);
-        toast.error("Failed to sync bills with server.");
+        setSyncStatus("error");
       } finally {
         setLoading(false);
       }
@@ -152,7 +158,13 @@ export default function BillFriendsClient({ userId }: BillFriendsClientProps) {
 
   return (
     <div className="flex flex-col flex-1">
-      <BillFriendsList bills={activeBills as any} accounts={activeAccounts} transactions={activeTransactions} />
+      <BillFriendsList
+        bills={activeBills as any}
+        accounts={activeAccounts}
+        transactions={activeTransactions}
+        syncStatus={syncStatus}
+        onSync={() => syncDataRef.current()}
+      />
     </div>
   );
 }

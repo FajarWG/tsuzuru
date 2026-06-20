@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { motion } from "framer-motion";
 import BalanceSummaryCard from "@/components/dashboard/BalanceSummaryCard";
 import MonthlyInsightsCard from "@/components/dashboard/MonthlyInsightsCard";
 import AnimatedCard from "@/components/ui/AnimatedCard";
@@ -16,8 +17,16 @@ import {
   IconChevronDown,
   IconSettings,
   IconCoins,
+  IconLoader,
+  IconCheck,
+  IconRefresh
 } from "@tabler/icons-react";
 import { getDashboardDataAction } from "@/lib/actions/dashboard";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 interface Account {
@@ -182,6 +191,7 @@ export default function DashboardClient() {
     }
     return null;
   });
+  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "success" | "error">("idle");
   const [isMounted, setIsMounted] = useState(isGloballyMounted);
   const [loading, setLoading] = useState(true);
 
@@ -196,6 +206,7 @@ export default function DashboardClient() {
 
   useEffect(() => {
     syncDataRef.current = async () => {
+      setSyncStatus("syncing");
       try {
         const res = await getDashboardDataAction();
         if (res.success && res.data) {
@@ -220,12 +231,16 @@ export default function DashboardClient() {
 
           setData(freshData);
           localStorage.setItem("tsuzuru_dashboard_data", JSON.stringify(freshData));
+          setSyncStatus("success");
+          setTimeout(() => {
+            setSyncStatus("idle");
+          }, 3500);
         } else {
-          toast.error(res.error || "Failed to fetch the latest data from the server.");
+          setSyncStatus("error");
         }
       } catch (err) {
         console.error("Error syncing dashboard data:", err);
-        toast.error("Failed to sync data with the server.");
+        setSyncStatus("error");
       } finally {
         setLoading(false);
       }
@@ -356,9 +371,65 @@ export default function DashboardClient() {
           <p className="text-xs text-muted-foreground tracking-wide font-sans">
             {greeting}, {activeData.user.name?.split(" ")[0] || "User"}
           </p>
-          <h1 className="font-sans text-3xl font-bold tracking-wide text-primary mt-0.5">
-            綴る
-          </h1>
+          <div className="flex items-center gap-2 mt-0.5">
+            <h1 className="font-sans text-3xl font-bold tracking-wide text-primary">
+              綴る
+            </h1>
+            {syncStatus !== "idle" && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex items-center justify-center p-1 rounded-full hover:bg-muted/40 transition-colors cursor-pointer focus:outline-none"
+                    aria-label="Sync status"
+                  >
+                    {syncStatus === "syncing" && (
+                      <IconLoader className="size-4 animate-spin text-muted-foreground" />
+                    )}
+                    {syncStatus === "success" && (
+                      <motion.div
+                        initial={{ scale: 0, rotate: -45 }}
+                        animate={{ scale: 1, rotate: 0 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                        className="text-green-600 bg-green-500/10 p-0.5 rounded-full"
+                      >
+                        <IconCheck className="size-3 stroke-[3]" />
+                      </motion.div>
+                    )}
+                    {syncStatus === "error" && (
+                      <span className="flex items-center justify-center size-3.5 bg-destructive/10 text-destructive font-bold text-[10px] rounded-full">
+                        !
+                      </span>
+                    )}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-3 rounded-xl border border-border bg-popover text-popover-foreground shadow-md" side="bottom" align="start">
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-xs font-semibold">
+                      {syncStatus === "syncing" && "Updating data..."}
+                      {syncStatus === "success" && "Data is up to date"}
+                      {syncStatus === "error" && "Sync failed"}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground leading-relaxed">
+                      {syncStatus === "syncing" && "Synchronizing dashboard records with server."}
+                      {syncStatus === "success" && "Successfully updated dashboard records!"}
+                      {syncStatus === "error" && "Could not sync data. Check your internet connection."}
+                    </p>
+                    {syncStatus !== "syncing" && (
+                      <button
+                        type="button"
+                        onClick={() => syncDataRef.current()}
+                        className="mt-1 flex items-center justify-center gap-1 py-1 text-[10px] font-bold text-primary hover:underline self-start cursor-pointer"
+                      >
+                        <IconRefresh className="size-3" />
+                        Sync now
+                      </button>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+          </div>
         </div>
         {activeData.user.image && (
           <Link href="/settings" className="cursor-pointer shrink-0">

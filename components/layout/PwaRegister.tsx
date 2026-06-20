@@ -90,9 +90,6 @@ export default function PwaRegister() {
             "tsuzuru_offline_transactions",
             JSON.stringify(failedTransactions)
           );
-          toast.error(
-            `Failed to sync ${failedTransactions.length} transactions. Will retry later.`
-          );
         } else {
           localStorage.removeItem("tsuzuru_offline_transactions");
         }
@@ -119,7 +116,7 @@ export default function PwaRegister() {
           localStorage.removeItem("tsuzuru_offline_bills");
           router.refresh();
         } else {
-          toast.error("Failed to sync offline split bills: " + result.error, { id: toastId });
+          toast.dismiss(toastId);
         }
       } catch (err) {
         console.error("[Sync] Error parsing offline bills:", err);

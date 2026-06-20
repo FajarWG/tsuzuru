@@ -71,12 +71,10 @@ export default function TransactionsClient({ userId }: TransactionsClientProps) 
           setSyncStatus("idle");
         }, 3500);
       } else {
-        toast.error(res.error || "Failed to fetch latest transaction records.");
         setSyncStatus("error");
       }
     } catch (err) {
       console.error("Error syncing transactions:", err);
-      toast.error("Failed to sync transactions with server.");
       setSyncStatus("error");
     } finally {
       setLoading(false);

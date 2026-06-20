@@ -100,6 +100,59 @@ function fileToBase64(file: File): Promise<{ base64: string; mimeType: string }>
   });
 }
 
+function compressImage(file: File, maxWidth = 1024, maxHeight = 1024, quality = 0.75): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(img.src);
+      let width = img.width;
+      let height = img.height;
+
+      // Calculate new dimensions
+      if (width > height) {
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve(file); // fallback to original file
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            resolve(file);
+            return;
+          }
+          const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), {
+            type: "image/jpeg",
+          });
+          resolve(compressedFile);
+        },
+        "image/jpeg",
+        quality
+      );
+    };
+    img.onerror = (err) => {
+      reject(err);
+    };
+  });
+}
+
 function roundAmount(value: number): number {
   const floorVal = Math.floor(value);
   const decimal = value - floorVal;
@@ -309,12 +362,47 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
     }
   };
 
-  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setSelectedImage(file);
-    const url = URL.createObjectURL(file);
+    let finalFile = file;
+
+    // 1. Check if the file is HEIC and convert it to JPEG
+    const isHeic = file.type === "image/heic" || file.name.toLowerCase().endsWith(".heic") || file.name.toLowerCase().endsWith(".heif");
+    if (isHeic) {
+      const convertingToast = toast.loading("Converting HEIC image to JPEG...");
+      try {
+        const heic2any = (await import("heic2any")).default;
+        const convertedBlob = await heic2any({
+          blob: file,
+          toType: "image/jpeg",
+          quality: 0.8,
+        });
+        const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+        finalFile = new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), {
+          type: "image/jpeg",
+        });
+        toast.success("Image successfully converted!", { id: convertingToast });
+      } catch (err: any) {
+        console.error("Failed to convert HEIC image:", err);
+        toast.error("Failed to convert HEIC image. Please upload a JPEG or PNG.", { id: convertingToast });
+        return;
+      }
+    }
+
+    // 2. Compress the image (works for all: JPEG, PNG, converted HEIC)
+    const compressionToast = toast.loading("Compressing and optimizing receipt photo...");
+    try {
+      finalFile = await compressImage(finalFile, 1200, 1200, 0.75);
+      toast.success("Image optimized successfully!", { id: compressionToast });
+    } catch (err) {
+      console.error("Image compression failed:", err);
+      toast.error("Image optimization failed, using original file.", { id: compressionToast });
+    }
+
+    setSelectedImage(finalFile);
+    const url = URL.createObjectURL(finalFile);
     setPreviewUrl(url);
   };
 

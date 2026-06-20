@@ -34,7 +34,9 @@ import {
   IconChevronUp,
   IconBuildingBank,
   IconActivity,
+  IconRefresh,
 } from "@tabler/icons-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import {
@@ -109,6 +111,7 @@ interface SettingsFormProps {
   };
   defaultTab?: string;
   onRefresh?: () => void;
+  syncStatus?: "idle" | "syncing" | "success" | "error";
   paidTemplateNamesThisMonth?: string[];
 }
 
@@ -165,6 +168,7 @@ export default function SettingsForm({
   profile,
   defaultTab = "templates",
   onRefresh,
+  syncStatus = "idle",
   paidTemplateNamesThisMonth = [],
 }: SettingsFormProps) {
   // Budget Limits CRUD states
@@ -570,9 +574,65 @@ export default function SettingsForm({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.05 }}
       >
-        <h1 className="font-sans text-2xl font-bold tracking-wide text-primary">
-          Settings
-        </h1>
+        <div className="flex items-center gap-2">
+          <h1 className="font-sans text-2xl font-bold tracking-wide text-primary">
+            Settings
+          </h1>
+          {syncStatus !== "idle" && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center justify-center p-1.5 rounded-full hover:bg-muted/40 transition-colors cursor-pointer focus:outline-none"
+                  aria-label="Sync status"
+                >
+                  {syncStatus === "syncing" && (
+                    <IconLoader className="size-4 animate-spin text-muted-foreground" />
+                  )}
+                  {syncStatus === "success" && (
+                    <motion.div
+                      initial={{ scale: 0, rotate: -45 }}
+                      animate={{ scale: 1, rotate: 0 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                      className="text-green-600 bg-green-500/10 p-0.5 rounded-full"
+                    >
+                      <IconCheck className="size-3 stroke-[3]" />
+                    </motion.div>
+                  )}
+                  {syncStatus === "error" && (
+                    <span className="flex items-center justify-center size-3.5 bg-destructive/10 text-destructive font-bold text-[10px] rounded-full">
+                      !
+                    </span>
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-3 rounded-xl border border-border bg-popover text-popover-foreground shadow-md" side="bottom" align="start">
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-xs font-semibold">
+                    {syncStatus === "syncing" && "Updating data..."}
+                    {syncStatus === "success" && "Data is up to date"}
+                    {syncStatus === "error" && "Sync failed"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground leading-relaxed">
+                    {syncStatus === "syncing" && "Synchronizing user settings and templates with server."}
+                    {syncStatus === "success" && "Successfully updated user settings and templates!"}
+                    {syncStatus === "error" && "Could not sync data. Check your internet connection."}
+                  </p>
+                  {onRefresh && syncStatus !== "syncing" && (
+                    <button
+                      type="button"
+                      onClick={onRefresh}
+                      className="mt-1 flex items-center justify-center gap-1 py-1 text-[10px] font-bold text-primary hover:underline self-start cursor-pointer"
+                    >
+                      <IconRefresh className="size-3" />
+                      Sync now
+                    </button>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
+        </div>
         <p className="text-xs text-muted-foreground mt-1">
           Manage recurring bills, budget, accounts, and profile.
         </p>

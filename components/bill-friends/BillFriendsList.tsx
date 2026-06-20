@@ -18,8 +18,14 @@ import {
   IconReceipt,
   IconChevronDown,
   IconChevronUp,
+  IconRefresh,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -74,6 +80,8 @@ interface BillFriendsListProps {
   bills: BillItem[];
   accounts: AccountItem[];
   transactions?: TransactionItem[];
+  syncStatus?: "idle" | "syncing" | "success" | "error";
+  onSync?: () => void;
 }
 
 const formatAmount = (amount: number, currency: string) =>
@@ -99,7 +107,13 @@ function groupByPerson(bills: BillItem[]) {
   return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
 }
 
-export default function BillFriendsList({ bills: initialBills, accounts = [], transactions = [] }: BillFriendsListProps) {
+export default function BillFriendsList({
+  bills: initialBills,
+  accounts = [],
+  transactions = [],
+  syncStatus = "idle",
+  onSync,
+}: BillFriendsListProps) {
   const [bills, setBills] = useState<BillItem[]>(initialBills);
   const [activeTab, setActiveTab] = useState<"active" | "settled">("active");
   const [expandedBills, setExpandedBills] = useState<Record<string, boolean>>({});
@@ -330,7 +344,65 @@ export default function BillFriendsList({ bills: initialBills, accounts = [], tr
         className="flex justify-between items-center"
       >
         <div>
-          <h1 className="font-sans text-2xl font-bold tracking-wide text-primary">Bill Friends</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="font-sans text-2xl font-bold tracking-wide text-primary">
+              Bill Friends
+            </h1>
+            {syncStatus !== "idle" && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex items-center justify-center p-1.5 rounded-full hover:bg-muted/40 transition-colors cursor-pointer focus:outline-none"
+                    aria-label="Sync status"
+                  >
+                    {syncStatus === "syncing" && (
+                      <IconLoader className="size-4 animate-spin text-muted-foreground" />
+                    )}
+                    {syncStatus === "success" && (
+                      <motion.div
+                        initial={{ scale: 0, rotate: -45 }}
+                        animate={{ scale: 1, rotate: 0 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                        className="text-green-600 bg-green-500/10 p-0.5 rounded-full"
+                      >
+                        <IconCheck className="size-3 stroke-[3]" />
+                      </motion.div>
+                    )}
+                    {syncStatus === "error" && (
+                      <span className="flex items-center justify-center size-3.5 bg-destructive/10 text-destructive font-bold text-[10px] rounded-full">
+                        !
+                      </span>
+                    )}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-3 rounded-xl border border-border bg-popover text-popover-foreground shadow-md" side="bottom" align="start">
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-xs font-semibold">
+                      {syncStatus === "syncing" && "Updating data..."}
+                      {syncStatus === "success" && "Data is up to date"}
+                      {syncStatus === "error" && "Sync failed"}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground leading-relaxed">
+                      {syncStatus === "syncing" && "Synchronizing friend bills data with server."}
+                      {syncStatus === "success" && "Successfully updated friend bills data!"}
+                      {syncStatus === "error" && "Could not sync data. Check your internet connection."}
+                    </p>
+                    {onSync && syncStatus !== "syncing" && (
+                      <button
+                        type="button"
+                        onClick={onSync}
+                        className="mt-1 flex items-center justify-center gap-1 py-1 text-[10px] font-bold text-primary hover:underline self-start cursor-pointer"
+                      >
+                        <IconRefresh className="size-3" />
+                        Sync now
+                      </button>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+          </div>
           <p className="text-xs text-muted-foreground mt-1">Track what you owe and what&apos;s owed to you.</p>
         </div>
         <Button size="sm" onClick={() => { setAddOpen(true); resetAddForm(); }}>
