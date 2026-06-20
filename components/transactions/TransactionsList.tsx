@@ -927,7 +927,7 @@ export default function TransactionsList({
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.15 }}
+        transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1] }}
         className={cn(
           "grid gap-2 transition-all duration-300",
           typeFilter === "all" ? "grid-cols-2" : "grid-cols-1"
@@ -987,7 +987,7 @@ export default function TransactionsList({
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.2 }}
+        transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1] }}
         className="flex flex-col gap-5 mt-2"
       >
         {Object.keys(groupedTransactions).length === 0 ? (
@@ -1550,11 +1550,6 @@ export default function TransactionsList({
                       <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                         Receipt Items ({editReceiptItems.length})
                       </Label>
-                      {editReceiptItems.length > 0 && totalReceiptAmount < 100000 && (
-                        <span className="text-[11px] font-bold text-primary font-sans">
-                          Total {editing?.currency === "IDR" ? "Rp" : "¥"}{totalReceiptAmount.toLocaleString()}
-                        </span>
-                      )}
                     </div>
 
                     {/* Items list */}
@@ -1586,7 +1581,7 @@ export default function TransactionsList({
                       </div>
                     )}
 
-                    {editReceiptItems.length > 0 && totalReceiptAmount >= 100000 && (
+                    {editReceiptItems.length > 0 && (
                       <div className="flex items-center justify-between border-t border-border/40 pt-2.5 mt-1 px-1">
                         <span className="text-xs font-semibold text-muted-foreground">Total Amount</span>
                         <span className="text-sm font-bold text-foreground">

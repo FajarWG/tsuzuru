@@ -1516,16 +1516,9 @@ export default function AddTransactionFab({
                         {/* 2. Receipt Items (Scan & List & Manual inputs) */}
                         <div className="flex flex-col gap-3 p-4 bg-muted/40 border border-border/50 rounded-xl">
                           <div className="flex items-center justify-between border-b border-border/40 pb-2">
-                            <div className="flex items-baseline gap-2">
-                              <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                                Receipt Items ({receiptItems.length})
-                              </Label>
-                              {receiptItems.length > 0 && totalReceiptAmount < 100000 && (
-                                <span className="text-[11px] font-bold text-primary font-sans">
-                                  Total {currencySymbol}{totalReceiptAmount.toLocaleString()}
-                                </span>
-                              )}
-                            </div>
+                            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                              Receipt Items ({receiptItems.length})
+                            </Label>
 
                             {/* Import by AI button */}
                             <div className="flex items-center gap-1.5">
@@ -1617,7 +1610,7 @@ export default function AddTransactionFab({
                             </div>
                           )}
 
-                          {receiptItems.length > 0 && totalReceiptAmount >= 100000 && (
+                          {receiptItems.length > 0 && (
                             <div className="flex items-center justify-between border-t border-border/40 pt-2 mt-1 px-1">
                               <span className="text-xs font-semibold text-muted-foreground">Total Amount</span>
                               <span className="text-sm font-bold text-foreground">
