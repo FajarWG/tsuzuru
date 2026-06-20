@@ -307,8 +307,14 @@ export default function TransactionsList({
     search,
   ]);
 
+  const isInitialMount = useRef(true);
+
   // Trigger loadData when online and filters change
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
     if (typeof window !== "undefined" && navigator.onLine) {
       setPage(1);
       loadData(1, false);
@@ -928,59 +934,63 @@ export default function TransactionsList({
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1] }}
-        className={cn(
-          "grid gap-2 transition-all duration-300",
-          typeFilter === "all" ? "grid-cols-2" : "grid-cols-1"
-        )}
+        className="w-full"
       >
-        {(typeFilter === "all" || typeFilter === "expense") && (
-          <div className="rounded-xl border border-border/40 bg-white p-3 dark:bg-zinc-900 min-h-[72px] flex flex-col justify-center">
-            {isLoading ? (
-              <div className="flex flex-col gap-2 w-full animate-pulse">
-                <div className="h-3 bg-muted rounded-full w-12" />
-                <div className="h-5 bg-muted rounded-full w-24" />
-              </div>
-            ) : (
-              <>
-                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-                  Expense
-                </p>
-                <p className="text-sm font-sans font-bold text-destructive mt-1">
-                  {formatJPY(displaySummary.expense.JPY)}
-                </p>
-                {displaySummary.expense.IDR > 0 && (
-                  <p className="text-xs font-sans font-bold text-destructive mt-0.5">
-                    {formatIDR(displaySummary.expense.IDR)}
+        <div
+          className={cn(
+            "grid gap-2 transition-all duration-300",
+            typeFilter === "all" ? "grid-cols-2" : "grid-cols-1"
+          )}
+        >
+          {(typeFilter === "all" || typeFilter === "expense") && (
+            <div className="rounded-xl border border-border/40 bg-white p-3 dark:bg-zinc-900 min-h-[72px] flex flex-col justify-center">
+              {isLoading ? (
+                <div className="flex flex-col gap-2 w-full animate-pulse">
+                  <div className="h-3 bg-muted rounded-full w-12" />
+                  <div className="h-5 bg-muted rounded-full w-24" />
+                </div>
+              ) : (
+                <>
+                  <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                    Expense
                   </p>
-                )}
-              </>
-            )}
-          </div>
-        )}
-        {(typeFilter === "all" || typeFilter === "income") && (
-          <div className="rounded-xl border border-border/40 bg-white p-3 dark:bg-zinc-900 min-h-[72px] flex flex-col justify-center">
-            {isLoading ? (
-              <div className="flex flex-col gap-2 w-full animate-pulse">
-                <div className="h-3 bg-muted rounded-full w-12" />
-                <div className="h-5 bg-muted rounded-full w-24" />
-              </div>
-            ) : (
-              <>
-                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-                  Income
-                </p>
-                <p className="text-sm font-sans font-bold text-primary mt-1">
-                  {formatJPY(displaySummary.income.JPY)}
-                </p>
-                {displaySummary.income.IDR > 0 && (
-                  <p className="text-xs font-sans font-bold text-primary mt-0.5">
-                    {formatIDR(displaySummary.income.IDR)}
+                  <p className="text-sm font-sans font-bold text-destructive mt-1">
+                    {formatJPY(displaySummary.expense.JPY)}
                   </p>
-                )}
-              </>
-            )}
-          </div>
-        )}
+                  {displaySummary.expense.IDR > 0 && (
+                    <p className="text-xs font-sans font-bold text-destructive mt-0.5">
+                      {formatIDR(displaySummary.expense.IDR)}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+          {(typeFilter === "all" || typeFilter === "income") && (
+            <div className="rounded-xl border border-border/40 bg-white p-3 dark:bg-zinc-900 min-h-[72px] flex flex-col justify-center">
+              {isLoading ? (
+                <div className="flex flex-col gap-2 w-full animate-pulse">
+                  <div className="h-3 bg-muted rounded-full w-12" />
+                  <div className="h-5 bg-muted rounded-full w-24" />
+                </div>
+              ) : (
+                <>
+                  <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
+                    Income
+                  </p>
+                  <p className="text-sm font-sans font-bold text-primary mt-1">
+                    {formatJPY(displaySummary.income.JPY)}
+                  </p>
+                  {displaySummary.income.IDR > 0 && (
+                    <p className="text-xs font-sans font-bold text-primary mt-0.5">
+                      {formatIDR(displaySummary.income.IDR)}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </motion.div>
 
       {/* Transactions List */}
@@ -1057,7 +1067,7 @@ export default function TransactionsList({
                           transition={{ duration: 0.25, ease: "easeInOut" }}
                           onClick={() => tx.isReceipt && setExpandedReceipts((prev) => ({ ...prev, [tx.id]: !prev[tx.id] }))}
                           className={cn(
-                            "border rounded-2xl p-4 flex flex-col gap-3 shadow-xs transition-all select-none bg-white dark:bg-zinc-900 relative overflow-hidden",
+                            "border rounded-2xl p-4 flex flex-col gap-3 shadow-xs transition-colors duration-200 select-none bg-white dark:bg-zinc-900 relative overflow-hidden",
                             tx.isReceipt 
                               ? "border-emerald-500/30 dark:border-emerald-500/20 cursor-pointer hover:bg-zinc-50/40 dark:hover:bg-zinc-950/20" 
                               : "border-border/40"
