@@ -8,6 +8,7 @@ import {
   IconAdjustments,
   IconBus,
   IconCalendar,
+  IconCheck,
   IconCreditCard,
   IconDeviceGamepad,
   IconDeviceLaptop,
@@ -103,6 +104,8 @@ interface TransactionsListProps {
   userId: string;
   transactions: TransactionItem[];
   accounts: AccountItem[];
+  syncStatus?: "idle" | "syncing" | "success" | "error";
+  onSync?: () => void;
 }
 
 const POCKET_MONEY_SUBCATS = [
@@ -206,6 +209,8 @@ export default function TransactionsList({
   userId,
   transactions,
   accounts,
+  syncStatus = "idle",
+  onSync,
 }: TransactionsListProps) {
   const router = useRouter();
   const today = useMemo(() => new Date(), []);
@@ -224,15 +229,33 @@ export default function TransactionsList({
   const [startDateFilter, setStartDateFilter] = useState("");
   const [endDateFilter, setEndDateFilter] = useState("");
 
-  const [loadedTransactions, setLoadedTransactions] = useState<TransactionItem[]>([]);
+  const [loadedTransactions, setLoadedTransactions] = useState<TransactionItem[]>(() => transactions);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [serverSummary, setServerSummary] = useState<{
     income: { JPY: number; IDR: number };
     expense: { JPY: number; IDR: number };
   } | null>(null);
+
+  // Sync loadedTransactions when transactions prop updates under default filters
+  useEffect(() => {
+    const isDefaultFilters =
+      typeFilter === "all" &&
+      accountFilter === "all" &&
+      categoryFilter === "all" &&
+      monthFilter === currentMonthKey &&
+      !startDateFilter &&
+      !endDateFilter &&
+      !search &&
+      page === 1;
+
+    if (isDefaultFilters) {
+      setLoadedTransactions(transactions);
+    }
+  }, [transactions, typeFilter, accountFilter, categoryFilter, monthFilter, startDateFilter, endDateFilter, search, page, currentMonthKey]);
 
   const loadData = useCallback(async (pageToLoad: number, append = false) => {
     if (typeof window !== "undefined" && !navigator.onLine) return;
@@ -263,6 +286,7 @@ export default function TransactionsList({
         if (res.summary) {
           setServerSummary(res.summary);
         }
+        setHasLoadedOnce(true);
       } else {
         toast.error(res.error || "Failed to load transactions");
       }
@@ -471,8 +495,12 @@ export default function TransactionsList({
     if (typeof window !== "undefined" && !navigator.onLine) {
       return filteredTransactions.slice(0, page * 20);
     }
+    // Fallback to cached transactions if they exist and we haven't successfully completed a fetch yet
+    if (!hasLoadedOnce && loadedTransactions.length === 0) {
+      return filteredTransactions.slice(0, page * 20);
+    }
     return loadedTransactions;
-  }, [loadedTransactions, filteredTransactions, page]);
+  }, [loadedTransactions, filteredTransactions, page, hasLoadedOnce]);
 
   const displaySummary = useMemo(() => {
     if (typeof window !== "undefined" && !navigator.onLine) {
@@ -685,9 +713,66 @@ export default function TransactionsList({
         className="flex flex-col gap-4"
       >
         <div className="flex justify-between items-center">
-          <h1 className="font-sans text-2xl font-bold tracking-wide text-primary">
-            Transactions
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="font-sans text-2xl font-bold tracking-wide text-primary">
+              Transactions
+            </h1>
+            
+            {syncStatus !== "idle" && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex items-center justify-center p-1.5 rounded-full hover:bg-muted/40 transition-colors cursor-pointer focus:outline-none"
+                    aria-label="Sync status"
+                  >
+                    {syncStatus === "syncing" && (
+                      <IconLoader className="size-4 animate-spin text-muted-foreground" />
+                    )}
+                    {syncStatus === "success" && (
+                      <motion.div
+                        initial={{ scale: 0, rotate: -45 }}
+                        animate={{ scale: 1, rotate: 0 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                        className="text-green-600 bg-green-500/10 p-0.5 rounded-full"
+                      >
+                        <IconCheck className="size-3.5 stroke-[3]" />
+                      </motion.div>
+                    )}
+                    {syncStatus === "error" && (
+                      <span className="flex items-center justify-center size-4 bg-destructive/10 text-destructive font-bold text-xs rounded-full">
+                        !
+                      </span>
+                    )}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-3 rounded-xl border border-border bg-popover text-popover-foreground shadow-md" side="right" align="center">
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-xs font-semibold">
+                      {syncStatus === "syncing" && "Updating data..."}
+                      {syncStatus === "success" && "Data is up to date"}
+                      {syncStatus === "error" && "Sync failed"}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground leading-relaxed">
+                      {syncStatus === "syncing" && "Synchronizing transaction records with server."}
+                      {syncStatus === "success" && "Successfully updated transaction records!"}
+                      {syncStatus === "error" && "Could not sync data. Check your internet connection."}
+                    </p>
+                    {onSync && syncStatus !== "syncing" && (
+                      <button
+                        type="button"
+                        onClick={onSync}
+                        className="mt-1 flex items-center justify-center gap-1 py-1 text-[10px] font-bold text-primary hover:underline self-start cursor-pointer"
+                      >
+                        <IconRefresh className="size-3" />
+                        Sync now
+                      </button>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+          </div>
         </div>
 
         {/* Search Input & Reset Button */}
@@ -1128,32 +1213,31 @@ export default function TransactionsList({
         )}
 
         {/* Load More Button */}
-        {displayHasMore && (
+        {displayHasMore && displayTransactions.length > 0 && !isLoading && syncStatus !== "syncing" && (
           <div className="flex justify-center mt-4 pb-6 px-1">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setPage((prev) => {
-                  const nextPage = prev + 1;
-                  if (typeof window !== "undefined" && navigator.onLine) {
-                    loadData(nextPage, true);
-                  }
-                  return nextPage;
-                });
-              }}
-              disabled={isLoadingMore}
-              className="w-full max-w-[280px] h-10 rounded-xl text-xs font-semibold shadow-xs transition-all hover:scale-[1.01] active:scale-95 cursor-pointer"
-            >
-              {isLoadingMore ? (
-                <>
-                  <IconLoader className="size-4 animate-spin mr-2 text-primary" />
-                  Loading...
-                </>
-              ) : (
-                "Load More Transactions"
-              )}
-            </Button>
+            {isLoadingMore ? (
+              <div className="flex justify-center py-2">
+                <IconLoader className="size-5 animate-spin text-primary" />
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setPage((prev) => {
+                    const nextPage = prev + 1;
+                    if (typeof window !== "undefined" && navigator.onLine) {
+                      loadData(nextPage, true);
+                    }
+                    return nextPage;
+                  });
+                }}
+                disabled={isLoadingMore}
+                className="w-full max-w-[280px] h-10 rounded-xl text-xs font-semibold shadow-xs transition-all hover:scale-[1.01] active:scale-95 cursor-pointer"
+              >
+                Load More Transactions
+              </Button>
+            )}
           </div>
         )}
       </motion.div>

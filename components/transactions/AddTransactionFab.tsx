@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { createTransactionAction } from "@/lib/actions/transactions";
@@ -125,6 +125,9 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
   const [activeMode, setActiveMode] = useState<"select" | "single" | "receipt">("select");
   const [aiImportMode, setAiImportMode] = useState<"auto" | "manual">("auto");
   const [isAiParsing, setIsAiParsing] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form state
   const [type, setType] = useState<"expense" | "income">("expense");
@@ -286,9 +289,37 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
     setShowFriendSuggestions(false);
   };
 
-  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Cleanup previewUrl on unmount
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  const handleClearSelectedImage = () => {
+    setSelectedImage(null);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    setSelectedImage(file);
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+  };
+
+  const handleSendImageToAi = async () => {
+    if (!selectedImage) return;
 
     try {
       const limitRes = await checkAiLimitAction();
@@ -304,8 +335,8 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
     const loadingToast = toast.loading("Analyzing receipt photo...");
 
     try {
-      const { base64, mimeType } = await fileToBase64(file);
-      const res = await parseReceiptImageAction(base64, mimeType);
+      const { base64, mimeType } = await fileToBase64(selectedImage);
+      const res = await parseReceiptImageAction(base64, mimeType, aiTranslateLang);
 
       if (res.success && res.data && Array.isArray(res.data.items)) {
         const parsedItems = res.data.items.map((item: any) => ({
@@ -317,6 +348,7 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
           setReceiptItems((prev) => [...prev, ...parsedItems]);
           toast.success(`Successfully imported ${parsedItems.length} items from receipt!`, { id: loadingToast });
           setIsAiImportOpen(false);
+          handleClearSelectedImage();
         } else {
           toast.error("No items could be extracted from the receipt.", { id: loadingToast });
         }
@@ -328,7 +360,6 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
       toast.error(err.message || "Failed to parse receipt image", { id: loadingToast });
     } finally {
       setIsAiParsing(false);
-      e.target.value = "";
     }
   };
 
@@ -1456,7 +1487,14 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isAiImportOpen} onOpenChange={(v) => { if (!isAiParsing) setIsAiImportOpen(v); }}>
+      <Dialog open={isAiImportOpen} onOpenChange={(v) => {
+        if (!isAiParsing) {
+          setIsAiImportOpen(v);
+          if (!v) {
+            handleClearSelectedImage();
+          }
+        }
+      }}>
         <DialogContent className="max-w-[440px] rounded-2xl p-0" layout={false}>
           <div className="flex flex-col max-h-[85vh] p-6">
             <DialogHeader className="shrink-0 pb-2">
@@ -1549,47 +1587,91 @@ export default function AddTransactionFab({ userId, accounts, budgetCategories }
 
             <div className="flex-1 overflow-y-auto py-2 flex flex-col gap-4 min-h-0 pr-1">
               {aiImportMode === "auto" ? (
-                // === Automatic Scan Layout ===
-                <div className="flex flex-col gap-4 py-2">
-                  <input
-                    type="file"
-                    id="receipt-upload"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleImageFileChange}
-                    disabled={isAiParsing}
-                  />
-                  
-                  <label
-                    htmlFor="receipt-upload"
-                    className={cn(
-                      "flex flex-col items-center justify-center border border-dashed border-border/80 rounded-2xl p-8 bg-muted/10 transition-all text-center group gap-3",
-                      isAiParsing 
-                        ? "cursor-not-allowed opacity-80" 
-                        : "cursor-pointer hover:bg-muted/30 dark:hover:bg-zinc-800/10 hover:border-primary/50"
-                    )}
-                  >
-                    {isAiParsing ? (
-                      <div className="p-3 rounded-full bg-primary/10 text-primary">
-                        <IconLoader className="size-6 animate-spin" />
+                <>
+                  {previewUrl ? (
+                    <div className="flex flex-col gap-4">
+                      {/* Image Preview Container */}
+                      <div className="relative border border-border/60 rounded-2xl overflow-hidden aspect-video bg-zinc-950 flex items-center justify-center group shadow-md">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={previewUrl}
+                          alt="Selected receipt preview"
+                          className="w-full h-full object-contain max-h-[220px]"
+                        />
+                        {/* Clear Photo Button */}
+                        <button
+                          type="button"
+                          onClick={handleClearSelectedImage}
+                          className="absolute top-3 right-3 p-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white/90 hover:text-white transition-all cursor-pointer shadow-xs border border-white/10"
+                          disabled={isAiParsing}
+                          title="Remove photo"
+                        >
+                          <IconX className="size-4" />
+                        </button>
                       </div>
-                    ) : (
-                      <div className="p-3 rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-all">
-                        <IconCamera className="size-6" />
+
+                      {/* Info / Send Button */}
+                      <div className="flex flex-col gap-2">
+                        <Button
+                          type="button"
+                          onClick={handleSendImageToAi}
+                          disabled={isAiParsing}
+                          className="w-full h-11 rounded-xl text-sm font-bold flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                        >
+                          {isAiParsing ? (
+                            <>
+                              <IconLoader className="size-4 animate-spin text-primary-foreground" />
+                              Analyzing receipt...
+                            </>
+                          ) : (
+                            <>
+                              <IconSparkles className="size-4 text-primary-foreground animate-pulse" />
+                              Send Photo to AI
+                            </>
+                          )}
+                        </Button>
+                        <span className="text-[10px] text-muted-foreground text-center">
+                          Selected file: {selectedImage?.name} ({(selectedImage?.size ? (selectedImage.size / 1024 / 1024).toFixed(2) : 0)} MB)
+                        </span>
                       </div>
-                    )}
-                    <div className="flex flex-col gap-1">
-                      <span className="text-sm font-bold text-foreground">
-                        {isAiParsing ? "Analyzing Receipt..." : "Upload Receipt Photo"}
-                      </span>
-                      <span className="text-xs text-muted-foreground max-w-[240px] mx-auto leading-relaxed">
-                        {isAiParsing 
-                          ? "Gemini is extracting receipt items and prices. This may take a few seconds..." 
-                          : "Take a photo or upload receipt image to extract items automatically"}
-                      </span>
                     </div>
-                  </label>
-                </div>
+                  ) : (
+                    // === Original Upload Box ===
+                    <div className="flex flex-col gap-4 py-2">
+                      <input
+                        type="file"
+                        id="receipt-upload"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageFileChange}
+                        disabled={isAiParsing}
+                        ref={fileInputRef}
+                      />
+                      
+                      <label
+                        htmlFor="receipt-upload"
+                        className={cn(
+                          "flex flex-col items-center justify-center border border-dashed border-border/80 rounded-2xl p-8 bg-muted/10 transition-all text-center group gap-3",
+                          isAiParsing 
+                            ? "cursor-not-allowed opacity-80" 
+                            : "cursor-pointer hover:bg-muted/30 dark:hover:bg-zinc-800/10 hover:border-primary/50"
+                        )}
+                      >
+                        <div className="p-3 rounded-full bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-all">
+                          <IconCamera className="size-6" />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm font-bold text-foreground">
+                            Upload Receipt Photo
+                          </span>
+                          <span className="text-xs text-muted-foreground max-w-[240px] mx-auto leading-relaxed">
+                            Take a photo or upload receipt image to extract items automatically
+                          </span>
+                        </div>
+                      </label>
+                    </div>
+                  )}
+                </>
               ) : (
                 // === Manual Prompt Layout ===
                 <>

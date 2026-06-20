@@ -51,24 +51,33 @@ export default function TransactionsClient({ userId }: TransactionsClientProps) 
     }
     return null;
   });
+  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "success" | "error">("idle");
   const [loading, setLoading] = useState(true);
 
   // Guard: prevents background listeners from firing before the initial fetch is done
   const hasInitiallyFetched = useRef(false);
 
   const syncData = useCallback(async () => {
+    setSyncStatus("syncing");
     try {
       const res = await getTransactionsDataAction();
       if (res.success && res.data) {
         const freshData = res.data as unknown as TransactionsData;
         setData(freshData);
         localStorage.setItem("tsuzuru_transactions_data", JSON.stringify(freshData));
+        setSyncStatus("success");
+        // Keep the checkmark animation visible for 3.5 seconds
+        setTimeout(() => {
+          setSyncStatus("idle");
+        }, 3500);
       } else {
         toast.error(res.error || "Failed to fetch latest transaction records.");
+        setSyncStatus("error");
       }
     } catch (err) {
       console.error("Error syncing transactions:", err);
       toast.error("Failed to sync transactions with server.");
+      setSyncStatus("error");
     } finally {
       setLoading(false);
     }
@@ -128,6 +137,8 @@ export default function TransactionsClient({ userId }: TransactionsClientProps) 
         userId={userId}
         transactions={activeTransactions}
         accounts={activeAccounts}
+        syncStatus={syncStatus}
+        onSync={syncData}
       />
     </div>
   );
