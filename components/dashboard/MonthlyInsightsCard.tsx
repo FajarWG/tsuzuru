@@ -64,7 +64,11 @@ export default function MonthlyInsightsCard({
       <div className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex items-center justify-between">
         <div className="flex flex-col gap-1 min-w-0">
           <h2 className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-            Monthly Insights (今月の支出分析)
+            Monthly Insights{" "}
+            <span className="text-[8px] text-muted-foreground">
+              {" "}
+              (今月の支出分析){" "}
+            </span>
           </h2>
           <p className="text-[10px] text-muted-foreground truncate">
             Analyze spending trends, top category, and projected spending.
