@@ -368,8 +368,15 @@ export default function TransactionsList({
   const [editReceiptItems, setEditReceiptItems] = useState<{ name: string; price: number }[]>([]);
   const [editNewItemName, setEditNewItemName] = useState("");
   const [editNewItemPrice, setEditNewItemPrice] = useState("");
+  const [editTargetTotal, setEditTargetTotal] = useState("");
+  const [editTaxPercentage, setEditTaxPercentage] = useState("");
 
-  const totalReceiptAmount = editReceiptItems.reduce((sum, item) => sum + item.price, 0);
+  const subtotalReceiptAmount = editReceiptItems.reduce((sum, item) => sum + item.price, 0);
+  const taxRate = parseFloat(editTaxPercentage) || 0;
+  const taxAmount = Math.round(subtotalReceiptAmount * (taxRate / 100));
+  const totalReceiptAmount = subtotalReceiptAmount + taxAmount;
+  const parsedTargetTotal = parseInputAmount(editTargetTotal);
+  const receiptDifference = parsedTargetTotal - totalReceiptAmount;
 
   const monthOptions = useMemo(() => {
     return Array.from({ length: 12 }, (_, i) => {
@@ -574,6 +581,13 @@ export default function TransactionsList({
     }
     setEditNewItemName("");
     setEditNewItemPrice("");
+    if (tx.isReceipt) {
+      setEditTargetTotal(String((tx as any).originalAmount ?? tx.amount));
+      setEditTaxPercentage("");
+    } else {
+      setEditTargetTotal("");
+      setEditTaxPercentage("");
+    }
   };
 
   const handleEditModeChange = (receiptMode: boolean) => {
@@ -1528,6 +1542,49 @@ export default function TransactionsList({
                     />
                   </div>
 
+                  {/* Target Total & Tax % */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs font-semibold text-muted-foreground">
+                        Target Total
+                      </Label>
+                      <div className="relative flex items-center bg-white dark:bg-zinc-900 border border-border/50 rounded-xl px-3 h-10 focus-within:border-primary transition-colors shadow-xs">
+                        <span className="text-sm font-bold text-muted-foreground mr-1.5 select-none">
+                          {editing?.currency === "IDR" ? "Rp" : "¥"}
+                        </span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={editTargetTotal}
+                          onChange={(e) => setEditTargetTotal(formatInputAmount(e.target.value))}
+                          className="flex-1 h-full text-sm font-bold font-sans bg-transparent focus:outline-none text-foreground"
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs font-semibold text-muted-foreground">
+                        Tax (%)
+                      </Label>
+                      <div className="relative flex items-center bg-white dark:bg-zinc-900 border border-border/50 rounded-xl px-3 h-10 focus-within:border-primary transition-colors shadow-xs">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={editTaxPercentage}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^0-9]/g, "");
+                            setEditTaxPercentage(val);
+                          }}
+                          className="flex-1 h-full text-sm font-bold font-sans bg-transparent focus:outline-none text-foreground pr-4"
+                          placeholder="0"
+                        />
+                        <span className="absolute right-3 text-sm font-bold text-muted-foreground select-none">
+                          %
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* 2. Receipt Items Card */}
                   <div className="flex flex-col gap-3 p-3 bg-muted/40 border border-border/50 rounded-xl">
                     <div className="flex items-baseline justify-between border-b border-border/40 pb-2">
@@ -1565,12 +1622,69 @@ export default function TransactionsList({
                       </div>
                     )}
 
-                    {editReceiptItems.length > 0 && (
-                      <div className="flex items-center justify-between border-t border-border/40 pt-2.5 mt-1 px-1">
-                        <span className="text-xs font-semibold text-muted-foreground">Total Amount</span>
-                        <span className="text-sm font-bold text-foreground">
-                          {editing?.currency === "IDR" ? "Rp" : "¥"}{totalReceiptAmount.toLocaleString()}
-                        </span>
+                    {(editReceiptItems.length > 0 || editTargetTotal) && (
+                      <div className="flex flex-col gap-1.5 border-t border-border/40 pt-2.5 mt-1 px-1 text-xs">
+                        <div className="flex items-center justify-between text-muted-foreground">
+                          <span>Subtotal</span>
+                          <span>
+                            {editing?.currency === "IDR" ? "Rp" : "¥"}
+                            {subtotalReceiptAmount.toLocaleString()}
+                          </span>
+                        </div>
+                        {taxRate > 0 && (
+                          <div className="flex items-center justify-between text-muted-foreground">
+                            <span>Tax ({taxRate}%)</span>
+                            <span>
+                              {editing?.currency === "IDR" ? "Rp" : "¥"}
+                              {taxAmount.toLocaleString()}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between font-bold text-foreground text-sm border-t border-border/20 pt-1.5 mt-1">
+                          <span>Calculated Total</span>
+                          <span>
+                            {editing?.currency === "IDR" ? "Rp" : "¥"}
+                            {totalReceiptAmount.toLocaleString()}
+                          </span>
+                        </div>
+
+                        {editTargetTotal && (
+                          <>
+                            <div className="flex items-center justify-between font-semibold border-t border-border/20 pt-1.5 mt-1">
+                              <span className="text-muted-foreground">Target Total</span>
+                              <span className="text-foreground">
+                                {editing?.currency === "IDR" ? "Rp" : "¥"}
+                                {parsedTargetTotal.toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between font-bold pt-1">
+                              <span className="text-muted-foreground">Difference</span>
+                              {(() => {
+                                if (receiptDifference === 0) {
+                                  return (
+                                    <span className="text-emerald-500 flex items-center gap-1">
+                                      <IconCheck className="size-3.5" /> Matched
+                                    </span>
+                                  );
+                                } else if (receiptDifference > 0) {
+                                  return (
+                                    <span className="text-amber-500">
+                                      Short by {editing?.currency === "IDR" ? "Rp" : "¥"}
+                                      {receiptDifference.toLocaleString()}
+                                    </span>
+                                  );
+                                } else {
+                                  return (
+                                    <span className="text-red-500">
+                                      Over by {editing?.currency === "IDR" ? "Rp" : "¥"}
+                                      {Math.abs(receiptDifference).toLocaleString()}
+                                    </span>
+                                  );
+                                }
+                              })()}
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
 

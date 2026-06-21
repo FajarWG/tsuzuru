@@ -92,6 +92,9 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
   const [isPromptCopied, setIsPromptCopied] = useState(false);
   const [aiTranslateLang, setAiTranslateLang] = useState<"none" | "id" | "en">("none");
   const [aiImportText, setAiImportText] = useState("");
+  const [targetTotal, setTargetTotal] = useState("");
+  const [taxPercentage, setTaxPercentage] = useState("");
+
 
   // Split Bill States
   const [showSplitPrompt, setShowSplitPrompt] = useState(false);
@@ -178,6 +181,8 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
       }
 
       setReceiptItems((prev) => [...prev, ...validItems]);
+      const importedTotal = validItems.reduce((sum: number, item: { price: number }) => sum + item.price, 0);
+      setTargetTotal(importedTotal.toString());
       toast.success(`Successfully imported ${validItems.length} items!`);
       setIsAiImportOpen(false);
       setAiImportText("");
@@ -187,7 +192,13 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
     }
   };
 
-  const totalReceiptAmount = receiptItems.reduce((sum, item) => sum + item.price, 0);
+  const subtotalReceiptAmount = receiptItems.reduce((sum, item) => sum + item.price, 0);
+  const taxRate = parseFloat(taxPercentage) || 0;
+  const taxAmount = Math.round(subtotalReceiptAmount * (taxRate / 100));
+  const totalReceiptAmount = subtotalReceiptAmount + taxAmount;
+  const parsedTargetTotal = parseInputAmount(targetTotal);
+  const receiptDifference = parsedTargetTotal - totalReceiptAmount;
+
 
   const activeAccount = accounts.find((a) => a.id === accountId);
   const currencySymbol = activeAccount?.currency === "IDR" ? "Rp" : "¥";
@@ -240,7 +251,8 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
         }
       });
 
-      const finalShare = currency === "JPY" ? Math.round(friendShare) : friendShare;
+      const friendShareWithTax = friendShare * (1 + taxRate / 100);
+      const finalShare = currency === "JPY" ? Math.round(friendShareWithTax) : friendShareWithTax;
 
       if (finalShare > 0) {
         billsToCreate.push({
@@ -970,6 +982,49 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
               />
             </div>
 
+            {/* Target Total & Tax % */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground">
+                  Target Total
+                </Label>
+                <div className="relative flex items-center bg-white dark:bg-zinc-900 border border-border/50 rounded-2xl px-3 h-10 focus-within:border-primary transition-colors shadow-xs">
+                  <span className="text-sm font-bold text-muted-foreground mr-1.5 select-none">
+                    {currencySymbol}
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={targetTotal}
+                    onChange={(e) => setTargetTotal(formatInputAmount(e.target.value))}
+                    className="flex-1 h-full text-sm font-bold font-sans bg-transparent focus:outline-none text-foreground"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground">
+                  Tax (%)
+                </Label>
+                <div className="relative flex items-center bg-white dark:bg-zinc-900 border border-border/50 rounded-2xl px-3 h-10 focus-within:border-primary transition-colors shadow-xs">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={taxPercentage}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, "");
+                      setTaxPercentage(val);
+                    }}
+                    className="flex-1 h-full text-sm font-bold font-sans bg-transparent focus:outline-none text-foreground pr-4"
+                    placeholder="0"
+                  />
+                  <span className="absolute right-3 text-sm font-bold text-muted-foreground select-none">
+                    %
+                  </span>
+                </div>
+              </div>
+            </div>
+
             {/* 2. Receipt Items (Scan & List & Manual inputs) */}
             <div className="flex flex-col gap-3 p-4 bg-muted/40 border border-border/50 rounded-2xl">
               <div className="flex items-center justify-between border-b border-border/40 pb-2">
@@ -1014,12 +1069,69 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
                       </div>
                     </div>
                   ))}
-                  {receiptItems.length > 0 && (
-                    <div className="flex items-center justify-between border-t border-border/40 pt-2.5 mt-2 px-1">
-                      <span className="text-xs font-semibold text-muted-foreground">Total Amount</span>
-                      <span className="text-sm font-bold text-foreground">
-                        {currencySymbol}{totalReceiptAmount.toLocaleString()}
-                      </span>
+                  {(receiptItems.length > 0 || targetTotal) && (
+                    <div className="flex flex-col gap-1.5 border-t border-border/40 pt-2.5 mt-2 px-1 text-xs">
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>Subtotal</span>
+                        <span>
+                          {currencySymbol}
+                          {subtotalReceiptAmount.toLocaleString()}
+                        </span>
+                      </div>
+                      {taxRate > 0 && (
+                        <div className="flex items-center justify-between text-muted-foreground">
+                          <span>Tax ({taxRate}%)</span>
+                          <span>
+                            {currencySymbol}
+                            {taxAmount.toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between font-bold text-foreground text-sm border-t border-border/20 pt-1.5 mt-1">
+                        <span>Calculated Total</span>
+                        <span>
+                          {currencySymbol}
+                          {totalReceiptAmount.toLocaleString()}
+                        </span>
+                      </div>
+
+                      {targetTotal && (
+                        <>
+                          <div className="flex items-center justify-between font-semibold border-t border-border/20 pt-1.5 mt-1">
+                            <span className="text-muted-foreground">Target Total</span>
+                            <span className="text-foreground">
+                              {currencySymbol}
+                              {parsedTargetTotal.toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between font-bold pt-1">
+                            <span className="text-muted-foreground">Difference</span>
+                            {(() => {
+                              if (receiptDifference === 0) {
+                                  return (
+                                    <span className="text-emerald-500 flex items-center gap-1">
+                                      <IconCheck className="size-3.5" /> Matched
+                                    </span>
+                                  );
+                              } else if (receiptDifference > 0) {
+                                  return (
+                                    <span className="text-amber-500">
+                                      Short by {currencySymbol}
+                                      {receiptDifference.toLocaleString()}
+                                    </span>
+                                  );
+                              } else {
+                                  return (
+                                    <span className="text-red-500">
+                                      Over by {currencySymbol}
+                                      {Math.abs(receiptDifference).toLocaleString()}
+                                    </span>
+                                  );
+                              }
+                            })()}
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
