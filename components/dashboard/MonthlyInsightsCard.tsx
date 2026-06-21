@@ -7,6 +7,7 @@ import {
   IconWallet,
   IconCalendar,
   IconArrowUpRight,
+  IconCoins,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +24,7 @@ interface MonthlyInsightsCardProps {
   actualSpentTotal: number;
   topCategory: [string, number] | undefined;
   currency?: string;
+  actualIncomeTotal?: number;
 }
 
 export default function MonthlyInsightsCard({
@@ -31,14 +33,26 @@ export default function MonthlyInsightsCard({
   actualSpentTotal,
   topCategory,
   currency = "JPY",
+  actualIncomeTotal = 0,
 }: MonthlyInsightsCardProps) {
   const [isOpen, setIsOpen] = useState(false);
+
+  // Wealth Growth calculations
+  const netSavings = actualIncomeTotal - actualSpentTotal;
+  const savingsRate =
+    actualIncomeTotal > 0
+      ? Math.round((netSavings / actualIncomeTotal) * 100)
+      : 0;
 
   // Calculate daily spending rate insights
   const today = new Date();
   const currentDay = Math.max(today.getDate(), 1);
   const dailyAverage = actualSpentTotal / currentDay;
-  const totalDaysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const totalDaysInMonth = new Date(
+    today.getFullYear(),
+    today.getMonth() + 1,
+    0,
+  ).getDate();
   const projectedSpent = dailyAverage * totalDaysInMonth;
 
   const formatAmount = (amount: number) => {
@@ -59,7 +73,7 @@ export default function MonthlyInsightsCard({
         <Button
           onClick={() => setIsOpen(true)}
           variant="outline"
-          className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wide h-8 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/50 text-muted-foreground hover:text-foreground cursor-pointer transition-all active:scale-[0.99] px-3.5"
+          className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wide h-8 rounded-xl border border-border/50 bg-muted/20 hover:bg-muted/50 text-muted-foreground hover:text-foreground cursor-pointer transition-all active:scale-[0.99] px-3.5 ml-2"
         >
           <span>Show</span>
           <IconArrowUpRight className="size-3" />
@@ -82,23 +96,61 @@ export default function MonthlyInsightsCard({
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto pr-1 py-4 flex flex-col gap-3 min-h-0">
+              {/* Wealth Growth Insight */}
+              {actualIncomeTotal > 0 && (
+                <div className="flex items-start gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
+                  <div
+                    className={`p-2 rounded-lg shrink-0 ${netSavings >= 0 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500" : "bg-destructive/10 text-destructive"}`}
+                  >
+                    <IconCoins className="size-4" />
+                  </div>
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                      Savings & Growth
+                    </span>
+                    <span className="text-sm font-bold text-foreground">
+                      {netSavings >= 0 ? "+" : ""}
+                      {formatAmount(netSavings)}
+                      <span className="text-xs font-normal text-muted-foreground">
+                        {" "}
+                        ({savingsRate}% savings rate)
+                      </span>
+                    </span>
+                    <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
+                      {netSavings > 0
+                        ? `Your money is growing! You saved ${formatAmount(netSavings)} out of ${formatAmount(actualIncomeTotal)} income this month.`
+                        : netSavings < 0
+                          ? `Your savings are shrinking. You spent ${formatAmount(Math.abs(netSavings))} more than your monthly income.`
+                          : "You spent exactly what you earned this month."}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Spending Trend */}
               <div className="flex items-start gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
-                <div className={`p-2 rounded-lg shrink-0 ${monthDelta > 0 ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}>
+                <div
+                  className={`p-2 rounded-lg shrink-0 ${monthDelta > 0 ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}
+                >
                   <IconTrendingUp className="size-4" />
                 </div>
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Spending Trend</span>
+                  <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                    Spending Trend
+                  </span>
                   <span className="text-sm font-bold text-foreground">
-                    {monthDelta === 0 
-                      ? "No change" 
+                    {monthDelta === 0
+                      ? "No change"
                       : `${monthDelta > 0 ? "+" : ""}${formatAmount(monthDelta)}`}
-                    <span className="text-xs font-normal text-muted-foreground"> vs last month</span>
+                    <span className="text-xs font-normal text-muted-foreground">
+                      {" "}
+                      vs last month
+                    </span>
                   </span>
                   <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
-                    {monthDelta > 0 
-                      ? `You are spending more than last month's ${currency} total (${formatAmount(previousSpentTotal)}).` 
-                      : monthDelta < 0 
+                    {monthDelta > 0
+                      ? `You are spending more than last month's ${currency} total (${formatAmount(previousSpentTotal)}).`
+                      : monthDelta < 0
                         ? `You've spent less than last month's ${currency} total (${formatAmount(previousSpentTotal)}) so far.`
                         : "Your spending matches last month's pattern exactly."}
                   </p>
@@ -111,15 +163,20 @@ export default function MonthlyInsightsCard({
                   <IconWallet className="size-4" />
                 </div>
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Top Category</span>
+                  <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                    Top Category
+                  </span>
                   <span className="text-sm font-bold text-foreground capitalize">
                     {topCategory ? topCategory[0].replace(/_/g, " ") : "None"}
                     {topCategory && (
-                      <span className="text-xs font-normal text-muted-foreground"> ({formatAmount(topCategory[1])})</span>
+                      <span className="text-xs font-normal text-muted-foreground">
+                        {" "}
+                        ({formatAmount(topCategory[1])})
+                      </span>
                     )}
                   </span>
                   <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
-                    {topCategory 
+                    {topCategory
                       ? `${Math.round((topCategory[1] / Math.max(actualSpentTotal, 1)) * 100)}% of your ${currency} expenses went to ${topCategory[0].replace(/_/g, " ")}.`
                       : `No ${currency} transactions logged this month yet.`}
                   </p>
@@ -132,13 +189,22 @@ export default function MonthlyInsightsCard({
                   <IconCalendar className="size-4" />
                 </div>
                 <div className="flex flex-col gap-0.5 min-w-0">
-                  <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Daily Spending Rate</span>
+                  <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                    Daily Spending Rate
+                  </span>
                   <span className="text-sm font-bold text-foreground">
-                    {formatAmount(dailyAverage)} <span className="text-xs font-normal text-muted-foreground">/ day average</span>
+                    {formatAmount(dailyAverage)}{" "}
+                    <span className="text-xs font-normal text-muted-foreground">
+                      / day average
+                    </span>
                   </span>
                   <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
-                    At this rate, your projected ${currency} spending for the end of the month is{" "}
-                    <span className="font-semibold text-foreground">{formatAmount(projectedSpent)}</span>.
+                    At this rate, your projected ${currency} spending for the
+                    end of the month is{" "}
+                    <span className="font-semibold text-foreground">
+                      {formatAmount(projectedSpent)}
+                    </span>
+                    .
                   </p>
                 </div>
               </div>

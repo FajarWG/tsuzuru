@@ -20,8 +20,64 @@ export default async function ChartsPage() {
       userId,
       currency: "JPY",
       date: { gte: sixMonthsAgo },
+      NOT: {
+        category: "adjustment",
+        description: { contains: "[tx_id:" },
+      },
     },
     include: { account: true },
+  });
+
+  function resolveSplitGroupId(tx: { splitGroupId?: string | null; description?: string | null }): string | null {
+    if (tx.splitGroupId) return tx.splitGroupId;
+    const match = tx.description ? tx.description.match(/\[tx_id:([^\]]+)\]/) : null;
+    return match ? match[1] : null;
+  }
+
+  const splitGroupIds: string[] = [];
+  JPYTransactions.forEach((tx) => {
+    const id = resolveSplitGroupId(tx);
+    if (id) splitGroupIds.push(id);
+  });
+
+  const adjustmentsMap: Record<string, number> = {};
+  if (splitGroupIds.length > 0) {
+    const adjustments = await prisma.transaction.findMany({
+      where: {
+        userId,
+        category: "adjustment",
+        OR: [
+          { splitGroupId: { in: splitGroupIds } },
+          ...splitGroupIds.map((id) => ({
+            description: { contains: `[tx_id:${id}]` },
+          })),
+        ],
+      },
+      select: {
+        amount: true,
+        description: true,
+        splitGroupId: true,
+      },
+    });
+
+    adjustments.forEach((tx) => {
+      const id = resolveSplitGroupId(tx);
+      if (id) {
+        adjustmentsMap[id] = (adjustmentsMap[id] || 0) + tx.amount;
+      }
+    });
+  }
+
+  const adjustedJPYTransactions = JPYTransactions.map((tx) => {
+    const splitGroupId = resolveSplitGroupId(tx);
+    let finalAmount = tx.amount;
+    if (splitGroupId && adjustmentsMap[splitGroupId]) {
+      finalAmount = Math.max(0, tx.amount - adjustmentsMap[splitGroupId]);
+    }
+    return {
+      ...tx,
+      amount: finalAmount,
+    };
   });
 
   // Helper to get month name label (e.g. "Dec", "Jan")
@@ -30,7 +86,7 @@ export default async function ChartsPage() {
   };
 
   // Generate the last 6 months structure
-  const monthlyOverviewMap: Record<string, { month: string; income: number; expense: number }> = {};
+  const monthlyOverviewMap: Record<string, { month: string; income: number; expense: number; net: number }> = {};
   for (let i = 5; i >= 0; i--) {
     const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
     const key = `${d.getFullYear()}-${d.getMonth()}`;
@@ -38,11 +94,12 @@ export default async function ChartsPage() {
       month: getMonthLabel(d),
       income: 0,
       expense: 0,
+      net: 0,
     };
   }
 
   // Populate monthly overview trend
-  JPYTransactions.forEach((tx) => {
+  adjustedJPYTransactions.forEach((tx) => {
     const txDate = new Date(tx.date);
     const key = `${txDate.getFullYear()}-${txDate.getMonth()}`;
     if (monthlyOverviewMap[key]) {
@@ -51,6 +108,7 @@ export default async function ChartsPage() {
       } else {
         monthlyOverviewMap[key].income += tx.amount;
       }
+      monthlyOverviewMap[key].net = monthlyOverviewMap[key].income - monthlyOverviewMap[key].expense;
     }
   });
 
@@ -59,7 +117,7 @@ export default async function ChartsPage() {
   // 2. Fetch current month expenses (JPY only) for breakdown and allocations
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   
-  const currentMonthExpenses = JPYTransactions.filter((tx) => {
+  const currentMonthExpenses = adjustedJPYTransactions.filter((tx) => {
     const txDate = new Date(tx.date);
     return tx.type === "expense" && txDate >= startOfMonth;
   });
@@ -93,29 +151,12 @@ export default async function ChartsPage() {
     value,
   }));
 
-  // 3. Jajan Detail: Average meals per day this month (from all food pocket money expenses)
-  const foodTransactions = await prisma.transaction.findMany({
-    where: {
-      userId,
-      category: "pocket_money",
-      subCategory: "food",
-      type: "expense",
-      date: { gte: startOfMonth },
-    },
-  });
-
-  const totalFoodMeals = foodTransactions.length;
-  const daysElapsed = today.getDate(); // Number of days elapsed in the current month
-  const avgMealsPerDay = totalFoodMeals / daysElapsed;
-
   return (
     <div className="flex flex-col flex-1">
       <ChartsContainer
         monthlyOverviewData={monthlyOverviewData}
         categoryBreakdownData={categoryBreakdownData}
         accountSpendingData={accountSpendingData}
-        avgMealsPerDay={avgMealsPerDay}
-        totalFoodMeals={totalFoodMeals}
       />
     </div>
   );

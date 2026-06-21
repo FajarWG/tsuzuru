@@ -213,7 +213,7 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
 
   const handleSubCategoryChange = (sub: string) => {
     setSubCategory(sub);
-    setMealNumber(sub === "food" ? 1 : null);
+    setMealNumber(null);
   };
 
   const handleSplitSave = async (totalAmount: number) => {
@@ -881,37 +881,6 @@ export default function TransactionForm({ userId, accounts }: TransactionFormPro
                     </SelectContent>
                   </Select>
                 </div>
-
-                {/* Meal number (food only) */}
-                {category === "pocket_money" && subCategory === "food" && (
-                  <div className="flex flex-col gap-2 p-4 bg-primary/5 border border-primary/10 rounded-2xl">
-                    <Label className="text-[11px] font-bold tracking-wide text-primary uppercase">
-                      Which meal of the day?
-                    </Label>
-                    <div className="flex gap-2 mt-1">
-                      {[
-                        { n: 1, label: "1st" },
-                        { n: 2, label: "2nd" },
-                        { n: 3, label: "3rd" },
-                        { n: 4, label: "4th" },
-                      ].map(({ n, label }) => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() => setMealNumber(n)}
-                          className={cn(
-                            "flex-1 h-9 rounded-lg border text-xs font-semibold tracking-wider transition-all",
-                            mealNumber === n
-                              ? "bg-primary text-primary-foreground border-transparent shadow-xs"
-                              : "bg-white dark:bg-zinc-900 border-border text-foreground hover:bg-muted"
-                          )}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </>
             )}
 

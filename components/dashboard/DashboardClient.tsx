@@ -72,6 +72,8 @@ interface DashboardData {
   userSettings: UserSettings;
   monthlyExpenses: Transaction[];
   previousMonthlyExpenses: Transaction[];
+  monthlyIncome?: Transaction[];
+  previousMonthlyIncome?: Transaction[];
   budgetLimits?: BudgetLimitItem[];
 }
 
@@ -316,6 +318,8 @@ export default function DashboardClient() {
     },
     monthlyExpenses: [],
     previousMonthlyExpenses: [],
+    monthlyIncome: [],
+    previousMonthlyIncome: [],
     budgetLimits: [],
   };
 
@@ -340,6 +344,9 @@ export default function DashboardClient() {
   const actualPocketSpent = monthlyExpenses
     .filter((t) => t.category === "pocket_money")
     .reduce((s, t) => s + t.amount, 0);
+
+  const monthlyIncome = activeData.monthlyIncome || [];
+  const actualIncomeTotal = monthlyIncome.reduce((s, t) => s + t.amount, 0);
   const actualShoppingSpent = monthlyExpenses
     .filter((t) => t.category === "shopping")
     .reduce((s, t) => s + t.amount, 0);
@@ -448,6 +455,9 @@ export default function DashboardClient() {
           accounts={accounts}
           totalJPY={totalJPY}
           totalIDR={totalIDR}
+          actualIncomeTotal={actualIncomeTotal}
+          actualSpentTotal={actualSpentTotal}
+          budgetCurrency={currency}
         />
       </AnimatedCard>
 
@@ -528,6 +538,7 @@ export default function DashboardClient() {
           actualSpentTotal={actualSpentTotal}
           topCategory={topCategory}
           currency={currency}
+          actualIncomeTotal={actualIncomeTotal}
         />
       </AnimatedCard>
     </div>

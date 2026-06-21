@@ -1,6 +1,5 @@
 import { dashboardRepository } from "@/repositories/dashboardRepository";
 import { settingsRepository } from "@/repositories/settingsRepository";
-import { budgetRepository } from "@/repositories/budgetRepository";
 import { seedBudgetLimitsIfEmpty } from "@/lib/seedBudgetLimits";
 
 export const dashboardService = {
@@ -74,12 +73,24 @@ export const dashboardService = {
       date: t.date.toISOString(),
     }));
 
+    const monthlyIncome = raw.monthlyIncomeRaw.map((t) => ({
+      ...t,
+      date: t.date.toISOString(),
+    }));
+
+    const previousMonthlyIncome = raw.previousMonthlyIncomeRaw.map((t) => ({
+      ...t,
+      date: t.date.toISOString(),
+    }));
+
     return {
       user: profile,
       accounts: raw.accounts,
       userSettings,
       monthlyExpenses,
       previousMonthlyExpenses,
+      monthlyIncome,
+      previousMonthlyIncome,
       budgetLimits: budgetLimitsWithSpent,
     };
   },

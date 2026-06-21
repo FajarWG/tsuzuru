@@ -1420,7 +1420,7 @@ export default function TransactionsList({
                             value={editSubCategory}
                             onValueChange={(value) => {
                               setEditSubCategory(value);
-                              setEditMealNumber(value === "food" ? 1 : null);
+                              setEditMealNumber(null);
                             }}
                           >
                             <SelectTrigger className="h-11 rounded-xl text-sm font-semibold">
@@ -1440,32 +1440,6 @@ export default function TransactionsList({
                           </Select>
                         </div>
                       )}
-
-                      {editCategory === "pocket_money" &&
-                        editSubCategory === "food" && (
-                          <div className="flex flex-col gap-2 p-3 bg-primary/5 border border-primary/10 rounded-xl">
-                            <Label className="text-[10px] font-bold tracking-wide text-primary uppercase">
-                              Which meal?
-                            </Label>
-                            <div className="flex gap-2">
-                              {[1, 2, 3, 4].map((meal) => (
-                                <button
-                                  key={meal}
-                                  type="button"
-                                  onClick={() => setEditMealNumber(meal)}
-                                  className={cn(
-                                    "flex-1 h-8 rounded-lg border text-xs font-semibold transition-all",
-                                    editMealNumber === meal
-                                      ? "bg-primary text-primary-foreground border-transparent"
-                                      : "bg-white dark:bg-zinc-900 border-border text-foreground hover:bg-muted",
-                                  )}
-                                >
-                                  {meal}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        )}
                     </>
                   )}
 
@@ -1711,7 +1685,7 @@ export default function TransactionsList({
                         value={editSubCategory}
                         onValueChange={(value) => {
                           setEditSubCategory(value);
-                          setEditMealNumber(value === "food" ? 1 : null);
+                          setEditMealNumber(null);
                         }}
                       >
                         <SelectTrigger className="h-11 rounded-xl text-sm font-semibold">

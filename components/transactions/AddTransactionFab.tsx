@@ -547,7 +547,7 @@ export default function AddTransactionFab({
 
   const handleSubCategoryChange = (sub: string) => {
     setSubCategory(sub);
-    setMealNumber(sub === "food" ? 1 : null);
+    setMealNumber(null);
   };
 
   const handleSplitSave = async (totalAmount: number) => {
@@ -1378,38 +1378,6 @@ export default function AddTransactionFab({
                                 </SelectContent>
                               </Select>
                             </div>
-
-                            {/* Meal number (food only) */}
-                            {category === "pocket_money" &&
-                              subCategory === "food" && (
-                                <div className="flex flex-col gap-2 p-3 bg-primary/5 border border-primary/10 rounded-xl">
-                                  <Label className="text-[10px] font-bold tracking-wide text-primary uppercase">
-                                    Which meal?
-                                  </Label>
-                                  <div className="flex gap-2">
-                                    {[
-                                      { n: 1, label: "1st" },
-                                      { n: 2, label: "2nd" },
-                                      { n: 3, label: "3rd" },
-                                      { n: 4, label: "4th" },
-                                    ].map(({ n, label }) => (
-                                      <button
-                                        key={n}
-                                        type="button"
-                                        onClick={() => setMealNumber(n)}
-                                        className={cn(
-                                          "flex-1 h-8 rounded-lg border text-xs font-semibold transition-all cursor-pointer",
-                                          mealNumber === n
-                                            ? "bg-primary text-primary-foreground border-transparent"
-                                            : "bg-white dark:bg-zinc-900 border-border text-foreground hover:bg-muted",
-                                        )}
-                                      >
-                                        {label}
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
                           </>
                         )}
 
