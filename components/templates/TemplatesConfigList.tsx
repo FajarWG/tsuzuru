@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   formatJPY,
   formatIDR,
@@ -90,6 +90,7 @@ interface TemplatesConfigListProps {
   accounts: AccountItem[];
   hideHeader?: boolean;
   paidTemplateNamesThisMonth?: string[];
+  friendNames?: string[];
 }
 
 const INTERVAL_OPTIONS = [
@@ -164,6 +165,7 @@ export default function TemplatesConfigList({
   accounts,
   hideHeader = false,
   paidTemplateNamesThisMonth = [],
+  friendNames = [],
 }: TemplatesConfigListProps) {
   // Create dialog state
   const [createOpen, setCreateOpen] = useState(false);
@@ -174,6 +176,12 @@ export default function TemplatesConfigList({
   const [createPaymentMode, setCreatePaymentMode] = useState<"self_paid" | "split_with_friends">("self_paid");
   const [createSplitFriends, setCreateSplitFriends] = useState([EMPTY_SPLIT_FRIEND]);
   const [isCreating, setIsCreating] = useState(false);
+
+  // Autocomplete suggestion states for split bill friends
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [focusedFriendIndex, setFocusedFriendIndex] = useState<number | null>(null);
+  const [focusedFriendType, setFocusedFriendType] = useState<"create" | "edit" | null>(null);
+  const [activeIndex, setActiveIndex] = useState(-1);
 
   // Edit dialog state
   const [editingItem, setEditingItem] = useState<TemplateItem | null>(null);
@@ -201,6 +209,67 @@ export default function TemplatesConfigList({
     "isCreditCardBill" in payingItem &&
     payingItem.isCreditCardBill
   );
+
+  // Autocomplete suggestion helpers
+  const filteredSuggestions = useMemo(() => {
+    if (focusedFriendIndex === null || focusedFriendType === null) return [];
+    const currentInputName =
+      focusedFriendType === "create"
+        ? createSplitFriends[focusedFriendIndex]?.personName || ""
+        : editSplitFriends[focusedFriendIndex]?.personName || "";
+
+    return friendNames.filter((name) =>
+      name.toLowerCase().includes(currentInputName.toLowerCase())
+    );
+  }, [friendNames, focusedFriendIndex, focusedFriendType, createSplitFriends, editSplitFriends]);
+
+  const selectSuggestion = (name: string) => {
+    if (focusedFriendIndex === null || focusedFriendType === null) return;
+    if (focusedFriendType === "create") {
+      setCreateSplitFriends((prev) =>
+        prev.map((item, idx) =>
+          idx === focusedFriendIndex ? { ...item, personName: name } : item
+        )
+      );
+    } else {
+      setEditSplitFriends((prev) =>
+        prev.map((item, idx) =>
+          idx === focusedFriendIndex ? { ...item, personName: name } : item
+        )
+      );
+    }
+    setShowSuggestions(false);
+    setActiveIndex(-1);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions) {
+      if (e.key === "ArrowDown" && filteredSuggestions.length > 0) {
+        setShowSuggestions(true);
+        setActiveIndex(0);
+        e.preventDefault();
+      }
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      setActiveIndex((prev) => (prev + 1 < filteredSuggestions.length ? prev + 1 : prev));
+      e.preventDefault();
+    } else if (e.key === "ArrowUp") {
+      setActiveIndex((prev) => (prev - 1 >= 0 ? prev - 1 : prev));
+      e.preventDefault();
+    } else if (e.key === "Enter") {
+      if (activeIndex >= 0 && activeIndex < filteredSuggestions.length) {
+        const name = filteredSuggestions[activeIndex];
+        selectSuggestion(name);
+        e.preventDefault();
+      }
+    } else if (e.key === "Escape") {
+      setShowSuggestions(false);
+      setActiveIndex(-1);
+      e.preventDefault();
+    }
+  };
 
   // --- Create dialog handlers ---
   const handleCreateBill = async () => {
@@ -851,21 +920,70 @@ export default function TemplatesConfigList({
 
                   <div className="flex flex-col gap-2">
                     {createSplitFriends.map((friend, index) => (
-                      <div key={`create-friend-${index}`} className="grid grid-cols-[1fr_112px_32px] gap-2 items-center">
-                        <Input
-                          value={friend.personName}
-                          onChange={(e) =>
-                            setCreateSplitFriends((prev) =>
-                              prev.map((item, itemIndex) =>
-                                itemIndex === index
-                                  ? { ...item, personName: e.target.value }
-                                  : item,
-                              ),
-                            )
-                          }
-                          className="h-9 text-xs"
-                          placeholder="Friend name"
-                        />
+                      <div key={`create-friend-${index}`} className="grid grid-cols-[1fr_112px_32px] gap-2 items-center relative">
+                        <div className="relative flex flex-col">
+                          <Input
+                            value={friend.personName}
+                            onChange={(e) => {
+                              setCreateSplitFriends((prev) =>
+                                prev.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? { ...item, personName: e.target.value }
+                                    : item,
+                                ),
+                              );
+                              setFocusedFriendIndex(index);
+                              setFocusedFriendType("create");
+                              setShowSuggestions(true);
+                              setActiveIndex(-1);
+                            }}
+                            onFocus={() => {
+                              setFocusedFriendIndex(index);
+                              setFocusedFriendType("create");
+                              setShowSuggestions(true);
+                              setActiveIndex(-1);
+                            }}
+                            onBlur={() => {
+                              setTimeout(() => {
+                                setShowSuggestions(false);
+                                setFocusedFriendIndex(null);
+                                setFocusedFriendType(null);
+                                setActiveIndex(-1);
+                              }, 150);
+                            }}
+                            onKeyDown={handleKeyDown}
+                            className="h-9 text-xs"
+                            placeholder="Friend name"
+                            autoComplete="off"
+                          />
+                          {showSuggestions &&
+                            focusedFriendType === "create" &&
+                            focusedFriendIndex === index &&
+                            filteredSuggestions.length > 0 && (
+                              <div className="absolute z-50 left-0 right-0 top-[38px] max-h-48 overflow-y-auto rounded-2xl border border-border/40 bg-white dark:bg-zinc-900 p-1.5 shadow-lg animate-in fade-in-50 slide-in-from-top-1 duration-150">
+                                <div className="flex flex-col gap-0.5">
+                                  {filteredSuggestions.map((name, idx) => (
+                                    <button
+                                      key={name}
+                                      type="button"
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        selectSuggestion(name);
+                                      }}
+                                      className={cn(
+                                        "w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer",
+                                        idx === activeIndex
+                                          ? "bg-primary text-primary-foreground"
+                                          : "hover:bg-muted/80 text-foreground"
+                                      )}
+                                    >
+                                      {name}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                        </div>
                         <div className="relative flex items-center">
                           <Input
                             value={friend.percentage}
@@ -1108,21 +1226,70 @@ export default function TemplatesConfigList({
 
                   <div className="flex flex-col gap-2">
                     {editSplitFriends.map((friend, index) => (
-                      <div key={`edit-friend-${index}`} className="grid grid-cols-[1fr_112px_32px] gap-2 items-center">
-                        <Input
-                          value={friend.personName}
-                          onChange={(e) =>
-                            setEditSplitFriends((prev) =>
-                              prev.map((item, itemIndex) =>
-                                itemIndex === index
-                                  ? { ...item, personName: e.target.value }
-                                  : item,
-                              ),
-                            )
-                          }
-                          className="h-9 text-xs"
-                          placeholder="Friend name"
-                        />
+                      <div key={`edit-friend-${index}`} className="grid grid-cols-[1fr_112px_32px] gap-2 items-center relative">
+                        <div className="relative flex flex-col">
+                          <Input
+                            value={friend.personName}
+                            onChange={(e) => {
+                              setEditSplitFriends((prev) =>
+                                prev.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? { ...item, personName: e.target.value }
+                                    : item,
+                                ),
+                              );
+                              setFocusedFriendIndex(index);
+                              setFocusedFriendType("edit");
+                              setShowSuggestions(true);
+                              setActiveIndex(-1);
+                            }}
+                            onFocus={() => {
+                              setFocusedFriendIndex(index);
+                              setFocusedFriendType("edit");
+                              setShowSuggestions(true);
+                              setActiveIndex(-1);
+                            }}
+                            onBlur={() => {
+                              setTimeout(() => {
+                                setShowSuggestions(false);
+                                setFocusedFriendIndex(null);
+                                setFocusedFriendType(null);
+                                setActiveIndex(-1);
+                              }, 150);
+                            }}
+                            onKeyDown={handleKeyDown}
+                            className="h-9 text-xs"
+                            placeholder="Friend name"
+                            autoComplete="off"
+                          />
+                          {showSuggestions &&
+                            focusedFriendType === "edit" &&
+                            focusedFriendIndex === index &&
+                            filteredSuggestions.length > 0 && (
+                              <div className="absolute z-50 left-0 right-0 top-[38px] max-h-48 overflow-y-auto rounded-2xl border border-border/40 bg-white dark:bg-zinc-900 p-1.5 shadow-lg animate-in fade-in-50 slide-in-from-top-1 duration-150">
+                                <div className="flex flex-col gap-0.5">
+                                  {filteredSuggestions.map((name, idx) => (
+                                    <button
+                                      key={name}
+                                      type="button"
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        selectSuggestion(name);
+                                      }}
+                                      className={cn(
+                                        "w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer",
+                                        idx === activeIndex
+                                          ? "bg-primary text-primary-foreground"
+                                          : "hover:bg-muted/80 text-foreground"
+                                      )}
+                                    >
+                                      {name}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                        </div>
                         <div className="relative flex items-center">
                           <Input
                             value={friend.percentage}

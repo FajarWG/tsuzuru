@@ -105,6 +105,14 @@ export const settingsService = {
       }
     }
 
+    const bills = await prisma.billFriend.findMany({
+      where: { userId },
+      select: { personName: true },
+    });
+    const friendNames = Array.from(
+      new Set(bills.map((b) => b.personName.trim()))
+    ).filter(Boolean);
+
     return {
       userSettings,
       accounts,
@@ -112,6 +120,7 @@ export const settingsService = {
       budgetLimits,
       profile,
       paidTemplateNamesThisMonth,
+      friendNames,
     };
   },
 };

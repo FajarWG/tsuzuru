@@ -117,6 +117,7 @@ interface SettingsFormProps {
   onRefresh?: () => void;
   syncStatus?: "idle" | "syncing" | "success" | "error";
   paidTemplateNamesThisMonth?: string[];
+  friendNames?: string[];
 }
 
 function formatCurrency(amount: number, currency: string) {
@@ -174,6 +175,7 @@ export default function SettingsForm({
   onRefresh,
   syncStatus = "idle",
   paidTemplateNamesThisMonth = [],
+  friendNames = [],
 }: SettingsFormProps) {
   // Budget Limits CRUD states
   const [addBudgetOpen, setAddBudgetOpen] = useState(false);
@@ -670,6 +672,7 @@ export default function SettingsForm({
               templates={templates}
               accounts={accountsForTemplates}
               paidTemplateNamesThisMonth={paidTemplateNamesThisMonth}
+              friendNames={friendNames}
             />
           </section>
         </TabsContent>

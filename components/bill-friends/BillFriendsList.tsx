@@ -722,7 +722,7 @@ export default function BillFriendsList({
 
       {/* Add Bill Dialog */}
       <Dialog open={addOpen} onOpenChange={(open) => { if (!isAdding) { setAddOpen(open); if (!open) resetAddForm(); } }}>
-        <DialogContent className="max-w-[380px] rounded-2xl p-0">
+        <DialogContent className="max-w-[380px] rounded-2xl p-0" layout={false}>
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
               <DialogTitle className="font-sans">Add Bill</DialogTitle>
@@ -874,7 +874,7 @@ export default function BillFriendsList({
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={!!deletingBill} onOpenChange={(open) => { if (!isDeleting && !open) setDeletingBill(null); }}>
-        <DialogContent className="max-w-[360px] rounded-2xl p-0">
+        <DialogContent className="max-w-[360px] rounded-2xl p-0" layout={false}>
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
               <DialogTitle className="font-sans">Delete Bill</DialogTitle>
@@ -921,7 +921,7 @@ export default function BillFriendsList({
 
       {/* Settle Split Dialog */}
       <Dialog open={settleOpen} onOpenChange={(open) => { if (!isSettling && !open) { setSettleOpen(false); setSettleBillTarget(null); } }}>
-        <DialogContent className="max-w-[400px] rounded-2xl p-0">
+        <DialogContent className="max-w-[400px] rounded-2xl p-0" layout={false}>
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
               <DialogTitle className="font-sans text-xl">Settle Bill</DialogTitle>
