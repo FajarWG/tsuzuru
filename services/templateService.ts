@@ -282,7 +282,7 @@ export const templateService = {
       accountId: data.accountId,
       intervalMonths: data.intervalMonths,
       paymentMode,
-      splitConfig,
+      splitConfig: splitConfig ?? Prisma.JsonNull,
       currency: account.currency, // Ensure currency matches account
     });
   },
@@ -307,7 +307,7 @@ export const templateService = {
       accountId: data.accountId,
       intervalMonths: data.intervalMonths,
       paymentMode,
-      splitConfig,
+      splitConfig: splitConfig ?? Prisma.JsonNull,
       isActive: true,
     });
   },

@@ -191,15 +191,16 @@ export default function TemplatesConfigList({
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Pay dialog state
-  const [payingItem, setPayingItem] = useState<TemplateItem | null>(null);
+  const [payingItem, setPayingItem] = useState<BillListItem | null>(null);
   const [isPayingId, setIsPayingId] = useState<string | null>(null);
   const [paySuccessId, setPaySuccessId] = useState<string | null>(null);
   const [paySourceAccountId, setPaySourceAccountId] = useState("");
   const [payoffAmount, setPayoffAmount] = useState("");
-  const isPayingItemCc =
+  const isPayingItemCc = !!(
     payingItem &&
     "isCreditCardBill" in payingItem &&
-    payingItem.isCreditCardBill;
+    payingItem.isCreditCardBill
+  );
 
   // --- Create dialog handlers ---
   const handleCreateBill = async () => {
@@ -487,7 +488,7 @@ export default function TemplatesConfigList({
               accountId: "", // Will be selected at payment time
               isActive: true,
               intervalMonths: 1,
-              isCreditCardBill: true,
+              isCreditCardBill: true as const,
               creditCardAccountId: acc.id,
             }));
 
@@ -513,7 +514,8 @@ export default function TemplatesConfigList({
               item.intervalMonths > 1
                 ? item.amount / item.intervalMonths
                 : null;
-            const splitFriends = item.splitConfig?.friends || [];
+            const splitFriends =
+              ("splitConfig" in item && item.splitConfig?.friends) || [];
             const splitTotal = splitFriends.reduce(
               (sum: number, friend: { personName: string; percentage: number }) =>
                 sum + friend.percentage,
@@ -560,7 +562,7 @@ export default function TemplatesConfigList({
                           `${item.intervalMonths}mo`}
                       </Badge>
                     )}
-                    {!isCreditCardBill && item.paymentMode === "split_with_friends" && (
+                    {"paymentMode" in item && item.paymentMode === "split_with_friends" && (
                       <Badge
                         variant="outline"
                         className="text-[8px] h-3.5 px-1 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-none font-semibold"
@@ -592,7 +594,7 @@ export default function TemplatesConfigList({
                       <span className="text-[10px] text-muted-foreground">
                         {linkedAccount?.name || "Unknown account"}
                       </span>
-                      {item.paymentMode === "split_with_friends" && splitFriends.length > 0 && (
+                      {"paymentMode" in item && item.paymentMode === "split_with_friends" && splitFriends.length > 0 && (
                         <span className="text-[10px] text-muted-foreground leading-relaxed">
                           {splitFriends.map((friend: { personName: string; percentage: number }) => `${friend.personName} ${friend.percentage}%`).join(" · ")} · You keep {Math.max(0, 100 - splitTotal)}%
                         </span>
@@ -656,7 +658,7 @@ export default function TemplatesConfigList({
                       <Button
                         size="icon-xs"
                         variant="ghost"
-                        onClick={() => openEdit(item)}
+                        onClick={() => openEdit(item as TemplateItem)}
                         aria-label={`Edit ${item.name}`}
                         className="cursor-pointer"
                       >
@@ -1292,7 +1294,7 @@ export default function TemplatesConfigList({
                 <span className="text-xs text-muted-foreground mt-1 block">
                   {isPayingItemCc
                     ? "This will pay off the credit card and record a dual-entry transfer transaction."
-                    : payingItem?.paymentMode === "split_with_friends"
+                    : (payingItem && "paymentMode" in payingItem && payingItem.paymentMode === "split_with_friends")
                       ? "This will deduct the full amount, record it in history, and auto-create Bill Friends entries from your saved split defaults."
                       : "This will deduct the full amount from the selected account and record it in history."}
                 </span>
