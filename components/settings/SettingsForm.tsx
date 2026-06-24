@@ -89,6 +89,10 @@ interface TemplateItem {
   accountId: string;
   isActive: boolean;
   intervalMonths: number;
+  paymentMode: "self_paid" | "split_with_friends";
+  splitConfig?: {
+    friends: { personName: string; percentage: number }[];
+  } | null;
 }
 
 interface BudgetLimitItem {

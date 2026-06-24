@@ -1,7 +1,88 @@
 import { templateRepository } from "@/repositories/templateRepository";
 import { accountRepository } from "@/repositories/accountRepository";
 import { prisma } from "@/lib/prisma";
-import { CreateTemplateInput, UpdateTemplateInput } from "@/types/template";
+import { Prisma } from "@prisma/client";
+import {
+  CreateTemplateInput,
+  UpdateTemplateInput,
+  TemplatePaymentMode,
+  TemplateSplitConfigInput,
+} from "@/types/template";
+
+function normalizeSplitConfig(
+  paymentMode: TemplatePaymentMode,
+  splitConfig?: TemplateSplitConfigInput | null,
+) {
+  if (paymentMode !== "split_with_friends") {
+    return null;
+  }
+
+  const friends = (splitConfig?.friends || [])
+    .map((friend) => ({
+      personName: friend.personName.trim(),
+      percentage: Number(friend.percentage),
+    }))
+    .filter((friend) => friend.personName);
+
+  if (friends.length === 0) {
+    throw new Error("Add at least one friend for split bills");
+  }
+
+  const invalidFriend = friends.find(
+    (friend) => !Number.isFinite(friend.percentage) || friend.percentage <= 0,
+  );
+  if (invalidFriend) {
+    throw new Error("Each friend split percentage must be greater than 0");
+  }
+
+  const uniqueNames = new Set(friends.map((friend) => friend.personName.toLowerCase()));
+  if (uniqueNames.size !== friends.length) {
+    throw new Error("Friend names in split bills must be unique");
+  }
+
+  const totalPercentage = friends.reduce(
+    (sum, friend) => sum + friend.percentage,
+    0,
+  );
+
+  if (totalPercentage >= 100) {
+    throw new Error("Total friend split percentage must stay below 100%");
+  }
+
+  return {
+    friends,
+  };
+}
+
+function buildSplitBills(params: {
+  userId: string;
+  templateName: string;
+  amount: number;
+  currency: string;
+  splitConfig: TemplateSplitConfigInput;
+}) {
+  const { userId, templateName, amount, currency, splitConfig } = params;
+
+  return splitConfig.friends
+    .map((friend) => {
+      const shareAmount = Number(((amount * friend.percentage) / 100).toFixed(2));
+      if (shareAmount <= 0) {
+        return null;
+      }
+
+      return {
+        userId,
+        personName: friend.personName,
+        amount: shareAmount,
+        currency,
+        direction: "they_owe",
+        description: `Split recurring bill: ${templateName} (${friend.percentage}%)`,
+        category: "adjustment",
+        subCategory: null,
+      };
+    })
+    .filter((bill): bill is NonNullable<typeof bill> => bill !== null);
+}
 
 export const templateService = {
   async markTemplatePaid(templateId: string, userId: string, sourceAccountId?: string, customAmount?: number) {
@@ -58,7 +139,7 @@ export const templateService = {
         });
       }
 
-      const operations: any[] = [
+      const operations: Prisma.PrismaPromise<unknown>[] = [
         // 1. Expense from paying account
         prisma.transaction.create({
           data: {
@@ -128,13 +209,46 @@ export const templateService = {
       throw new Error("Currency mismatch between paying account and bill");
     }
 
-    await templateRepository.markTemplatePaidWithBalanceUpdate({
-      userId,
-      accountId: targetAccountId,
-      amount: template.amount,
-      currency: template.currency,
-      description: template.name,
-      newBalance: account.balance - template.amount,
+    const splitConfig = normalizeSplitConfig(
+      (template.paymentMode as TemplatePaymentMode) || "self_paid",
+      (template.splitConfig as TemplateSplitConfigInput | null | undefined) || null,
+    );
+
+    const friendBills = splitConfig
+      ? buildSplitBills({
+          userId,
+          templateName: template.name,
+          amount: template.amount,
+          currency: template.currency,
+          splitConfig,
+        })
+      : [];
+
+    await prisma.$transaction(async (tx) => {
+      await tx.transaction.create({
+        data: {
+          userId,
+          accountId: targetAccountId,
+          type: "expense",
+          amount: template.amount,
+          currency: template.currency,
+          category: "adjustment",
+          description: template.name,
+          isTemplate: true,
+          date: new Date(),
+        },
+      });
+
+      await tx.account.update({
+        where: { id: targetAccountId },
+        data: { balance: account.balance - template.amount },
+      });
+
+      for (const bill of friendBills) {
+        await tx.billFriend.create({
+          data: bill,
+        });
+      }
     });
   },
 
@@ -147,12 +261,17 @@ export const templateService = {
       throw new Error("Selected account is inactive");
     }
 
+    const paymentMode = data.paymentMode || "self_paid";
+    const splitConfig = normalizeSplitConfig(paymentMode, data.splitConfig);
+
     await templateRepository.update(templateId, userId, {
       name: data.name,
       amount: data.amount,
       isActive: data.isActive,
       accountId: data.accountId,
       intervalMonths: data.intervalMonths,
+      paymentMode,
+      splitConfig,
       currency: account.currency, // Ensure currency matches account
     });
   },
@@ -166,6 +285,9 @@ export const templateService = {
       throw new Error("Selected account is inactive");
     }
 
+    const paymentMode = data.paymentMode || "self_paid";
+    const splitConfig = normalizeSplitConfig(paymentMode, data.splitConfig);
+
     return templateRepository.create({
       userId,
       name: data.name,
@@ -173,6 +295,8 @@ export const templateService = {
       currency: account.currency, // Inherit currency from account
       accountId: data.accountId,
       intervalMonths: data.intervalMonths,
+      paymentMode,
+      splitConfig,
       isActive: true,
     });
   },

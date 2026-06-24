@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   formatJPY,
   formatIDR,
@@ -55,7 +55,25 @@ interface TemplateItem {
   accountId: string;
   isActive: boolean;
   intervalMonths: number;
+  paymentMode: "self_paid" | "split_with_friends";
+  splitConfig?: {
+    friends: { personName: string; percentage: number }[];
+  } | null;
 }
+
+interface CreditCardBillItem {
+  id: string;
+  name: string;
+  amount: number;
+  currency: string;
+  accountId: string;
+  isActive: boolean;
+  intervalMonths: number;
+  isCreditCardBill: true;
+  creditCardAccountId: string;
+}
+
+type BillListItem = TemplateItem | CreditCardBillItem;
 
 interface AccountItem {
   id: string;
@@ -83,24 +101,78 @@ const INTERVAL_OPTIONS = [
   { value: "12", label: "Every 12 months (yearly)" },
 ];
 
+const EMPTY_SPLIT_FRIEND = {
+  personName: "",
+  percentage: "",
+};
+
+function parseSplitPercentage(value: string) {
+  const sanitized = value.replace(/[^0-9.]/g, "");
+  const parsed = Number.parseFloat(sanitized);
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function validateSplitFriends(
+  friends: { personName: string; percentage: string }[],
+) {
+  const normalized = friends
+    .map((friend) => ({
+      personName: friend.personName.trim(),
+      percentage: parseSplitPercentage(friend.percentage),
+    }))
+    .filter(
+      (friend) => friend.personName.length > 0 || !Number.isNaN(friend.percentage),
+    );
+
+  if (normalized.length === 0) {
+    return { error: "Add at least one friend for split bills" };
+  }
+
+  if (normalized.some((friend) => !friend.personName)) {
+    return { error: "Every split friend needs a name" };
+  }
+
+  if (
+    normalized.some(
+      (friend) => Number.isNaN(friend.percentage) || friend.percentage <= 0,
+    )
+  ) {
+    return { error: "Every split friend needs a valid percentage" };
+  }
+
+  const totalPercentage = normalized.reduce(
+    (sum, friend) => sum + friend.percentage,
+    0,
+  );
+  if (totalPercentage >= 100) {
+    return { error: "Total friend percentage must stay below 100%" };
+  }
+
+  const names = normalized.map((friend) => friend.personName.toLowerCase());
+  if (new Set(names).size !== names.length) {
+    return { error: "Friend names must be unique" };
+  }
+
+  return {
+    value: normalized,
+    totalPercentage,
+  };
+}
+
 export default function TemplatesConfigList({
   templates,
   accounts,
   hideHeader = false,
   paidTemplateNamesThisMonth = [],
 }: TemplatesConfigListProps) {
-  const [items, setItems] = useState<TemplateItem[]>(templates);
-
-  useEffect(() => {
-    setItems(templates);
-  }, [templates]);
-
   // Create dialog state
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createAmount, setCreateAmount] = useState("");
   const [createAccountId, setCreateAccountId] = useState(accounts[0]?.id || "");
   const [createIntervalMonths, setCreateIntervalMonths] = useState("1");
+  const [createPaymentMode, setCreatePaymentMode] = useState<"self_paid" | "split_with_friends">("self_paid");
+  const [createSplitFriends, setCreateSplitFriends] = useState([EMPTY_SPLIT_FRIEND]);
   const [isCreating, setIsCreating] = useState(false);
 
   // Edit dialog state
@@ -110,6 +182,8 @@ export default function TemplatesConfigList({
   const [editAccountId, setEditAccountId] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
   const [editIntervalMonths, setEditIntervalMonths] = useState("1");
+  const [editPaymentMode, setEditPaymentMode] = useState<"self_paid" | "split_with_friends">("self_paid");
+  const [editSplitFriends, setEditSplitFriends] = useState([EMPTY_SPLIT_FRIEND]);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Delete dialog state
@@ -125,7 +199,7 @@ export default function TemplatesConfigList({
   const isPayingItemCc =
     payingItem &&
     "isCreditCardBill" in payingItem &&
-    (payingItem as any).isCreditCardBill;
+    payingItem.isCreditCardBill;
 
   // --- Create dialog handlers ---
   const handleCreateBill = async () => {
@@ -143,6 +217,15 @@ export default function TemplatesConfigList({
       return;
     }
 
+    const splitValidation =
+      createPaymentMode === "split_with_friends"
+        ? validateSplitFriends(createSplitFriends)
+        : null;
+    if (splitValidation && !splitValidation.value) {
+      toast.error(splitValidation.error || "Invalid split configuration");
+      return;
+    }
+
     setIsCreating(true);
 
     try {
@@ -151,19 +234,22 @@ export default function TemplatesConfigList({
         amount: parsedAmount,
         accountId: createAccountId,
         intervalMonths: parseInt(createIntervalMonths),
+        paymentMode: createPaymentMode,
+        splitConfig:
+          createPaymentMode === "split_with_friends" && splitValidation?.value
+            ? { friends: splitValidation.value }
+            : null,
       });
 
       if (res.success && res.template) {
         toast.success("Bill created successfully");
-        setItems((prev) =>
-          [...prev, res.template as TemplateItem].sort((a, b) =>
-            a.name.localeCompare(b.name),
-          ),
-        );
         setCreateOpen(false);
         setCreateName("");
         setCreateAmount("");
         setCreateIntervalMonths("1");
+        setCreatePaymentMode("self_paid");
+        setCreateSplitFriends([EMPTY_SPLIT_FRIEND]);
+        window.dispatchEvent(new CustomEvent("bill-updated"));
       } else {
         toast.error(res.error || "Failed to create bill");
       }
@@ -182,10 +268,21 @@ export default function TemplatesConfigList({
     setEditAccountId(item.accountId);
     setEditIsActive(item.isActive);
     setEditIntervalMonths(String(item.intervalMonths));
+    setEditPaymentMode(item.paymentMode || "self_paid");
+    setEditSplitFriends(
+      item.paymentMode === "split_with_friends" && item.splitConfig?.friends?.length
+        ? item.splitConfig.friends.map((friend) => ({
+            personName: friend.personName,
+            percentage: String(friend.percentage),
+          }))
+        : [EMPTY_SPLIT_FRIEND],
+    );
   };
 
   const closeEdit = () => {
     setEditingItem(null);
+    setEditPaymentMode("self_paid");
+    setEditSplitFriends([EMPTY_SPLIT_FRIEND]);
   };
 
   const handleSaveEdit = async () => {
@@ -200,6 +297,15 @@ export default function TemplatesConfigList({
       return;
     }
 
+    const splitValidation =
+      editPaymentMode === "split_with_friends"
+        ? validateSplitFriends(editSplitFriends)
+        : null;
+    if (splitValidation && !splitValidation.value) {
+      toast.error(splitValidation.error || "Invalid split configuration");
+      return;
+    }
+
     setIsSavingEdit(true);
 
     try {
@@ -209,24 +315,16 @@ export default function TemplatesConfigList({
         accountId: editAccountId,
         isActive: editIsActive,
         intervalMonths: parseInt(editIntervalMonths),
+        paymentMode: editPaymentMode,
+        splitConfig:
+          editPaymentMode === "split_with_friends" && splitValidation?.value
+            ? { friends: splitValidation.value }
+            : null,
       });
 
       if (res.success) {
         toast.success("Bill updated successfully");
-        setItems((prev) =>
-          prev.map((t) =>
-            t.id === editingItem.id
-              ? {
-                  ...t,
-                  name: editName.trim(),
-                  amount: parsedAmount,
-                  accountId: editAccountId,
-                  isActive: editIsActive,
-                  intervalMonths: parseInt(editIntervalMonths),
-                }
-              : t,
-          ),
-        );
+        window.dispatchEvent(new CustomEvent("bill-updated"));
         closeEdit();
       } else {
         toast.error(res.error || "Failed to save");
@@ -251,8 +349,8 @@ export default function TemplatesConfigList({
       const res = await deleteTemplateAction(deletingItem.id);
       if (res.success) {
         toast.success("Bill deleted successfully");
-        setItems((prev) => prev.filter((t) => t.id !== deletingItem.id));
         setDeletingItem(null);
+        window.dispatchEvent(new CustomEvent("bill-updated"));
       } else {
         toast.error(res.error || "Failed to delete bill");
       }
@@ -264,12 +362,12 @@ export default function TemplatesConfigList({
   };
 
   // --- Mark as Paid handlers ---
-  const openPay = (item: TemplateItem) => {
+  const openPay = (item: BillListItem) => {
     setPayingItem(item);
-    const isCc = "isCreditCardBill" in item && (item as any).isCreditCardBill;
+    const isCc = "isCreditCardBill" in item && item.isCreditCardBill;
     if (isCc) {
       const ccAcc = accounts.find(
-        (a) => a.id === (item as any).creditCardAccountId,
+        (a) => a.id === item.creditCardAccountId,
       );
       const configuredDefaultId = ccAcc?.defaultPaymentAccountId;
       const defAcc =
@@ -298,7 +396,7 @@ export default function TemplatesConfigList({
     if (!payingItem) return;
 
     const isCc =
-      "isCreditCardBill" in payingItem && (payingItem as any).isCreditCardBill;
+      "isCreditCardBill" in payingItem && payingItem.isCreditCardBill;
     const customAmount = isCc ? parseInputAmount(payoffAmount) : undefined;
 
     if (isCc && (isNaN(customAmount!) || customAmount! <= 0)) {
@@ -348,6 +446,8 @@ export default function TemplatesConfigList({
               setCreateAmount("");
               setCreateAccountId(accounts[0]?.id || "");
               setCreateIntervalMonths("1");
+              setCreatePaymentMode("self_paid");
+              setCreateSplitFriends([EMPTY_SPLIT_FRIEND]);
               setCreateOpen(true);
             }}
             size="sm"
@@ -362,7 +462,7 @@ export default function TemplatesConfigList({
 
       <div className="flex flex-col gap-1">
         {(() => {
-          const isItemPaid = (item: any) => {
+          const isItemPaid = (item: BillListItem) => {
             if ("isCreditCardBill" in item && item.isCreditCardBill) {
               const cleanCcName = item.name.replace("Credit Card Bill: ", "");
               const ccPaidName = `CC Payoff: ${cleanCcName}`;
@@ -391,7 +491,7 @@ export default function TemplatesConfigList({
               creditCardAccountId: acc.id,
             }));
 
-          const allBills = [...ccBills, ...items];
+          const allBills: BillListItem[] = [...ccBills, ...templates];
 
           if (allBills.length === 0) {
             return (
@@ -405,14 +505,20 @@ export default function TemplatesConfigList({
           const unpaidBills = allBills.filter((item) => !isItemPaid(item));
           const paidBills = allBills.filter((item) => isItemPaid(item));
 
-          const renderBillRow = (item: any, isPaid: boolean) => {
+          const renderBillRow = (item: BillListItem, isPaid: boolean) => {
             const isCreditCardBill =
-              "isCreditCardBill" in item && (item as any).isCreditCardBill;
+              "isCreditCardBill" in item && item.isCreditCardBill;
             const linkedAccount = accounts.find((a) => a.id === item.accountId);
             const monthlyEquivalent =
               item.intervalMonths > 1
                 ? item.amount / item.intervalMonths
                 : null;
+            const splitFriends = item.splitConfig?.friends || [];
+            const splitTotal = splitFriends.reduce(
+              (sum: number, friend: { personName: string; percentage: number }) =>
+                sum + friend.percentage,
+              0,
+            );
             const isPaying = isPayingId === item.id;
             const justPaid = paySuccessId === item.id;
 
@@ -454,6 +560,14 @@ export default function TemplatesConfigList({
                           `${item.intervalMonths}mo`}
                       </Badge>
                     )}
+                    {!isCreditCardBill && item.paymentMode === "split_with_friends" && (
+                      <Badge
+                        variant="outline"
+                        className="text-[8px] h-3.5 px-1 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-none font-semibold"
+                      >
+                        Split {splitFriends.length} friends
+                      </Badge>
+                    )}
                     {isCreditCardBill && (
                       <Badge
                         variant="outline"
@@ -474,9 +588,16 @@ export default function TemplatesConfigList({
                     )}
                   </div>
                   {!isCreditCardBill && (
-                    <span className="text-[10px] text-muted-foreground">
-                      {linkedAccount?.name || "Unknown account"}
-                    </span>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[10px] text-muted-foreground">
+                        {linkedAccount?.name || "Unknown account"}
+                      </span>
+                      {item.paymentMode === "split_with_friends" && splitFriends.length > 0 && (
+                        <span className="text-[10px] text-muted-foreground leading-relaxed">
+                          {splitFriends.map((friend: { personName: string; percentage: number }) => `${friend.personName} ${friend.percentage}%`).join(" · ")} · You keep {Math.max(0, 100 - splitTotal)}%
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -678,6 +799,118 @@ export default function TemplatesConfigList({
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Payment Handling</Label>
+                <Select
+                  value={createPaymentMode}
+                  onValueChange={(value: "self_paid" | "split_with_friends") =>
+                    setCreatePaymentMode(value)
+                  }
+                >
+                  <SelectTrigger className="h-10 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="self_paid" className="text-sm">
+                      I pay this bill myself
+                    </SelectItem>
+                    <SelectItem value="split_with_friends" className="text-sm">
+                      Split with bill friends
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {createPaymentMode === "split_with_friends" && (
+                <div className="flex flex-col gap-3 rounded-2xl border border-border/40 bg-muted/30 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <Label className="text-xs font-semibold">Default Split Friends</Label>
+                      <p className="mt-1 text-[10px] text-muted-foreground leading-relaxed">
+                        When this bill is paid, Tsuzuru will auto-create Bill Friends entries for these people.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[10px] cursor-pointer"
+                      onClick={() =>
+                        setCreateSplitFriends((prev) => [
+                          ...prev,
+                          { ...EMPTY_SPLIT_FRIEND },
+                        ])
+                      }
+                    >
+                      <IconPlus className="size-3" /> Add
+                    </Button>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    {createSplitFriends.map((friend, index) => (
+                      <div key={`create-friend-${index}`} className="grid grid-cols-[1fr_112px_32px] gap-2 items-center">
+                        <Input
+                          value={friend.personName}
+                          onChange={(e) =>
+                            setCreateSplitFriends((prev) =>
+                              prev.map((item, itemIndex) =>
+                                itemIndex === index
+                                  ? { ...item, personName: e.target.value }
+                                  : item,
+                              ),
+                            )
+                          }
+                          className="h-9 text-xs"
+                          placeholder="Friend name"
+                        />
+                        <div className="relative flex items-center">
+                          <Input
+                            value={friend.percentage}
+                            onChange={(e) =>
+                              setCreateSplitFriends((prev) =>
+                                prev.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...item,
+                                        percentage: e.target.value.replace(/[^0-9.]/g, ""),
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                            className="h-9 pr-6 text-xs"
+                            placeholder="25"
+                          />
+                          <span className="absolute right-3 text-[10px] text-muted-foreground">%</span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          className="text-destructive hover:bg-destructive/10 cursor-pointer"
+                          disabled={createSplitFriends.length === 1}
+                          onClick={() =>
+                            setCreateSplitFriends((prev) =>
+                              prev.length === 1
+                                ? prev
+                                : prev.filter((_, itemIndex) => itemIndex !== index),
+                            )
+                          }
+                        >
+                          <IconTrash className="size-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <Alert className="border-amber-500/20 bg-amber-500/5">
+                    <AlertDescription className="text-[10px] leading-relaxed">
+                      Friend percentages must stay below 100% so part of the recurring bill remains your own share.
+                    </AlertDescription>
+                  </Alert>
+                </div>
+              )}
             </div>
 
             <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
@@ -824,6 +1057,118 @@ export default function TemplatesConfigList({
                 </Select>
               </div>
 
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Payment Handling</Label>
+                <Select
+                  value={editPaymentMode}
+                  onValueChange={(value: "self_paid" | "split_with_friends") =>
+                    setEditPaymentMode(value)
+                  }
+                >
+                  <SelectTrigger className="h-10 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="self_paid" className="text-sm">
+                      I pay this bill myself
+                    </SelectItem>
+                    <SelectItem value="split_with_friends" className="text-sm">
+                      Split with bill friends
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {editPaymentMode === "split_with_friends" && (
+                <div className="flex flex-col gap-3 rounded-2xl border border-border/40 bg-muted/30 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <Label className="text-xs font-semibold">Default Split Friends</Label>
+                      <p className="mt-1 text-[10px] text-muted-foreground leading-relaxed">
+                        Marking this bill as paid will auto-create Bill Friends entries with these percentages.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[10px] cursor-pointer"
+                      onClick={() =>
+                        setEditSplitFriends((prev) => [
+                          ...prev,
+                          { ...EMPTY_SPLIT_FRIEND },
+                        ])
+                      }
+                    >
+                      <IconPlus className="size-3" /> Add
+                    </Button>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    {editSplitFriends.map((friend, index) => (
+                      <div key={`edit-friend-${index}`} className="grid grid-cols-[1fr_112px_32px] gap-2 items-center">
+                        <Input
+                          value={friend.personName}
+                          onChange={(e) =>
+                            setEditSplitFriends((prev) =>
+                              prev.map((item, itemIndex) =>
+                                itemIndex === index
+                                  ? { ...item, personName: e.target.value }
+                                  : item,
+                              ),
+                            )
+                          }
+                          className="h-9 text-xs"
+                          placeholder="Friend name"
+                        />
+                        <div className="relative flex items-center">
+                          <Input
+                            value={friend.percentage}
+                            onChange={(e) =>
+                              setEditSplitFriends((prev) =>
+                                prev.map((item, itemIndex) =>
+                                  itemIndex === index
+                                    ? {
+                                        ...item,
+                                        percentage: e.target.value.replace(/[^0-9.]/g, ""),
+                                      }
+                                    : item,
+                                ),
+                              )
+                            }
+                            className="h-9 pr-6 text-xs"
+                            placeholder="25"
+                          />
+                          <span className="absolute right-3 text-[10px] text-muted-foreground">%</span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-xs"
+                          className="text-destructive hover:bg-destructive/10 cursor-pointer"
+                          disabled={editSplitFriends.length === 1}
+                          onClick={() =>
+                            setEditSplitFriends((prev) =>
+                              prev.length === 1
+                                ? prev
+                                : prev.filter((_, itemIndex) => itemIndex !== index),
+                            )
+                          }
+                        >
+                          <IconTrash className="size-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <Alert className="border-amber-500/20 bg-amber-500/5">
+                    <AlertDescription className="text-[10px] leading-relaxed">
+                      Friend percentages must stay below 100% so part of the recurring bill remains your own share.
+                    </AlertDescription>
+                  </Alert>
+                </div>
+              )}
+
               {/* Active */}
               <div className="flex items-center justify-between py-1">
                 <Label className="text-xs font-semibold">Active</Label>
@@ -947,7 +1292,9 @@ export default function TemplatesConfigList({
                 <span className="text-xs text-muted-foreground mt-1 block">
                   {isPayingItemCc
                     ? "This will pay off the credit card and record a dual-entry transfer transaction."
-                    : "This will deduct the full amount from the selected account and record it in history."}
+                    : payingItem?.paymentMode === "split_with_friends"
+                      ? "This will deduct the full amount, record it in history, and auto-create Bill Friends entries from your saved split defaults."
+                      : "This will deduct the full amount from the selected account and record it in history."}
                 </span>
               </DialogDescription>
             </DialogHeader>
@@ -981,7 +1328,7 @@ export default function TemplatesConfigList({
                       </div>
                       <span className="text-[10px] text-muted-foreground leading-normal">
                         Default is the current outstanding balance. You can
-                        enter a custom payoff amount (e.g. last month's
+                        enter a custom payoff amount (e.g. last month&apos;s
                         statement balance).
                       </span>
                     </div>

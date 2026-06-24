@@ -62,6 +62,8 @@ model MonthlyTemplate {
   accountId      String
   isActive       Boolean @default(true)
   intervalMonths Int     @default(1) // 1=monthly, 2=every 2 months, 3=quarterly, etc.
+  paymentMode    String  @default("self_paid") // "self_paid" | "split_with_friends"
+  splitConfig    Json?
   user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
