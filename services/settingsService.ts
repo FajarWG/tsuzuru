@@ -56,20 +56,54 @@ export const settingsService = {
     const budgetLimits = await seedBudgetLimitsIfEmpty(userId);
 
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
     const paidTxs = await prisma.transaction.findMany({
       where: {
         userId,
-        date: { gte: startOfMonth },
+        date: { gte: twelveMonthsAgo },
         isTemplate: true,
       },
       select: {
         description: true,
+        date: true,
       },
     });
-    const paidTemplateNamesThisMonth = paidTxs
-      .map((tx) => tx.description)
-      .filter((desc): desc is string => !!desc);
+
+    const paidTemplateNamesThisMonth: string[] = [];
+
+    for (const template of templates) {
+      const interval = template.intervalMonths || 1;
+      const windowStart = new Date(now.getFullYear(), now.getMonth() - interval + 1, 1);
+
+      const hasPayment = paidTxs.some((tx) => {
+        if (!tx.description) return false;
+        return (
+          tx.description.startsWith(template.name) &&
+          new Date(tx.date) >= windowStart
+        );
+      });
+
+      if (hasPayment) {
+        paidTemplateNamesThisMonth.push(template.name);
+      }
+    }
+
+    // For Credit Card bills (always monthly, so interval = 1)
+    const ccAccounts = accounts.filter((acc) => acc.type === "credit_card" && acc.isActive);
+    for (const acc of ccAccounts) {
+      const windowStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const ccPaidName = `CC Payoff: ${acc.name}`;
+      const hasCcPayment = paidTxs.some((tx) => {
+        if (!tx.description) return false;
+        return (
+          tx.description.includes(ccPaidName) &&
+          new Date(tx.date) >= windowStart
+        );
+      });
+      if (hasCcPayment) {
+        paidTemplateNamesThisMonth.push(ccPaidName);
+      }
+    }
 
     return {
       userSettings,

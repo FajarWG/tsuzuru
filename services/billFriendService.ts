@@ -109,15 +109,17 @@ export const billFriendService = {
       });
     }
 
+    const match = bill.description ? bill.description.match(/\[tx_id:([^\]]+)\]/) : null;
+    const txSplitGroupId = match ? match[1] : billId;
+
     await billFriendRepository.settleBillWithAllocations({
       billId,
       userId,
       settleDate: new Date(),
       allocations: formattedAllocations.map((alloc) => ({
         ...alloc,
-        // Use splitGroupId = billId so we can link adjustment transactions
-        // to the source bill without embedding magic strings in description
-        splitGroupId: billId,
+        // Fall back to billId if description does not contain a tx_id tag
+        splitGroupId: txSplitGroupId,
       })),
     });
   },

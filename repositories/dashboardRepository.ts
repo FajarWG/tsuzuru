@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/prisma";
 
 function resolveSplitGroupId(tx: { splitGroupId?: string | null; description?: string | null }): string | null {
-  if (tx.splitGroupId) return tx.splitGroupId;
   const match = tx.description ? tx.description.match(/\[tx_id:([^\]]+)\]/) : null;
-  return match ? match[1] : null;
+  if (match) return match[1];
+  return tx.splitGroupId || null;
 }
 
 export const dashboardRepository = {

@@ -152,7 +152,7 @@ describe("templateService.markTemplatePaid", () => {
     expect(tx.transaction.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          description: "Shared Rent",
+          description: expect.stringContaining("Shared Rent"),
           amount: 50000,
           isTemplate: true,
         }),

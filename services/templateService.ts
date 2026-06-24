@@ -60,8 +60,9 @@ function buildSplitBills(params: {
   amount: number;
   currency: string;
   splitConfig: TemplateSplitConfigInput;
+  splitGroupId: string;
 }) {
-  const { userId, templateName, amount, currency, splitConfig } = params;
+  const { userId, templateName, amount, currency, splitConfig, splitGroupId } = params;
 
   return splitConfig.friends
     .map((friend) => {
@@ -76,7 +77,7 @@ function buildSplitBills(params: {
         amount: shareAmount,
         currency,
         direction: "they_owe",
-        description: `Split recurring bill: ${templateName} (${friend.percentage}%)`,
+        description: `[tx_id:${splitGroupId}] Split recurring bill: ${templateName} (${friend.percentage}%)`,
         category: "adjustment",
         subCategory: null,
       };
@@ -214,17 +215,26 @@ export const templateService = {
       (template.splitConfig as TemplateSplitConfigInput | null | undefined) || null,
     );
 
-    const friendBills = splitConfig
+    const splitGroupId = splitConfig
+      ? "split_" + Math.random().toString(36).substring(2, 15) + "_" + Date.now()
+      : null;
+
+    const friendBills = splitConfig && splitGroupId
       ? buildSplitBills({
           userId,
           templateName: template.name,
           amount: template.amount,
           currency: template.currency,
           splitConfig,
+          splitGroupId,
         })
       : [];
 
     await prisma.$transaction(async (tx) => {
+      const txDescription = splitGroupId
+        ? `${template.name} [tx_id:${splitGroupId}]`
+        : template.name;
+
       await tx.transaction.create({
         data: {
           userId,
@@ -233,7 +243,8 @@ export const templateService = {
           amount: template.amount,
           currency: template.currency,
           category: "adjustment",
-          description: template.name,
+          description: txDescription,
+          splitGroupId: splitGroupId,
           isTemplate: true,
           date: new Date(),
         },

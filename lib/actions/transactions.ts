@@ -195,10 +195,9 @@ export async function getPaginatedTransactionsAction(params: {
      * Legacy records (before this field was added) fall back to regex parsing.
      */
     function resolveSplitGroupId(tx: { splitGroupId?: string | null; description?: string | null }): string | null {
-      if (tx.splitGroupId) return tx.splitGroupId;
-      // Backward compat: parse legacy [tx_id:xxx] magic strings from description
       const match = tx.description ? tx.description.match(/\[tx_id:([^\]]+)\]/) : null;
-      return match ? match[1] : null;
+      if (match) return match[1];
+      return tx.splitGroupId || null;
     }
 
     // Collect all unique splitGroupIds from the matching set

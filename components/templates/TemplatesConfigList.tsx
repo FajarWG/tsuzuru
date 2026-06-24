@@ -683,7 +683,7 @@ export default function TemplatesConfigList({
                 <div className="mt-4 flex flex-col gap-1">
                   <div className="flex items-center gap-2 px-1 py-1 border-b border-border/10">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                      Paid This Month
+                      Paid
                     </span>
                   </div>
                   <div className="flex flex-col divide-y divide-border/40">
