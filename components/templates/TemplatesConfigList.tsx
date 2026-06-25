@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import {
   IconCheck,
+  IconCircleCheck,
   IconLoader,
   IconSettings,
   IconCash,
@@ -752,7 +753,8 @@ export default function TemplatesConfigList({
               {/* Paid section */}
               {paidBills.length > 0 && (
                 <div className="mt-4 flex flex-col gap-1">
-                  <div className="flex items-center gap-2 px-1 py-1 border-b border-border/10">
+                  <div className="flex items-center gap-1.5 px-1 py-1 border-b border-border/10">
+                    <IconCircleCheck className="size-3.5 text-muted-foreground/80" />
                     <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                       Paid
                     </span>
@@ -782,8 +784,7 @@ export default function TemplatesConfigList({
         <DialogContent className="max-w-[360px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-sans flex items-center gap-2">
-                <IconCalendarRepeat className="size-5 text-primary" />
+              <DialogTitle className="font-sans">
                 Create Recurring Bill
               </DialogTitle>
               <DialogDescription className="text-xs">
@@ -1069,10 +1070,7 @@ export default function TemplatesConfigList({
         <DialogContent className="max-w-[360px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-sans flex items-center gap-2">
-                <IconCalendarRepeat className="size-5 text-primary" />
-                Edit Recurring Bill
-              </DialogTitle>
+              <DialogTitle className="font-sans">Edit Bill</DialogTitle>
               <DialogDescription className="text-xs">
                 {editingItem?.name}
               </DialogDescription>
@@ -1403,8 +1401,7 @@ export default function TemplatesConfigList({
         <DialogContent className="max-w-[340px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-sans flex items-center gap-2 text-destructive">
-                <IconTrash className="size-5" />
+              <DialogTitle className="font-sans">
                 Delete Recurring Bill
               </DialogTitle>
               <DialogDescription className="text-sm leading-relaxed">
@@ -1453,10 +1450,7 @@ export default function TemplatesConfigList({
         <DialogContent className="max-w-[340px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-sans flex items-center gap-2">
-                <IconCash className="size-5 text-emerald-600 dark:text-emerald-400" />
-                Mark as Paid
-              </DialogTitle>
+              <DialogTitle className="font-sans">Mark as Paid</DialogTitle>
               <DialogDescription className="text-sm leading-relaxed">
                 Record payment of{" "}
                 <strong>
