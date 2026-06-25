@@ -17,6 +17,7 @@ vi.mock("@/repositories/billFriendRepository", () => ({
     update: vi.fn(),
     delete: vi.fn(),
     settleBillWithAllocations: vi.fn(),
+    createBillWithAdjustment: vi.fn(),
   },
 }));
 
@@ -245,3 +246,81 @@ describe("billFriendService.settleBillWithAllocations", () => {
     );
   });
 });
+
+describe("billFriendService.createBill with balance adjustment", () => {
+  it("throws when balance adjustment is requested on i_owe direction", async () => {
+    await expect(
+      billFriendService.createBill(
+        { personName: "Alice", amount: 5000, currency: "JPY", direction: "i_owe", accountId: "acc-1" },
+        "user-1"
+      )
+    ).rejects.toThrow("Balance adjustment is only supported when lending money (They owe me)");
+  });
+
+  it("throws when the account does not exist or belongs to another user", async () => {
+    mockAccRepo.findById.mockResolvedValue(null);
+
+    await expect(
+      billFriendService.createBill(
+        { personName: "Alice", amount: 5000, currency: "JPY", direction: "they_owe", accountId: "acc-1" },
+        "user-1"
+      )
+    ).rejects.toThrow("Selected account not found");
+
+    mockAccRepo.findById.mockResolvedValue(makeAccount({ userId: "user-2" }));
+
+    await expect(
+      billFriendService.createBill(
+        { personName: "Alice", amount: 5000, currency: "JPY", direction: "they_owe", accountId: "acc-1" },
+        "user-1"
+      )
+    ).rejects.toThrow("Selected account not found");
+  });
+
+  it("throws when the account is inactive", async () => {
+    mockAccRepo.findById.mockResolvedValue(makeAccount({ userId: "user-1", isActive: false }));
+
+    await expect(
+      billFriendService.createBill(
+        { personName: "Alice", amount: 5000, currency: "JPY", direction: "they_owe", accountId: "acc-1" },
+        "user-1"
+      )
+    ).rejects.toThrow("Selected account is inactive");
+  });
+
+  it("throws when there is a currency mismatch", async () => {
+    mockAccRepo.findById.mockResolvedValue(makeAccount({ userId: "user-1", currency: "IDR" }));
+
+    await expect(
+      billFriendService.createBill(
+        { personName: "Alice", amount: 5000, currency: "JPY", direction: "they_owe", accountId: "acc-1" },
+        "user-1"
+      )
+    ).rejects.toThrow("Account currency does not match bill currency");
+  });
+
+  it("creates bill and adjusts account balance when inputs are valid", async () => {
+    mockAccRepo.findById.mockResolvedValue(makeAccount({ userId: "user-1", currency: "JPY" }));
+    mockBillRepo.createBillWithAdjustment.mockResolvedValue(makeBill({ id: "bill-1" }));
+
+    await expect(
+      billFriendService.createBill(
+        { personName: "Alice", amount: 5000, currency: "JPY", direction: "they_owe", accountId: "acc-1" },
+        "user-1"
+      )
+    ).resolves.not.toThrow();
+
+    expect(mockBillRepo.createBillWithAdjustment).toHaveBeenCalledWith({
+      userId: "user-1",
+      personName: "Alice",
+      amount: 5000,
+      currency: "JPY",
+      direction: "they_owe",
+      description: null,
+      category: null,
+      subCategory: null,
+      accountId: "acc-1",
+    });
+  });
+});
+

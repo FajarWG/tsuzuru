@@ -26,6 +26,67 @@ export const billFriendRepository = {
     });
   },
 
+  async createBillWithAdjustment(params: {
+    userId: string;
+    personName: string;
+    amount: number;
+    currency: string;
+    direction: "i_owe" | "they_owe";
+    description?: string | null;
+    category?: string | null;
+    subCategory?: string | null;
+    accountId: string;
+  }) {
+    const { userId, personName, amount, currency, direction, description, category, subCategory, accountId } = params;
+
+    return prisma.$transaction(async (tx) => {
+      // 1. Create the BillFriend
+      const bill = await tx.billFriend.create({
+        data: {
+          userId,
+          personName,
+          amount,
+          currency,
+          direction,
+          description,
+          category,
+          subCategory,
+        },
+      });
+
+      // 2. Create the associated initial transaction (expense)
+      const splitGroupId = bill.id;
+      const txDescription = description
+        ? `${description} [tx_id:${splitGroupId}]`
+        : `[tx_id:${splitGroupId}]`;
+
+      await tx.transaction.create({
+        data: {
+          userId,
+          accountId,
+          type: "expense",
+          amount,
+          currency,
+          category: category || "pocket_money",
+          subCategory: subCategory || "others",
+          description: txDescription,
+          splitGroupId,
+          date: new Date(),
+        },
+      });
+
+      // 3. Decrement the account balance
+      await tx.account.update({
+        where: { id: accountId },
+        data: {
+          balance: { decrement: amount },
+        },
+      });
+
+      return bill;
+    });
+  },
+
   async createMany(billsData: Prisma.BillFriendUncheckedCreateInput[]) {
     return prisma.$transaction(
       billsData.map((data) =>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { createBillAction, settleBillAction, deleteBillAction, settleBillWithAllocationsAction } from "@/lib/actions/bill-friends";
 import { toast } from "sonner";
@@ -131,6 +132,25 @@ export default function BillFriendsList({
   const [description, setDescription] = useState("");
   const [isAdding, setIsAdding] = useState(false);
 
+  const router = useRouter();
+
+  // Balance adjustment states
+  const [adjustBalance, setAdjustBalance] = useState(false);
+  const [selectedAccountId, setSelectedAccountId] = useState("");
+
+  // Sync selected account with currency
+  useEffect(() => {
+    const matching = accounts.filter((a) => a.currency === currency);
+    setSelectedAccountId(matching[0]?.id || "");
+  }, [currency, accounts]);
+
+  // Reset adjust balance if direction switches to i_owe
+  useEffect(() => {
+    if (direction === "i_owe") {
+      setAdjustBalance(false);
+    }
+  }, [direction]);
+
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
 
@@ -172,6 +192,9 @@ export default function BillFriendsList({
   const resetAddForm = () => {
     setPersonName(""); setAmount(""); setCurrency("JPY");
     setDirection("they_owe"); setDescription("");
+    setAdjustBalance(false);
+    const matching = accounts.filter((a) => a.currency === "JPY");
+    setSelectedAccountId(matching[0]?.id || "");
     setShowSuggestions(false);
     setActiveIndex(-1);
   };
@@ -213,10 +236,22 @@ export default function BillFriendsList({
       return;
     }
 
+    if (adjustBalance && direction === "they_owe" && !selectedAccountId) {
+      toast.error("Please select an account for balance adjustment.");
+      return;
+    }
+
     setIsAdding(true);
 
     try {
-      const res = await createBillAction({ personName, amount: parsedAmount, currency, direction, description: description || undefined });
+      const res = await createBillAction({
+        personName,
+        amount: parsedAmount,
+        currency,
+        direction,
+        description: description || undefined,
+        accountId: adjustBalance && direction === "they_owe" ? selectedAccountId : undefined,
+      });
 
       if (res.success) {
         toast.success("Bill added successfully");
@@ -231,6 +266,8 @@ export default function BillFriendsList({
         resetAddForm();
         setAddOpen(false);
         window.dispatchEvent(new CustomEvent("bill-updated"));
+        window.dispatchEvent(new CustomEvent("transaction-added"));
+        router.refresh();
       } else {
         toast.error(res.error || "Failed to add bill");
       }
@@ -858,6 +895,60 @@ export default function BillFriendsList({
                   className="h-10"
                 />
               </div>
+
+              {/* Balance Adjustment Option */}
+              {direction === "they_owe" && (
+                <div className="flex flex-col gap-3 pt-2 border-t border-border/10">
+                  <div className="flex items-center justify-between p-3 rounded-xl border border-border/40 bg-muted/20">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-xs font-semibold text-foreground">Adjust account balance?</span>
+                      <span className="text-[10px] text-muted-foreground">Reduce selected account balance immediately.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAdjustBalance(!adjustBalance)}
+                      className={cn(
+                        "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                        adjustBalance ? "bg-primary" : "bg-muted"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "pointer-events-none inline-block size-4 transform rounded-full bg-background shadow-lg ring-0 transition duration-200 ease-in-out",
+                          adjustBalance ? "translate-x-4" : "translate-x-0"
+                        )}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Account Selector */}
+                  {adjustBalance && (
+                    <div className="flex flex-col gap-1.5 animate-in fade-in-50 slide-in-from-top-1 duration-150">
+                      <Label className="text-xs font-semibold">Select Account *</Label>
+                      {accounts.filter((acc) => acc.currency === currency).length > 0 ? (
+                        <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
+                          <SelectTrigger className="h-10">
+                            <SelectValue placeholder="Choose an account" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {accounts
+                              .filter((acc) => acc.currency === currency)
+                              .map((acc) => (
+                                <SelectItem key={acc.id} value={acc.id}>
+                                  {acc.name} ({acc.currency === "JPY" ? "¥" : "Rp"}{acc.balance.toLocaleString()})
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <span className="text-[10px] text-destructive font-semibold">
+                          No active {currency} accounts found. Please activate one in Settings.
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">

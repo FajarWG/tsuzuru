@@ -6,6 +6,7 @@ export interface CreateBillInput {
   description?: string;
   category?: string | null;
   subCategory?: string | null;
+  accountId?: string;
 }
 
 export interface SettleAllocationInput {

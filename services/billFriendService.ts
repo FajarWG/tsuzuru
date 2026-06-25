@@ -5,12 +5,40 @@ import { CreateBillInput, SettleAllocationInput } from "@/types/billFriend";
 
 export const billFriendService = {
   async createBill(data: CreateBillInput, userId: string) {
-    const { personName, amount, currency, direction, description, category, subCategory } = data;
+    const { personName, amount, currency, direction, description, category, subCategory, accountId } = data;
 
     if (!personName.trim()) throw new Error("Person name is required");
     if (amount <= 0) throw new Error("Amount must be greater than 0");
     if (!["JPY", "IDR"].includes(currency)) throw new Error("Invalid currency");
     if (!["i_owe", "they_owe"].includes(direction)) throw new Error("Invalid direction");
+
+    if (accountId) {
+      if (direction === "i_owe") {
+        throw new Error("Balance adjustment is only supported when lending money (They owe me)");
+      }
+      const account = await accountRepository.findById(accountId);
+      if (!account || account.userId !== userId) {
+        throw new Error("Selected account not found");
+      }
+      if (!account.isActive) {
+        throw new Error("Selected account is inactive");
+      }
+      if (account.currency !== currency) {
+        throw new Error("Account currency does not match bill currency");
+      }
+
+      return billFriendRepository.createBillWithAdjustment({
+        userId,
+        personName: personName.trim(),
+        amount,
+        currency,
+        direction,
+        description: description?.trim() || null,
+        category: category || null,
+        subCategory: subCategory || null,
+        accountId,
+      });
+    }
 
     return billFriendRepository.create({
       userId,
