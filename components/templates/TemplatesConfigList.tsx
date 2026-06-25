@@ -920,7 +920,7 @@ export default function TemplatesConfigList({
 
                   <div className="flex flex-col gap-2">
                     {createSplitFriends.map((friend, index) => (
-                      <div key={`create-friend-${index}`} className="grid grid-cols-[1fr_112px_32px] gap-2 items-center relative">
+                      <div key={`create-friend-${index}`} className="grid grid-cols-[minmax(0,1fr)_80px_32px] gap-2 items-center relative">
                         <div className="relative flex flex-col">
                           <Input
                             value={friend.personName}
@@ -1226,7 +1226,7 @@ export default function TemplatesConfigList({
 
                   <div className="flex flex-col gap-2">
                     {editSplitFriends.map((friend, index) => (
-                      <div key={`edit-friend-${index}`} className="grid grid-cols-[1fr_112px_32px] gap-2 items-center relative">
+                      <div key={`edit-friend-${index}`} className="grid grid-cols-[minmax(0,1fr)_80px_32px] gap-2 items-center relative">
                         <div className="relative flex flex-col">
                           <Input
                             value={friend.personName}
