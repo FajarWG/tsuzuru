@@ -10,12 +10,12 @@ export default function NotFound() {
   const router = useRouter();
   const [countdown, setCountdown] = useState(5);
 
+  // Handle countdown decrement
   useEffect(() => {
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          router.push("/");
           return 0;
         }
         return prev - 1;
@@ -23,7 +23,14 @@ export default function NotFound() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [router]);
+  }, []);
+
+  // Handle redirect side-effect when countdown reaches 0
+  useEffect(() => {
+    if (countdown <= 0) {
+      router.push("/");
+    }
+  }, [countdown, router]);
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center bg-background select-none p-6 min-h-[90vh]">
