@@ -753,7 +753,7 @@ export default function TemplatesConfigList({
               {/* Paid section */}
               {paidBills.length > 0 && (
                 <div className="mt-4 flex flex-col gap-1">
-                  <div className="flex items-center gap-1.5 px-1 py-1 border-b border-border/10">
+                  <div className="flex items-center gap-1.5 pl-0 pr-1 py-1 border-b border-border/10">
                     <IconCircleCheck className="size-3.5 text-muted-foreground/80" />
                     <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                       Paid
