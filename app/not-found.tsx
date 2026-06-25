@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { IconAlertTriangle, IconHome } from "@tabler/icons-react";
+import { IconHome } from "@tabler/icons-react";
 
 export default function NotFound() {
   const router = useRouter();
@@ -25,44 +26,99 @@ export default function NotFound() {
   }, [router]);
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-5 text-center bg-background min-h-[80vh]">
-      <div className="max-w-[360px] w-full flex flex-col items-center gap-5 p-6 rounded-2xl border border-border/40 bg-white dark:bg-zinc-900 shadow-sm animate-in fade-in zoom-in-95 duration-300">
-        {/* Warning Icon with a soft pulsing background */}
-        <div className="size-14 rounded-xl bg-destructive/10 text-destructive flex items-center justify-center animate-pulse">
-          <IconAlertTriangle className="size-7" />
+    <div className="flex-1 flex flex-col items-center justify-center bg-background select-none p-6 min-h-[90vh]">
+      <div className="flex flex-col items-center max-w-[320px] w-full text-center animate-in fade-in duration-300">
+        
+        {/* Zen Circle (Enso) & 404 */}
+        <div className="relative w-32 h-32 flex items-center justify-center mb-6">
+          <svg className="absolute inset-0 w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+            {/* Background thin circle */}
+            <circle
+              cx="50"
+              cy="50"
+              r="40"
+              className="stroke-muted/40 fill-none"
+              strokeWidth="1"
+            />
+            {/* Animating circle stroke */}
+            <motion.circle
+              cx="50"
+              cy="50"
+              r="40"
+              className="stroke-primary fill-none"
+              strokeWidth="2"
+              strokeLinecap="round"
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{
+                duration: 2.2,
+                ease: [0.25, 1, 0.5, 1], // easeOutQuart
+              }}
+            />
+          </svg>
+
+          {/* 404 Text */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.4, duration: 1.5, ease: "easeOut" }}
+            className="font-serif text-3xl text-primary font-medium tracking-wider relative z-10"
+          >
+            404
+          </motion.div>
         </div>
 
-        {/* Heading */}
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-lg font-bold tracking-tight text-foreground">
-            Oops... Page Not Found!
-          </h1>
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            The page you are looking for doesn&apos;t exist, has been moved, or hasn&apos;t been created yet.
-          </p>
-        </div>
+        {/* Title: Page Not Found */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8, duration: 1.2, ease: "easeOut" }}
+          className="font-serif text-base tracking-[0.2em] text-foreground font-medium mb-2 uppercase"
+        >
+          Page Not Found
+        </motion.div>
+
+        {/* Subtitle / Description */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.6 }}
+          transition={{ delay: 1.0, duration: 1.2, ease: "easeOut" }}
+          className="text-xs text-muted-foreground leading-relaxed mb-6 font-serif max-w-[260px]"
+        >
+          The page you are looking for doesn&apos;t exist or has been moved.
+        </motion.div>
 
         {/* Countdown details */}
-        <div className="py-2.5 px-4 rounded-xl bg-muted/30 border border-border/30 w-full">
-          <p className="text-[11px] text-muted-foreground">
-            Redirecting you to the Home page in{" "}
-            <span className="font-bold text-primary text-xs inline-block min-w-[10px] animate-bounce">
-              {countdown}
-            </span>{" "}
-            seconds...
-          </p>
-        </div>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.8 }}
+          transition={{ delay: 1.2, duration: 1.2, ease: "easeOut" }}
+          className="text-[10px] tracking-[0.15em] text-muted-foreground font-serif uppercase mb-6"
+        >
+          Redirecting to Home in{" "}
+          <span className="font-bold text-primary text-xs inline-block min-w-[8px] animate-bounce">
+            {countdown}
+          </span>{" "}
+          seconds
+        </motion.div>
 
-        {/* Redirect button */}
-        <div className="flex flex-col gap-2 w-full mt-1">
+        {/* Back to Home Button */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.4, duration: 1.2, ease: "easeOut" }}
+          className="w-full max-w-[200px]"
+        >
           <Button
             onClick={() => router.push("/")}
-            className="w-full h-10 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer"
+            variant="outline"
+            className="w-full h-10 rounded-full text-[10px] uppercase tracking-[0.2em] font-serif font-medium flex items-center justify-center gap-1.5 cursor-pointer bg-transparent hover:bg-muted/10 border-border/60"
           >
-            <IconHome className="size-4" />
-            Go back to Home
+            <IconHome className="size-3.5" />
+            Home
           </Button>
-        </div>
+        </motion.div>
+
       </div>
     </div>
   );
