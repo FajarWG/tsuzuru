@@ -782,7 +782,8 @@ export default function TemplatesConfigList({
         <DialogContent className="max-w-[360px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-sans">
+              <DialogTitle className="font-sans flex items-center gap-2">
+                <IconCalendarRepeat className="size-5 text-primary" />
                 Create Recurring Bill
               </DialogTitle>
               <DialogDescription className="text-xs">
@@ -1068,7 +1069,10 @@ export default function TemplatesConfigList({
         <DialogContent className="max-w-[360px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-sans">Edit Bill</DialogTitle>
+              <DialogTitle className="font-sans flex items-center gap-2">
+                <IconCalendarRepeat className="size-5 text-primary" />
+                Edit Recurring Bill
+              </DialogTitle>
               <DialogDescription className="text-xs">
                 {editingItem?.name}
               </DialogDescription>
@@ -1399,7 +1403,8 @@ export default function TemplatesConfigList({
         <DialogContent className="max-w-[340px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-sans">
+              <DialogTitle className="font-sans flex items-center gap-2 text-destructive">
+                <IconTrash className="size-5" />
                 Delete Recurring Bill
               </DialogTitle>
               <DialogDescription className="text-sm leading-relaxed">
@@ -1448,7 +1453,10 @@ export default function TemplatesConfigList({
         <DialogContent className="max-w-[340px] rounded-2xl p-0">
           <div className="flex flex-col max-h-[85vh] p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-sans">Mark as Paid</DialogTitle>
+              <DialogTitle className="font-sans flex items-center gap-2">
+                <IconCash className="size-5 text-emerald-600 dark:text-emerald-400" />
+                Mark as Paid
+              </DialogTitle>
               <DialogDescription className="text-sm leading-relaxed">
                 Record payment of{" "}
                 <strong>
