@@ -25,42 +25,42 @@ export default function NotFound() {
   }, [router]);
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 text-center bg-background min-h-[80vh]">
-      <div className="max-w-[380px] w-full flex flex-col items-center gap-6 p-8 rounded-3xl border border-border/40 bg-card shadow-xl animate-in fade-in zoom-in-95 duration-300">
+    <div className="flex-1 flex flex-col items-center justify-center p-5 text-center bg-background min-h-[80vh]">
+      <div className="max-w-[360px] w-full flex flex-col items-center gap-5 p-6 rounded-2xl border border-border/40 bg-white dark:bg-zinc-900 shadow-sm animate-in fade-in zoom-in-95 duration-300">
         {/* Warning Icon with a soft pulsing background */}
-        <div className="size-16 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center animate-pulse">
-          <IconAlertTriangle className="size-8" />
+        <div className="size-14 rounded-xl bg-destructive/10 text-destructive flex items-center justify-center animate-pulse">
+          <IconAlertTriangle className="size-7" />
         </div>
 
         {/* Heading */}
-        <div className="flex flex-col gap-2">
-          <h1 className="text-xl font-bold tracking-tight text-foreground">
-            Oops... Halaman Tidak Ditemukan!
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-lg font-bold tracking-tight text-foreground">
+            Oops... Page Not Found!
           </h1>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Halaman yang Anda cari tidak tersedia, telah dipindahkan, atau belum dibuat.
+            The page you are looking for doesn&apos;t exist, has been moved, or hasn&apos;t been created yet.
           </p>
         </div>
 
         {/* Countdown details */}
-        <div className="py-3 px-4 rounded-2xl bg-muted/50 border border-border/20 w-full">
-          <p className="text-xs text-muted-foreground">
-            Mengarahkan kembali ke Beranda dalam{" "}
-            <span className="font-bold text-primary text-sm inline-block min-w-[12px] animate-bounce">
+        <div className="py-2.5 px-4 rounded-xl bg-muted/30 border border-border/30 w-full">
+          <p className="text-[11px] text-muted-foreground">
+            Redirecting you to the Home page in{" "}
+            <span className="font-bold text-primary text-xs inline-block min-w-[10px] animate-bounce">
               {countdown}
             </span>{" "}
-            detik...
+            seconds...
           </p>
         </div>
 
         {/* Redirect button */}
-        <div className="flex flex-col gap-2 w-full mt-2">
+        <div className="flex flex-col gap-2 w-full mt-1">
           <Button
             onClick={() => router.push("/")}
-            className="w-full h-11 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full h-10 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer"
           >
             <IconHome className="size-4" />
-            Kembali ke Beranda
+            Go back to Home
           </Button>
         </div>
       </div>
