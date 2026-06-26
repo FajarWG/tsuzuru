@@ -7,6 +7,7 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 import LoadingProvider from "@/components/layout/LoadingProvider";
 import PwaRegister from "@/components/layout/PwaRegister";
+import PwaInstallBanner from "@/components/layout/PwaInstallBanner";
 
 const poppins = Poppins({
   weight: ["300", "400", "500", "600", "700"],
@@ -59,6 +60,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-background text-foreground animate-in fade-in duration-300">
         <LoadingProvider>{children}</LoadingProvider>
         <PwaRegister />
+        <PwaInstallBanner />
         <Toaster />
         <SpeedInsights />
         <Analytics />
