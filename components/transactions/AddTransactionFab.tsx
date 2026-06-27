@@ -220,8 +220,9 @@ export default function AddTransactionFab({
   // Receipt Mode States
   const [isReceipt, setIsReceipt] = useState(false);
   const [receiptItems, setReceiptItems] = useState<
-    { name: string; price: number }[]
+    { name: string; price: number; category?: string; subCategory?: string }[]
   >([]);
+  const [openCategoryPickerIdx, setOpenCategoryPickerIdx] = useState<number | null>(null);
   const [newItemName, setNewItemName] = useState("");
   const [newItemPrice, setNewItemPrice] = useState("");
   const [isAiImportOpen, setIsAiImportOpen] = useState(false);
@@ -384,6 +385,7 @@ export default function AddTransactionFab({
     setDate(new Date());
     setIsReceipt(false);
     setReceiptItems([]);
+    setOpenCategoryPickerIdx(null);
     setNewItemName("");
     setNewItemPrice("");
     setTargetTotal("");
@@ -610,6 +612,8 @@ export default function AddTransactionFab({
     const receiptItemsWithAssignments = receiptItems.map((item, idx) => ({
       ...item,
       assigned: itemAssignments[idx] || ["Me"],
+      category: item.category ?? category,
+      subCategory: item.subCategory ?? subCategory,
     }));
 
     const finalDescription = description.trim()
@@ -735,7 +739,13 @@ export default function AddTransactionFab({
           description: description.trim() || null,
           date: date.toISOString(),
           isReceipt,
-          receiptItems: isReceipt ? receiptItems : null,
+          receiptItems: isReceipt
+            ? receiptItems.map((item) => ({
+                ...item,
+                category: item.category ?? category,
+                subCategory: item.subCategory ?? subCategory,
+              }))
+            : null,
         };
 
         const stored =
@@ -773,7 +783,13 @@ export default function AddTransactionFab({
         description: description.trim() || null,
         date,
         isReceipt,
-        receiptItems: isReceipt ? receiptItems : null,
+        receiptItems: isReceipt
+          ? receiptItems.map((item) => ({
+              ...item,
+              category: item.category ?? category,
+              subCategory: item.subCategory ?? subCategory,
+            }))
+          : null,
       });
 
       if (res.success) {
@@ -867,7 +883,7 @@ export default function AddTransactionFab({
 
             <div
               className="flex-1 overflow-y-auto overflow-x-hidden px-1 flex flex-col gap-4 py-3"
-              onClick={() => setShowFriendSuggestions(false)}
+              onClick={() => { setShowFriendSuggestions(false); setOpenCategoryPickerIdx(null); }}
             >
               <AnimatePresence mode="wait">
                 {showSplitPrompt ? (
@@ -1564,71 +1580,196 @@ export default function AddTransactionFab({
 
                           {/* Items list */}
                           {receiptItems.length > 0 ? (
-                            <div className="flex flex-col gap-1.5 max-h-[180px] overflow-y-auto overflow-x-hidden pr-1">
-                              {receiptItems.map((item, idx) => (
-                                <div
-                                  key={idx}
-                                  className="flex items-center justify-between bg-white dark:bg-zinc-900 border border-border/30 px-3 py-1.5 rounded-lg text-xs gap-2"
-                                >
-                                  <input
-                                    type="text"
-                                    value={item.name}
-                                    onChange={(e) => {
-                                      const newName = e.target.value;
-                                      setReceiptItems((prev) =>
-                                        prev.map((it, i) =>
-                                          i === idx
-                                            ? { ...it, name: newName }
-                                            : it,
-                                        ),
-                                      );
-                                    }}
-                                    className="font-semibold text-foreground bg-transparent focus:outline-none focus:border-b focus:border-primary border-b border-transparent w-[140px] truncate focus:truncate-none min-w-0"
-                                    placeholder="Item name"
-                                  />
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    <div className="flex items-center gap-0.5 font-bold text-muted-foreground">
-                                      <span>{currencySymbol}</span>
+                            <div className="flex flex-col gap-1.5 max-h-[220px] overflow-y-auto overflow-x-hidden pr-1">
+                              {receiptItems.map((item, idx) => {
+                                const effectiveCat = item.category ?? category;
+                                const effectiveSubCat = item.subCategory ?? subCategory;
+                                const isOverridden = !!item.category;
+                                const catLabel = categoriesToUse.find(c => c.name === effectiveCat)?.label ?? effectiveCat;
+                                const allSubcats = [
+                                  ...POCKET_MONEY_SUBCATS,
+                                  ...SHOPPING_SUBCATS,
+                                  ...INCOME_SUBCATS,
+                                  { value: "bills", label: "Bills" },
+                                  { value: "transport", label: "Transport" },
+                                ];
+                                const subCatLabel = allSubcats.find(s => s.value === effectiveSubCat)?.label ?? effectiveSubCat;
+                                const catColor = effectiveCat === "pocket_money"
+                                  ? isOverridden
+                                    ? "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50"
+                                    : "bg-muted text-muted-foreground border-border/30"
+                                  : effectiveCat === "shopping"
+                                  ? isOverridden
+                                    ? "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:border-violet-800/50"
+                                    : "bg-muted text-muted-foreground border-border/30"
+                                  : isOverridden
+                                    ? "bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-400 dark:border-sky-800/50"
+                                    : "bg-muted text-muted-foreground border-border/30";
+
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="flex flex-col bg-white dark:bg-zinc-900 border border-border/30 px-3 py-2 rounded-lg text-xs gap-1.5"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
                                       <input
                                         type="text"
-                                        inputMode="numeric"
-                                        value={
-                                          item.price === 0 ? "" : item.price
-                                        }
+                                        value={item.name}
                                         onChange={(e) => {
-                                          const val = e.target.value.replace(
-                                            /[^0-9]/g,
-                                            "",
-                                          );
-                                          const newPrice = val
-                                            ? parseInt(val, 10)
-                                            : 0;
+                                          const newName = e.target.value;
                                           setReceiptItems((prev) =>
                                             prev.map((it, i) =>
-                                              i === idx
-                                                ? { ...it, price: newPrice }
-                                                : it,
+                                              i === idx ? { ...it, name: newName } : it,
                                             ),
                                           );
                                         }}
-                                        className="w-[70px] text-right font-bold bg-transparent focus:outline-none focus:border-b focus:border-primary border-b border-transparent text-foreground"
-                                        placeholder="0"
+                                        className="font-semibold text-foreground bg-transparent focus:outline-none focus:border-b focus:border-primary border-b border-transparent flex-1 min-w-0 truncate"
+                                        placeholder="Item name"
                                       />
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        <div className="flex items-center gap-0.5 font-bold text-muted-foreground">
+                                          <span>{currencySymbol}</span>
+                                          <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            value={item.price === 0 ? "" : item.price}
+                                            onChange={(e) => {
+                                              const val = e.target.value.replace(/[^0-9]/g, "");
+                                              const newPrice = val ? parseInt(val, 10) : 0;
+                                              setReceiptItems((prev) =>
+                                                prev.map((it, i) =>
+                                                  i === idx ? { ...it, price: newPrice } : it,
+                                                ),
+                                              );
+                                            }}
+                                            className="w-[64px] text-right font-bold bg-transparent focus:outline-none focus:border-b focus:border-primary border-b border-transparent text-foreground"
+                                            placeholder="0"
+                                          />
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setReceiptItems((prev) => prev.filter((_, i) => i !== idx));
+                                            if (openCategoryPickerIdx === idx) setOpenCategoryPickerIdx(null);
+                                          }}
+                                          className="p-1 hover:bg-red-50 dark:hover:bg-red-950/20 text-red-500 rounded-md transition-colors cursor-pointer ml-0.5"
+                                        >
+                                          <IconTrash className="size-3.5" />
+                                        </button>
+                                      </div>
                                     </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setReceiptItems((prev) =>
-                                          prev.filter((_, i) => i !== idx),
-                                        );
-                                      }}
-                                      className="p-1 hover:bg-red-50 dark:hover:bg-red-950/20 text-red-500 rounded-md transition-colors cursor-pointer"
-                                    >
-                                      <IconTrash className="size-3.5" />
-                                    </button>
+
+                                    {/* Category badge row */}
+                                    <div className="flex items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setOpenCategoryPickerIdx(openCategoryPickerIdx === idx ? null : idx);
+                                        }}
+                                        className={cn(
+                                          "inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-bold transition-all cursor-pointer",
+                                          catColor,
+                                        )}
+                                      >
+                                        {catLabel}/{subCatLabel}
+                                        <svg className="size-2.5 opacity-60" viewBox="0 0 10 10" fill="currentColor"><path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                      </button>
+                                      {isOverridden && (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setReceiptItems((prev) =>
+                                              prev.map((it, i) =>
+                                                i === idx ? { ...it, category: undefined, subCategory: undefined } : it,
+                                              ),
+                                            )
+                                          }
+                                          className="text-[9px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer underline underline-offset-1"
+                                        >
+                                          reset
+                                        </button>
+                                      )}
+                                    </div>
+
+                                    {/* Inline category picker */}
+                                    {openCategoryPickerIdx === idx && (
+                                      <div
+                                        className="flex flex-col gap-1.5 pt-1.5 mt-0.5 border-t border-border/30"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        {/* Category selector */}
+                                        <div className="flex gap-1">
+                                          {categoriesToUse.map((cat) => (
+                                            <button
+                                              key={cat.name}
+                                              type="button"
+                                              onClick={() => {
+                                                const defaultSub = cat.name === "pocket_money"
+                                                  ? "food"
+                                                  : cat.name === "shopping"
+                                                  ? "others"
+                                                  : "others";
+                                                setReceiptItems((prev) =>
+                                                  prev.map((it, i) =>
+                                                    i === idx
+                                                      ? { ...it, category: cat.name, subCategory: defaultSub }
+                                                      : it,
+                                                  ),
+                                                );
+                                              }}
+                                              className={cn(
+                                                "flex-1 py-1 rounded-lg border text-[10px] font-bold transition-all cursor-pointer",
+                                                effectiveCat === cat.name
+                                                  ? "bg-primary text-primary-foreground border-transparent"
+                                                  : "bg-muted/40 border-border/40 text-muted-foreground hover:bg-muted",
+                                              )}
+                                            >
+                                              {cat.label}
+                                            </button>
+                                          ))}
+                                        </div>
+                                        {/* Sub-category selector */}
+                                        <div className="flex flex-wrap gap-1">
+                                          {(effectiveCat === "pocket_money"
+                                            ? POCKET_MONEY_SUBCATS
+                                            : effectiveCat === "shopping"
+                                            ? SHOPPING_SUBCATS
+                                            : INCOME_SUBCATS
+                                          ).map((sub) => (
+                                            <button
+                                              key={sub.value}
+                                              type="button"
+                                              onClick={() =>
+                                                setReceiptItems((prev) =>
+                                                  prev.map((it, i) =>
+                                                    i === idx ? { ...it, subCategory: sub.value, category: effectiveCat } : it,
+                                                  ),
+                                                )
+                                              }
+                                              className={cn(
+                                                "px-2 py-0.5 rounded-md border text-[10px] font-bold transition-all cursor-pointer",
+                                                effectiveSubCat === sub.value
+                                                  ? "bg-primary/10 text-primary border-primary/30"
+                                                  : "bg-muted/30 border-border/30 text-muted-foreground hover:bg-muted",
+                                              )}
+                                            >
+                                              {sub.label}
+                                            </button>
+                                          ))}
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => setOpenCategoryPickerIdx(null)}
+                                          className="text-[10px] font-semibold text-primary hover:text-primary/80 text-right cursor-pointer transition-colors"
+                                        >
+                                          Done ✓
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           ) : (
                             <div className="text-center py-5 px-4 text-xs text-muted-foreground bg-white dark:bg-zinc-900 border border-dashed border-border/50 rounded-lg">

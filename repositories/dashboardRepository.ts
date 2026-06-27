@@ -39,6 +39,8 @@ export const dashboardRepository = {
           date: true,
           description: true,
           splitGroupId: true,
+          isReceipt: true,
+          receiptItems: true,
         },
       }),
       prisma.transaction.findMany({
@@ -60,6 +62,8 @@ export const dashboardRepository = {
           date: true,
           description: true,
           splitGroupId: true,
+          isReceipt: true,
+          receiptItems: true,
         },
       }),
     ]);
@@ -115,6 +119,8 @@ export const dashboardRepository = {
           currency: tx.currency,
           type: tx.type,
           date: tx.date,
+          isReceipt: tx.isReceipt,
+          receiptItems: tx.receiptItems,
         };
       });
     };

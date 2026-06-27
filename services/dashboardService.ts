@@ -49,9 +49,42 @@ export const dashboardService = {
       if (limit.name === "monthly") {
         spent = raw.monthlyExpensesRaw.reduce((sum, tx) => sum + tx.amount, 0);
       } else {
-        spent = raw.monthlyExpensesRaw
-          .filter((tx) => tx.category === limit.name)
-          .reduce((sum, tx) => sum + tx.amount, 0);
+        for (const tx of raw.monthlyExpensesRaw) {
+          // For receipt transactions with per-item categories, attribute each item
+          // to its own category instead of the whole transaction amount.
+          if (
+            tx.isReceipt &&
+            tx.receiptItems &&
+            Array.isArray(tx.receiptItems) &&
+            tx.receiptItems.length > 0
+          ) {
+            const items = tx.receiptItems as {
+              name: string;
+              price: number;
+              category?: string;
+              subCategory?: string;
+            }[];
+            // Sum prices of items that belong to this budget category
+            const itemSubtotalForCat = items.reduce((s, item) => {
+              const itemCat = item.category ?? tx.category;
+              return itemCat === limit.name ? s + (item.price ?? 0) : s;
+            }, 0);
+
+            if (itemSubtotalForCat > 0) {
+              // Calculate the overall items subtotal (before tax)
+              const overallSubtotal = items.reduce((s, item) => s + (item.price ?? 0), 0);
+              // Apply proportional tax: tx.amount may include tax
+              // proportion = itemSubtotalForCat / overallSubtotal
+              const proportion = overallSubtotal > 0 ? itemSubtotalForCat / overallSubtotal : 0;
+              spent += Math.round(tx.amount * proportion);
+            }
+          } else {
+            // Non-receipt: use tx.category as before
+            if (tx.category === limit.name) {
+              spent += tx.amount;
+            }
+          }
+        }
       }
       return {
         id: limit.id,
