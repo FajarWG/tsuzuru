@@ -14,8 +14,15 @@ import {
 import {
   addBudgetLimitAction,
   updateBudgetLimitAction,
+  updateBudgetSubCategoriesAction,
   deleteBudgetLimitAction,
 } from "@/lib/actions/budgets";
+import {
+  SubCatOption,
+  LIVING_EXPENSES_DEFAULT_SUBCATS,
+  PERSONAL_SPENDING_DEFAULT_SUBCATS,
+  getDefaultSubCats,
+} from "@/lib/categories";
 import TemplatesConfigList from "@/components/templates/TemplatesConfigList";
 import {
   IconCalendarRepeat,
@@ -36,7 +43,11 @@ import {
   IconActivity,
   IconRefresh,
 } from "@tabler/icons-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import {
@@ -100,6 +111,7 @@ interface BudgetLimitItem {
   name: string;
   label: string;
   limit: number;
+  subCategories?: SubCatOption[] | null;
 }
 
 interface SettingsFormProps {
@@ -131,36 +143,39 @@ function getBudgetStyle(name: string, index: number) {
     return {
       icon: IconCurrencyYen,
       bgClass: "bg-primary/10 text-primary",
-      description: "Main spending limit for the entire month across all financial accounts. Used to calculate overall remaining balance."
+      description:
+        "Main spending limit for the entire month across all financial accounts. Used to calculate overall remaining balance.",
     };
   }
-  if (name === "pocket_money") {
+  if (name === "living_expenses") {
     return {
       icon: IconWallet,
-      bgClass: "bg-primary/15 text-primary/80",
-      description: "Allowance allocated for daily items, snacks, transport, and other flexible pocket money expenses."
+      bgClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500",
+      description:
+        "All essential living costs: groceries, utilities (gas, electricity, water), rent, household supplies, and healthcare.",
     };
   }
-  if (name === "shopping") {
+  if (name === "personal_spending") {
     return {
       icon: IconCreditCard,
       bgClass: "bg-amber-500/10 text-amber-600 dark:text-amber-500",
-      description: "Allocation designated for non-daily purchases like clothing, electronics, and household goods."
+      description:
+        "Discretionary and personal enjoyment expenses: dining out, coffee, snacks, drinks, shopping for wants, entertainment, and hobbies.",
     };
   }
-  
+
   const colors = [
-    { bgClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500" },
     { bgClass: "bg-blue-500/10 text-blue-600 dark:text-blue-500" },
     { bgClass: "bg-rose-500/10 text-rose-600 dark:text-rose-500" },
     { bgClass: "bg-violet-500/10 text-violet-600 dark:text-violet-500" },
     { bgClass: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-500" },
+    { bgClass: "bg-pink-500/10 text-pink-600 dark:text-pink-500" },
   ];
   const color = colors[index % colors.length];
   return {
     icon: IconWallet,
     bgClass: color.bgClass,
-    description: `Budget limit category for ${name.replace(/_/g, " ")} transactions.`
+    description: `Budget limit category for ${name.replace(/_/g, " ")} transactions.`,
   };
 }
 
@@ -184,21 +199,36 @@ export default function SettingsForm({
   const [isAddingBudget, setIsAddingBudget] = useState(false);
 
   const [editBudgetOpen, setEditBudgetOpen] = useState(false);
-  const [editingBudget, setEditingBudget] = useState<BudgetLimitItem | null>(null);
+  const [editingBudget, setEditingBudget] = useState<BudgetLimitItem | null>(
+    null,
+  );
   const [editBudgetLabel, setEditBudgetLabel] = useState("");
   const [editBudgetLimit, setEditBudgetLimit] = useState("");
   const [isUpdatingBudget, setIsUpdatingBudget] = useState(false);
 
   const [deleteBudgetOpen, setDeleteBudgetOpen] = useState(false);
-  const [deletingBudget, setDeletingBudget] = useState<BudgetLimitItem | null>(null);
+  const [deletingBudget, setDeletingBudget] = useState<BudgetLimitItem | null>(
+    null,
+  );
   const [isDeletingBudget, setIsDeletingBudget] = useState(false);
+
+  // Subcategory management state
+  const [managingSubCatsFor, setManagingSubCatsFor] =
+    useState<BudgetLimitItem | null>(null);
+  const [subCatsDialogOpen, setSubCatsDialogOpen] = useState(false);
+  const [editingSubCats, setEditingSubCats] = useState<SubCatOption[]>([]);
+  const [newSubCatLabel, setNewSubCatLabel] = useState("");
+  const [isSavingSubCats, setIsSavingSubCats] = useState(false);
 
   // Recommendation Calculator state
   const [recommendationOpen, setRecommendationOpen] = useState(false);
   const [salaryInput, setSalaryInput] = useState("");
-  const [savingsType, setSavingsType] = useState<"percentage" | "nominal">("percentage");
+  const [savingsType, setSavingsType] = useState<"percentage" | "nominal">(
+    "percentage",
+  );
   const [savingsValue, setSavingsValue] = useState("20");
-  const [isApplyingRecommendation, setIsApplyingRecommendation] = useState(false);
+  const [isApplyingRecommendation, setIsApplyingRecommendation] =
+    useState(false);
 
   // Collapse states for profile tab cards
   const [showAccounts, setShowAccounts] = useState(false);
@@ -206,7 +236,9 @@ export default function SettingsForm({
   const [showDangerZone, setShowDangerZone] = useState(false);
 
   // Main Currency state
-  const [mainCurrency, setMainCurrency] = useState(userSettings.budgetCurrency || "JPY");
+  const [mainCurrency, setMainCurrency] = useState(
+    userSettings.budgetCurrency || "JPY",
+  );
   const [isSavingCurrency, setIsSavingCurrency] = useState(false);
   const [currencySuccess, setCurrencySuccess] = useState(false);
 
@@ -218,9 +250,17 @@ export default function SettingsForm({
   const handleSaveCurrency = async () => {
     setIsSavingCurrency(true);
     try {
-      const monthlyLimit = budgetLimits.find((b) => b.name === "monthly")?.limit || userSettings.monthlyBudget;
-      const pocketLimit = budgetLimits.find((b) => b.name === "pocket_money")?.limit || userSettings.pocketMoneyLimit;
-      const shoppingLimitVal = budgetLimits.find((b) => b.name === "shopping")?.limit || userSettings.shoppingLimit;
+      const monthlyLimit =
+        budgetLimits.find((b) => b.name === "monthly")?.limit ||
+        userSettings.monthlyBudget;
+      const pocketLimit =
+        budgetLimits.find(
+          (b) => b.name === "living_expenses" || b.name === "pocket_money",
+        )?.limit || userSettings.pocketMoneyLimit;
+      const shoppingLimitVal =
+        budgetLimits.find(
+          (b) => b.name === "personal_spending" || b.name === "shopping",
+        )?.limit || userSettings.shoppingLimit;
 
       const res = await updateUserSettingsAction({
         userId,
@@ -245,8 +285,10 @@ export default function SettingsForm({
     }
   };
 
-  const budgetCurrencySymbol = userSettings.budgetCurrency === "JPY" ? "¥" : "Rp";
-  const budgetCurrencyPadding = userSettings.budgetCurrency === "JPY" ? "pl-7" : "pl-9";
+  const budgetCurrencySymbol =
+    userSettings.budgetCurrency === "JPY" ? "¥" : "Rp";
+  const budgetCurrencyPadding =
+    userSettings.budgetCurrency === "JPY" ? "pl-7" : "pl-9";
 
   // Accounts CRUD state
   const [accountList, setAccountList] = useState<AccountItem[]>(accounts);
@@ -269,8 +311,10 @@ export default function SettingsForm({
   const [editAccBalance, setEditAccBalance] = useState("");
   const [editAccIsActive, setEditAccIsActive] = useState(true);
   const [isSavingAcc, setIsSavingAcc] = useState(false);
-  const [addAccDefaultPaymentAccountId, setAddAccDefaultPaymentAccountId] = useState("");
-  const [editAccDefaultPaymentAccountId, setEditAccDefaultPaymentAccountId] = useState("");
+  const [addAccDefaultPaymentAccountId, setAddAccDefaultPaymentAccountId] =
+    useState("");
+  const [editAccDefaultPaymentAccountId, setEditAccDefaultPaymentAccountId] =
+    useState("");
 
   // Delete Account Dialog state
   const [deletingAccount, setDeletingAccount] = useState<AccountItem | null>(
@@ -323,7 +367,11 @@ export default function SettingsForm({
 
     setIsUpdatingBudget(true);
     try {
-      const res = await updateBudgetLimitAction(editingBudget.id, editBudgetLabel, limitVal);
+      const res = await updateBudgetLimitAction(
+        editingBudget.id,
+        editBudgetLabel,
+        limitVal,
+      );
       if (res.success) {
         toast.success("Budget limit updated successfully");
         setEditBudgetOpen(false);
@@ -394,19 +442,29 @@ export default function SettingsForm({
     }
 
     const monthlyId = budgetLimits.find((b) => b.name === "monthly")?.id;
-    const pocketId = budgetLimits.find((b) => b.name === "pocket_money")?.id;
-    const shoppingId = budgetLimits.find((b) => b.name === "shopping")?.id;
+    const pocketId = budgetLimits.find((b) => b.name === "living_expenses")?.id;
+    const shoppingId = budgetLimits.find(
+      (b) => b.name === "personal_spending",
+    )?.id;
 
     setIsApplyingRecommendation(true);
     try {
       if (monthlyId) {
-        await updateBudgetLimitAction(monthlyId, "Monthly Expected Budget", monthlyRec);
+        await updateBudgetLimitAction(
+          monthlyId,
+          "Monthly Expected Budget",
+          monthlyRec,
+        );
       }
       if (pocketId) {
-        await updateBudgetLimitAction(pocketId, "Pocket Money", pocketRec);
+        await updateBudgetLimitAction(pocketId, "Living Expenses", pocketRec);
       }
       if (shoppingId) {
-        await updateBudgetLimitAction(shoppingId, "Shopping", shoppingRec);
+        await updateBudgetLimitAction(
+          shoppingId,
+          "Personal Spending",
+          shoppingRec,
+        );
       }
 
       toast.success("Recommended budget limits applied successfully");
@@ -420,13 +478,40 @@ export default function SettingsForm({
     }
   };
 
+  // --- SubCategory Management Handler ---
+  const handleSaveSubCategories = async () => {
+    if (!managingSubCatsFor) return;
+    setIsSavingSubCats(true);
+    try {
+      const res = await updateBudgetSubCategoriesAction(
+        managingSubCatsFor.id,
+        editingSubCats,
+      );
+      if (res.success) {
+        toast.success("Subcategories updated successfully");
+        setSubCatsDialogOpen(false);
+        setManagingSubCatsFor(null);
+        // Refresh settings to reload updated BudgetLimit from server
+        onRefresh?.();
+        window.dispatchEvent(new CustomEvent("transaction-added"));
+      } else {
+        toast.error(res.error || "Failed to update subcategories");
+      }
+    } catch {
+      toast.error("An error occurred while saving subcategories");
+    } finally {
+      setIsSavingSubCats(false);
+    }
+  };
+
   // --- Add Account Handler ---
   const handleAddAccount = async () => {
     if (!addAccName.trim()) {
       toast.error("Please enter account name");
       return;
     }
-    const parsedBalance = addAccType === "credit_card" ? 0 : parseInputAmount(addAccBalance);
+    const parsedBalance =
+      addAccType === "credit_card" ? 0 : parseInputAmount(addAccBalance);
 
     setIsAddingAcc(true);
 
@@ -436,7 +521,10 @@ export default function SettingsForm({
         currency: addAccCurrency,
         balance: parsedBalance,
         type: addAccType,
-        defaultPaymentAccountId: addAccType === "credit_card" ? addAccDefaultPaymentAccountId || null : null,
+        defaultPaymentAccountId:
+          addAccType === "credit_card"
+            ? addAccDefaultPaymentAccountId || null
+            : null,
       });
 
       if (res.success && res.account) {
@@ -480,7 +568,12 @@ export default function SettingsForm({
       toast.error("Please enter account name");
       return;
     }
-    const parsedBalance = editAccType === "credit_card" ? (editingAccount.type === "credit_card" ? editingAccount.balance : 0) : parseInputAmount(editAccBalance);
+    const parsedBalance =
+      editAccType === "credit_card"
+        ? editingAccount.type === "credit_card"
+          ? editingAccount.balance
+          : 0
+        : parseInputAmount(editAccBalance);
 
     setIsSavingAcc(true);
 
@@ -491,7 +584,10 @@ export default function SettingsForm({
         balance: parsedBalance,
         type: editAccType,
         isActive: editAccIsActive,
-        defaultPaymentAccountId: editAccType === "credit_card" ? editAccDefaultPaymentAccountId || null : null,
+        defaultPaymentAccountId:
+          editAccType === "credit_card"
+            ? editAccDefaultPaymentAccountId || null
+            : null,
       });
 
       if (res.success && res.account) {
@@ -599,7 +695,11 @@ export default function SettingsForm({
                     <motion.div
                       initial={{ scale: 0, rotate: -45 }}
                       animate={{ scale: 1, rotate: 0 }}
-                      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 300,
+                        damping: 20,
+                      }}
                       className="text-green-600 bg-green-500/10 p-0.5 rounded-full"
                     >
                       <IconCheck className="size-3 stroke-[3]" />
@@ -612,7 +712,11 @@ export default function SettingsForm({
                   )}
                 </button>
               </PopoverTrigger>
-              <PopoverContent className="w-56 p-3 rounded-xl border border-border bg-popover text-popover-foreground shadow-md" side="bottom" align="start">
+              <PopoverContent
+                className="w-56 p-3 rounded-xl border border-border bg-popover text-popover-foreground shadow-md"
+                side="bottom"
+                align="start"
+              >
                 <div className="flex flex-col gap-1.5">
                   <p className="text-xs font-semibold">
                     {syncStatus === "syncing" && "Updating data..."}
@@ -620,9 +724,12 @@ export default function SettingsForm({
                     {syncStatus === "error" && "Sync failed"}
                   </p>
                   <p className="text-[10px] text-muted-foreground leading-relaxed">
-                    {syncStatus === "syncing" && "Synchronizing user settings and templates with server."}
-                    {syncStatus === "success" && "Successfully updated user settings and templates!"}
-                    {syncStatus === "error" && "Could not sync data. Check your internet connection."}
+                    {syncStatus === "syncing" &&
+                      "Synchronizing user settings and templates with server."}
+                    {syncStatus === "success" &&
+                      "Successfully updated user settings and templates!"}
+                    {syncStatus === "error" &&
+                      "Could not sync data. Check your internet connection."}
                   </p>
                   {onRefresh && syncStatus !== "syncing" && (
                     <button
@@ -650,384 +757,466 @@ export default function SettingsForm({
         transition={{ duration: 0.45, ease: [0.25, 1, 0.5, 1], delay: 0.1 }}
         className="flex flex-col gap-4 flex-1"
       >
-        <Tabs key={defaultTab} defaultValue={defaultTab} className="gap-4" onValueChange={() => onRefresh?.()}>
-        <TabsList className="grid h-auto w-full grid-cols-3 rounded-2xl">
-          <TabsTrigger value="templates" className="text-[10px] cursor-pointer">
-            <IconCalendarRepeat className="size-3.5" />
-            Bills
-          </TabsTrigger>
-          <TabsTrigger value="budget" className="text-[10px] cursor-pointer">
-            <IconCurrencyYen className="size-3.5" />
-            Budget
-          </TabsTrigger>
-          <TabsTrigger value="profile" className="text-[10px] cursor-pointer">
-            <IconUser className="size-3.5" />
-            Profile
-          </TabsTrigger>
-        </TabsList>
+        <Tabs
+          key={defaultTab}
+          defaultValue={defaultTab}
+          className="gap-4"
+          onValueChange={() => onRefresh?.()}
+        >
+          <TabsList className="grid h-auto w-full grid-cols-3 rounded-2xl">
+            <TabsTrigger
+              value="templates"
+              className="text-[10px] cursor-pointer"
+            >
+              <IconCalendarRepeat className="size-3.5" />
+              Bills
+            </TabsTrigger>
+            <TabsTrigger value="budget" className="text-[10px] cursor-pointer">
+              <IconCurrencyYen className="size-3.5" />
+              Budget
+            </TabsTrigger>
+            <TabsTrigger value="profile" className="text-[10px] cursor-pointer">
+              <IconUser className="size-3.5" />
+              Profile
+            </TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="templates" className="mt-0">
-          <section className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5">
-            <TemplatesConfigList
-              templates={templates}
-              accounts={accountsForTemplates}
-              paidTemplateNamesThisMonth={paidTemplateNamesThisMonth}
-              friendNames={friendNames}
-            />
-          </section>
-        </TabsContent>
+          <TabsContent value="templates" className="mt-0">
+            <section className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5">
+              <TemplatesConfigList
+                templates={templates}
+                accounts={accountsForTemplates}
+                paidTemplateNamesThisMonth={paidTemplateNamesThisMonth}
+                friendNames={friendNames}
+                budgetCategories={budgetLimits}
+              />
+            </section>
+          </TabsContent>
 
-        <TabsContent value="budget" className="mt-0">
-          <section className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
-            <div className="flex items-center justify-between gap-3 pb-2 border-b border-border/20">
-              <div className="flex items-center gap-2">
-                <IconCurrencyYen className="size-4 text-primary" />
-                <h2 className="text-sm font-bold text-foreground">
-                  Budget Limits
-                </h2>
+          <TabsContent value="budget" className="mt-0">
+            <section className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
+              <div className="flex items-center justify-between gap-3 pb-2 border-b border-border/20">
+                <div className="flex items-center gap-2">
+                  <IconCurrencyYen className="size-4 text-primary" />
+                  <h2 className="text-sm font-bold text-foreground">
+                    Budget Limits
+                  </h2>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setAddBudgetLabel("");
+                    setAddBudgetLimit("");
+                    setAddBudgetOpen(true);
+                  }}
+                  className="cursor-pointer gap-1 text-xs px-2.5 h-8 rounded-lg"
+                >
+                  <IconPlus className="size-3.5" /> Add Budget Card
+                </Button>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setAddBudgetLabel("");
-                  setAddBudgetLimit("");
-                  setAddBudgetOpen(true);
-                }}
-                className="cursor-pointer gap-1 text-xs px-2.5 h-8 rounded-lg"
-              >
-                <IconPlus className="size-3.5" /> Add Budget Card
-              </Button>
-            </div>
 
-            <div className="flex flex-col gap-4">
-              {budgetLimits.map((item, idx) => {
-                const style = getBudgetStyle(item.name, idx);
-                const BudgetIcon = style.icon;
-                return (
-                  <div key={item.id} className="flex items-center justify-between gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
-                    <div className="flex items-start gap-3 min-w-0 flex-1">
-                      <div className={cn("p-2 rounded-lg shrink-0", style.bgClass)}>
-                        <BudgetIcon className="size-4" />
+              <div className="flex flex-col gap-4">
+                {budgetLimits.map((item, idx) => {
+                  const style = getBudgetStyle(item.name, idx);
+                  const BudgetIcon = style.icon;
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex flex-col gap-2 p-3 bg-muted/30 border border-border/30 rounded-xl"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          <div
+                            className={cn(
+                              "p-2 rounded-lg shrink-0",
+                              style.bgClass,
+                            )}
+                          >
+                            <BudgetIcon className="size-4" />
+                          </div>
+                          <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                              {item.label}
+                            </span>
+                            <span className="text-sm font-bold text-foreground mt-0.5">
+                              {formatCurrency(
+                                item.limit,
+                                userSettings.budgetCurrency,
+                              )}
+                            </span>
+                            <p className="text-[10px] text-muted-foreground leading-relaxed mt-1">
+                              {style.description}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setEditingBudget(item);
+                              setEditBudgetLabel(item.label);
+                              setEditBudgetLimit(formatInputAmount(item.limit));
+                              setEditBudgetOpen(true);
+                            }}
+                            className="size-8 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
+                            title="Edit budget"
+                          >
+                            <IconEdit className="size-4" />
+                          </Button>
+
+                          {item.name !== "monthly" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setDeletingBudget(item);
+                                setDeleteBudgetOpen(true);
+                              }}
+                              className="size-8 rounded-lg text-destructive hover:bg-destructive/10 hover:text-destructive cursor-pointer"
+                              title="Delete budget"
+                            >
+                              <IconTrash className="size-4" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                        <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-                          {item.label}
-                        </span>
-                        <span className="text-sm font-bold text-foreground mt-0.5">
-                          {formatCurrency(item.limit, userSettings.budgetCurrency)}
-                        </span>
-                        <p className="text-[10px] text-muted-foreground leading-relaxed mt-1">
-                          {style.description}
-                        </p>
-                      </div>
+
+                      {/* Subcategories section — shown for living_expenses and personal_spending */}
+                      {(item.name === "living_expenses" ||
+                        item.name === "personal_spending") &&
+                        (() => {
+                          const subcats: SubCatOption[] =
+                            item.subCategories && item.subCategories.length > 0
+                              ? item.subCategories
+                              : getDefaultSubCats(item.name);
+                          return (
+                            <div className="flex flex-col gap-1.5 pt-2 pl-11 border-t border-border/15">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+                                  Subcategories
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setManagingSubCatsFor(item);
+                                    setEditingSubCats(subcats);
+                                    setNewSubCatLabel("");
+                                    setSubCatsDialogOpen(true);
+                                  }}
+                                  className="text-[9px] font-bold text-primary hover:underline cursor-pointer"
+                                >
+                                  Manage
+                                </button>
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {subcats.map((sc) => (
+                                  <span
+                                    key={sc.value}
+                                    className="px-1.5 py-0.5 text-[9px] font-semibold rounded-md bg-background border border-border/40 text-muted-foreground"
+                                  >
+                                    {sc.label}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
                     </div>
-                    
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setEditingBudget(item);
-                          setEditBudgetLabel(item.label);
-                          setEditBudgetLimit(formatInputAmount(item.limit));
-                          setEditBudgetOpen(true);
-                        }}
-                        className="size-8 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
-                        title="Edit budget"
-                      >
-                        <IconEdit className="size-4" />
-                      </Button>
-                      
-                      {item.name !== "monthly" && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setDeletingBudget(item);
-                            setDeleteBudgetOpen(true);
-                          }}
-                          className="size-8 rounded-lg text-destructive hover:bg-destructive/10 hover:text-destructive cursor-pointer"
-                          title="Delete budget"
-                        >
-                          <IconTrash className="size-4" />
-                        </Button>
+                  );
+                })}
+              </div>
+
+              <div className="pt-2 border-t border-border/20 flex justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSalaryInput("");
+                    setSavingsType("percentage");
+                    setSavingsValue("20");
+                    setRecommendationOpen(true);
+                  }}
+                  className="cursor-pointer gap-1.5 text-xs font-semibold"
+                >
+                  <IconActivity className="size-3.5 text-primary" />
+                  Calculate Recommendation
+                </Button>
+              </div>
+            </section>
+          </TabsContent>
+
+          <TabsContent value="profile" className="mt-0 flex flex-col gap-4">
+            {/* Accounts Card */}
+            <section className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
+              <div
+                className={cn(
+                  "flex items-center justify-between cursor-pointer select-none transition-all",
+                  showAccounts ? "pb-2 border-b border-border/20" : "",
+                )}
+                onClick={() => setShowAccounts((v) => !v)}
+              >
+                <div className="flex items-center gap-2">
+                  <IconWallet className="size-4 text-primary" />
+                  <h2 className="text-sm font-bold text-foreground">
+                    Financial Accounts
+                  </h2>
+                  {showAccounts && (
+                    <IconChevronUp className="size-4 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {showAccounts ? (
+                    <Button
+                      variant="outline"
+                      size="icon-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setAddAccName("");
+                        setAddAccBalance("");
+                        setAddAccCurrency("JPY");
+                        setAddAccType("bank");
+                        setAddAccountOpen(true);
+                      }}
+                      aria-label="Add financial account"
+                      className="cursor-pointer size-8 rounded-lg"
+                    >
+                      <IconPlus className="size-3.5" />
+                    </Button>
+                  ) : (
+                    <IconChevronDown className="size-4 text-muted-foreground" />
+                  )}
+                </div>
+              </div>
+
+              <AnimatePresence initial={false}>
+                {showAccounts && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.3, ease: [0.25, 1, 0.5, 1] }}
+                    className="overflow-hidden"
+                  >
+                    <div className="flex flex-col gap-2 pt-2">
+                      {accountList.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">
+                          No accounts added yet.
+                        </p>
+                      ) : (
+                        accountList.map((acc) => (
+                          <div
+                            key={acc.id}
+                            className={cn(
+                              "flex items-center justify-between gap-3 p-3 bg-muted/40 border border-border/25 rounded-xl hover:bg-muted/70 transition-colors",
+                              !acc.isActive && "opacity-60",
+                            )}
+                          >
+                            <div className="flex min-w-0 items-center gap-2.5">
+                              <div className="p-2 bg-white dark:bg-zinc-800 rounded-lg shadow-2xs border border-border/20">
+                                {acc.type === "investment" ? (
+                                  <IconActivity className="size-4 text-emerald-600 dark:text-emerald-400" />
+                                ) : acc.type === "credit_card" ? (
+                                  <IconCreditCard className="size-4 text-rose-500 dark:text-rose-400" />
+                                ) : acc.type === "ewallet" ? (
+                                  <IconWallet className="size-4 text-amber-500 dark:text-amber-400" />
+                                ) : (
+                                  <IconBuildingBank className="size-4 text-blue-500 dark:text-blue-400" />
+                                )}
+                              </div>
+                              <div className="flex min-w-0 flex-col gap-0.5">
+                                <span className="truncate text-xs font-semibold text-foreground leading-tight">
+                                  {acc.name}
+                                </span>
+                                <span className="truncate text-[10px] text-muted-foreground leading-none capitalize">
+                                  {acc.type === "credit_card"
+                                    ? "Credit Card"
+                                    : acc.type === "ewallet"
+                                      ? "E-Wallet"
+                                      : acc.type}{" "}
+                                  · {acc.currency}{" "}
+                                  {!acc.isActive && "· Inactive"}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex shrink-0 items-center gap-2">
+                              <span className="text-xs font-sans font-bold text-foreground mr-1">
+                                {formatCurrency(acc.balance, acc.currency)}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="icon-xs"
+                                onClick={() => openEditAccount(acc)}
+                                aria-label="Edit account"
+                                className="cursor-pointer"
+                              >
+                                <IconEdit className="size-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))
                       )}
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-            
-            <div className="pt-2 border-t border-border/20 flex justify-end">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSalaryInput("");
-                  setSavingsType("percentage");
-                  setSavingsValue("20");
-                  setRecommendationOpen(true);
-                }}
-                className="cursor-pointer gap-1.5 text-xs font-semibold"
-              >
-                <IconActivity className="size-3.5 text-primary" />
-                Calculate Recommendation
-              </Button>
-            </div>
-          </section>
-        </TabsContent>
-
-        <TabsContent value="profile" className="mt-0 flex flex-col gap-4">
-          {/* Accounts Card */}
-          <section className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
-            <div 
-              className={cn(
-                "flex items-center justify-between cursor-pointer select-none transition-all",
-                showAccounts ? "pb-2 border-b border-border/20" : ""
-              )}
-              onClick={() => setShowAccounts((v) => !v)}
-            >
-              <div className="flex items-center gap-2">
-                <IconWallet className="size-4 text-primary" />
-                <h2 className="text-sm font-bold text-foreground">Financial Accounts</h2>
-                {showAccounts && (
-                  <IconChevronUp className="size-4 text-muted-foreground" />
+                  </motion.div>
                 )}
-              </div>
-              <div className="flex items-center gap-2">
-                {showAccounts ? (
-                  <Button
-                    variant="outline"
-                    size="icon-xs"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setAddAccName("");
-                      setAddAccBalance("");
-                      setAddAccCurrency("JPY");
-                      setAddAccType("bank");
-                      setAddAccountOpen(true);
-                    }}
-                    aria-label="Add financial account"
-                    className="cursor-pointer size-8 rounded-lg"
-                  >
-                    <IconPlus className="size-3.5" />
-                  </Button>
+              </AnimatePresence>
+            </section>
+            {/* Profile Card */}
+            <section className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
+              <div
+                className={cn(
+                  "flex items-center justify-between cursor-pointer select-none transition-all",
+                  showProfile ? "pb-2 border-b border-border/20" : "",
+                )}
+                onClick={() => setShowProfile((v) => !v)}
+              >
+                <div className="flex items-center gap-2">
+                  <IconUser className="size-4 text-primary" />
+                  <h2 className="text-sm font-bold text-foreground">Profile</h2>
+                </div>
+                {showProfile ? (
+                  <IconChevronUp className="size-4 text-muted-foreground" />
                 ) : (
                   <IconChevronDown className="size-4 text-muted-foreground" />
                 )}
               </div>
-            </div>
 
-            <AnimatePresence initial={false}>
-              {showAccounts && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.3, ease: [0.25, 1, 0.5, 1] }}
-                  className="overflow-hidden"
-                >
-                  <div className="flex flex-col gap-2 pt-2">
-                    {accountList.length === 0 ? (
-                      <p className="text-xs text-muted-foreground text-center py-4">
-                        No accounts added yet.
-                      </p>
-                    ) : (
-                      accountList.map((acc) => (
-                        <div
-                          key={acc.id}
-                          className={cn(
-                            "flex items-center justify-between gap-3 p-3 bg-muted/40 border border-border/25 rounded-xl hover:bg-muted/70 transition-colors",
-                            !acc.isActive && "opacity-60",
-                          )}
-                        >
-                          <div className="flex min-w-0 items-center gap-2.5">
-                            <div className="p-2 bg-white dark:bg-zinc-800 rounded-lg shadow-2xs border border-border/20">
-                              {acc.type === "investment" ? (
-                                <IconActivity className="size-4 text-emerald-600 dark:text-emerald-400" />
-                              ) : acc.type === "credit_card" ? (
-                                <IconCreditCard className="size-4 text-rose-500 dark:text-rose-400" />
-                              ) : acc.type === "ewallet" ? (
-                                <IconWallet className="size-4 text-amber-500 dark:text-amber-400" />
-                              ) : (
-                                <IconBuildingBank className="size-4 text-blue-500 dark:text-blue-400" />
-                              )}
-                            </div>
-                            <div className="flex min-w-0 flex-col gap-0.5">
-                              <span className="truncate text-xs font-semibold text-foreground leading-tight">
-                                {acc.name}
-                              </span>
-                              <span className="truncate text-[10px] text-muted-foreground leading-none capitalize">
-                                {acc.type === "credit_card" ? "Credit Card" : acc.type === "ewallet" ? "E-Wallet" : acc.type} · {acc.currency}{" "}
-                                {!acc.isActive && "· Inactive"}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="flex shrink-0 items-center gap-2">
-                            <span className="text-xs font-sans font-bold text-foreground mr-1">
-                              {formatCurrency(acc.balance, acc.currency)}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="icon-xs"
-                              onClick={() => openEditAccount(acc)}
-                              aria-label="Edit account"
-                              className="cursor-pointer"
-                            >
-                              <IconEdit className="size-3.5" />
-                            </Button>
-                          </div>
+              <AnimatePresence initial={false}>
+                {showProfile && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.3, ease: [0.25, 1, 0.5, 1] }}
+                    className="overflow-hidden"
+                  >
+                    <div className="flex flex-col gap-4 pt-2">
+                      <div className="flex items-center gap-3">
+                        {profile.image && (
+                          <img
+                            src={profile.image}
+                            alt="Avatar"
+                            className="size-11 rounded-full border shadow-sm"
+                          />
+                        )}
+                        <div className="flex min-w-0 flex-col gap-0.5">
+                          <span className="truncate text-sm font-bold text-foreground leading-tight">
+                            {profile.name || "Google User"}
+                          </span>
+                          <span className="truncate text-xs text-muted-foreground leading-none">
+                            {profile.email || "No email linked"}
+                          </span>
                         </div>
-                      ))
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </section>
-          {/* Profile Card */}
-          <section className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
-            <div 
-              className={cn(
-                "flex items-center justify-between cursor-pointer select-none transition-all",
-                showProfile ? "pb-2 border-b border-border/20" : ""
-              )}
-              onClick={() => setShowProfile((v) => !v)}
-            >
-              <div className="flex items-center gap-2">
-                <IconUser className="size-4 text-primary" />
-                <h2 className="text-sm font-bold text-foreground">Profile</h2>
-              </div>
-              {showProfile ? (
-                <IconChevronUp className="size-4 text-muted-foreground" />
-              ) : (
-                <IconChevronDown className="size-4 text-muted-foreground" />
-              )}
-            </div>
-
-            <AnimatePresence initial={false}>
-              {showProfile && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.3, ease: [0.25, 1, 0.5, 1] }}
-                  className="overflow-hidden"
-                >
-                  <div className="flex flex-col gap-4 pt-2">
-                    <div className="flex items-center gap-3">
-                      {profile.image && (
-                        <img
-                          src={profile.image}
-                          alt="Avatar"
-                          className="size-11 rounded-full border shadow-sm"
-                        />
-                      )}
-                      <div className="flex min-w-0 flex-col gap-0.5">
-                        <span className="truncate text-sm font-bold text-foreground leading-tight">
-                          {profile.name || "Google User"}
-                        </span>
-                        <span className="truncate text-xs text-muted-foreground leading-none">
-                          {profile.email || "No email linked"}
-                        </span>
                       </div>
-                    </div>
 
-                    {/* Main Currency Setting */}
-                    <div className="flex flex-col gap-2 pt-4 border-t border-border/20">
-                      <Label className="text-xs font-semibold">Main Currency</Label>
-                      <div className="flex gap-2">
-                        <Select value={mainCurrency} onValueChange={setMainCurrency}>
-                          <SelectTrigger className="h-10 text-xs font-semibold flex-1">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="JPY" className="text-xs">
-                              JPY (¥)
-                            </SelectItem>
-                            <SelectItem value="IDR" className="text-xs">
-                              IDR (Rp)
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          size="sm"
-                          onClick={handleSaveCurrency}
-                          disabled={isSavingCurrency}
-                          className="h-10 min-w-[72px] text-xs font-medium cursor-pointer"
-                        >
-                          {isSavingCurrency ? (
-                            <IconLoader className="size-3.5 animate-spin" />
-                          ) : currencySuccess ? (
-                            <IconCheck className="size-3.5" />
-                          ) : (
-                            "Save"
-                          )}
-                        </Button>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
-                        This sets your base budget currency. Dashboard widgets will format and track limits in this currency.
-                      </p>
-                    </div>
-
-                    {/* Danger Zone */}
-                    <div className="flex flex-col gap-2 pt-4 border-t border-border/20">
-                      <div 
-                        className="flex items-center justify-between cursor-pointer select-none"
-                        onClick={() => setShowDangerZone((v) => !v)}
-                      >
-                        <Label className="text-xs font-semibold text-destructive cursor-pointer">Danger Zone</Label>
-                        {showDangerZone ? (
-                          <IconChevronUp className="size-4 text-destructive" />
-                        ) : (
-                          <IconChevronDown className="size-4 text-destructive" />
-                        )}
-                      </div>
-                      
-                      <AnimatePresence initial={false}>
-                        {showDangerZone && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.3, ease: [0.25, 1, 0.5, 1] }}
-                            className="overflow-hidden"
+                      {/* Main Currency Setting */}
+                      <div className="flex flex-col gap-2 pt-4 border-t border-border/20">
+                        <Label className="text-xs font-semibold">
+                          Main Currency
+                        </Label>
+                        <div className="flex gap-2">
+                          <Select
+                            value={mainCurrency}
+                            onValueChange={setMainCurrency}
                           >
-                            <div className="flex flex-col gap-2 pt-2">
-                              <p className="text-[10px] text-muted-foreground leading-relaxed">
-                                Permanently delete all accounts, transactions, bills, and reset settings.
-                              </p>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => setResetDialogOpen(true)}
-                                className="w-full gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/80 transition-colors cursor-pointer"
-                              >
-                                <IconTrash className="size-4" />
-                                Reset Account Data
-                              </Button>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
+                            <SelectTrigger className="h-10 text-xs font-semibold flex-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="JPY" className="text-xs">
+                                JPY (¥)
+                              </SelectItem>
+                              <SelectItem value="IDR" className="text-xs">
+                                IDR (Rp)
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            size="sm"
+                            onClick={handleSaveCurrency}
+                            disabled={isSavingCurrency}
+                            className="h-10 min-w-[72px] text-xs font-medium cursor-pointer"
+                          >
+                            {isSavingCurrency ? (
+                              <IconLoader className="size-3.5 animate-spin" />
+                            ) : currencySuccess ? (
+                              <IconCheck className="size-3.5" />
+                            ) : (
+                              "Save"
+                            )}
+                          </Button>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground leading-relaxed mt-0.5">
+                          This sets your base budget currency. Dashboard widgets
+                          will format and track limits in this currency.
+                        </p>
+                      </div>
 
-                    <Button
-                      variant="destructive"
-                      onClick={() => signOut({ callbackUrl: "/login" })}
-                      className="w-full gap-2 cursor-pointer mt-2"
-                    >
-                      <IconLogout className="size-4" />
-                      Sign Out
-                    </Button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </section>
-        </TabsContent>
-      </Tabs>
+                      {/* Danger Zone */}
+                      <div className="flex flex-col gap-2 pt-4 border-t border-border/20">
+                        <div
+                          className="flex items-center justify-between cursor-pointer select-none"
+                          onClick={() => setShowDangerZone((v) => !v)}
+                        >
+                          <Label className="text-xs font-semibold text-destructive cursor-pointer">
+                            Danger Zone
+                          </Label>
+                          {showDangerZone ? (
+                            <IconChevronUp className="size-4 text-destructive" />
+                          ) : (
+                            <IconChevronDown className="size-4 text-destructive" />
+                          )}
+                        </div>
+
+                        <AnimatePresence initial={false}>
+                          {showDangerZone && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{
+                                duration: 0.3,
+                                ease: [0.25, 1, 0.5, 1],
+                              }}
+                              className="overflow-hidden"
+                            >
+                              <div className="flex flex-col gap-2 pt-2">
+                                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                                  Permanently delete all accounts, transactions,
+                                  bills, and reset settings.
+                                </p>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() => setResetDialogOpen(true)}
+                                  className="w-full gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive hover:border-destructive/80 transition-colors cursor-pointer"
+                                >
+                                  <IconTrash className="size-4" />
+                                  Reset Account Data
+                                </Button>
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+
+                      <Button
+                        variant="destructive"
+                        onClick={() => signOut({ callbackUrl: "/login" })}
+                        className="w-full gap-2 cursor-pointer mt-2"
+                      >
+                        <IconLogout className="size-4" />
+                        Sign Out
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </section>
+          </TabsContent>
+        </Tabs>
       </motion.div>
 
       {/* Add Custom Budget Dialog */}
@@ -1068,7 +1257,9 @@ export default function SettingsForm({
                     type="text"
                     inputMode="numeric"
                     value={addBudgetLimit}
-                    onChange={(e) => setAddBudgetLimit(formatInputAmount(e.target.value))}
+                    onChange={(e) =>
+                      setAddBudgetLimit(formatInputAmount(e.target.value))
+                    }
                     className={cn(budgetCurrencyPadding, "h-10 font-semibold")}
                     placeholder="10,000"
                     required
@@ -1128,14 +1319,25 @@ export default function SettingsForm({
                   onChange={(e) => setEditBudgetLabel(e.target.value)}
                   className="h-10 font-semibold"
                   placeholder="e.g. Food"
-                  disabled={editingBudget ? ["monthly", "pocket_money", "shopping"].includes(editingBudget.name) : false}
+                  disabled={
+                    editingBudget
+                      ? [
+                          "monthly",
+                          "living_expenses",
+                          "personal_spending",
+                        ].includes(editingBudget.name)
+                      : false
+                  }
                   required
                 />
-                {editingBudget && ["monthly", "pocket_money", "shopping"].includes(editingBudget.name) && (
-                  <span className="text-[10px] text-muted-foreground">
-                    System category labels cannot be changed.
-                  </span>
-                )}
+                {editingBudget &&
+                  ["monthly", "living_expenses", "personal_spending"].includes(
+                    editingBudget.name,
+                  ) && (
+                    <span className="text-[10px] text-muted-foreground">
+                      System category labels cannot be changed.
+                    </span>
+                  )}
               </div>
 
               <div className="flex flex-col gap-1.5">
@@ -1148,7 +1350,9 @@ export default function SettingsForm({
                     type="text"
                     inputMode="numeric"
                     value={editBudgetLimit}
-                    onChange={(e) => setEditBudgetLimit(formatInputAmount(e.target.value))}
+                    onChange={(e) =>
+                      setEditBudgetLimit(formatInputAmount(e.target.value))
+                    }
                     className={cn(budgetCurrencyPadding, "h-10 font-semibold")}
                     placeholder="20,000"
                     required
@@ -1194,7 +1398,9 @@ export default function SettingsForm({
         <DialogContent className="max-w-[360px] rounded-2xl p-0">
           <div className="flex flex-col p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-sans text-destructive">Delete Budget Card</DialogTitle>
+              <DialogTitle className="font-sans text-destructive">
+                Delete Budget Card
+              </DialogTitle>
               <DialogDescription className="text-xs">
                 This action will delete the budget category limit.
               </DialogDescription>
@@ -1203,7 +1409,11 @@ export default function SettingsForm({
             <div className="py-4">
               <p className="text-xs text-muted-foreground">
                 Are you sure you want to delete the budget limit card for{" "}
-                <strong className="text-foreground">{deletingBudget?.label}</strong>? Transactions under this category will no longer have a dedicated progress bar.
+                <strong className="text-foreground">
+                  {deletingBudget?.label}
+                </strong>
+                ? Transactions under this category will no longer have a
+                dedicated progress bar.
               </p>
             </div>
 
@@ -1235,6 +1445,152 @@ export default function SettingsForm({
         </DialogContent>
       </Dialog>
 
+      {/* Subcategory Management Dialog */}
+      <Dialog
+        open={subCatsDialogOpen}
+        onOpenChange={(open) => {
+          if (!isSavingSubCats) setSubCatsDialogOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-[360px] rounded-2xl p-0 max-h-[85vh] flex flex-col overflow-hidden">
+          <div className="flex flex-col flex-1 min-h-0 p-5">
+            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
+              <DialogTitle className="font-sans">
+                Manage Subcategories
+              </DialogTitle>
+              <DialogDescription className="text-xs">
+                Customize the subcategory options for{" "}
+                <strong>{managingSubCatsFor?.label}</strong>. These will appear
+                when logging transactions.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex flex-col gap-3 py-4 flex-1 overflow-y-auto">
+              {/* Existing subcats list */}
+              <div className="flex flex-col gap-2">
+                {editingSubCats.map((sc, idx) => (
+                  <div
+                    key={sc.value}
+                    className="flex items-center gap-2 p-2 bg-muted/30 rounded-lg border border-border/20"
+                  >
+                    <span className="flex-1 text-xs font-semibold text-foreground">
+                      {sc.label}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditingSubCats((prev) =>
+                          prev.filter((_, i) => i !== idx),
+                        )
+                      }
+                      className="p-1 text-destructive hover:bg-destructive/10 rounded-md transition-colors cursor-pointer"
+                      title="Remove"
+                    >
+                      <IconTrash className="size-3.5" />
+                    </button>
+                  </div>
+                ))}
+                {editingSubCats.length === 0 && (
+                  <p className="text-[10px] text-muted-foreground text-center py-2">
+                    No subcategories yet. Add one below.
+                  </p>
+                )}
+              </div>
+
+              {/* Add new subcat */}
+              <div className="flex gap-2 pt-2 border-t border-border/20">
+                <Input
+                  value={newSubCatLabel}
+                  onChange={(e) => setNewSubCatLabel(e.target.value)}
+                  placeholder="New subcategory name..."
+                  className="h-9 text-xs flex-1"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const trimmed = newSubCatLabel.trim();
+                      if (!trimmed) return;
+                      const newValue = trimmed
+                        .toLowerCase()
+                        .replace(/\s+/g, "_")
+                        .replace(/[^a-z0-9_]/g, "");
+                      if (editingSubCats.some((sc) => sc.value === newValue))
+                        return;
+                      setEditingSubCats((prev) => [
+                        ...prev,
+                        { value: newValue, label: trimmed },
+                      ]);
+                      setNewSubCatLabel("");
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const trimmed = newSubCatLabel.trim();
+                    if (!trimmed) return;
+                    const newValue = trimmed
+                      .toLowerCase()
+                      .replace(/\s+/g, "_")
+                      .replace(/[^a-z0-9_]/g, "");
+                    if (editingSubCats.some((sc) => sc.value === newValue))
+                      return;
+                    setEditingSubCats((prev) => [
+                      ...prev,
+                      { value: newValue, label: trimmed },
+                    ]);
+                    setNewSubCatLabel("");
+                  }}
+                  className="h-9 shrink-0 cursor-pointer"
+                >
+                  <IconPlus className="size-3.5" />
+                </Button>
+              </div>
+
+              {/* Reset to defaults */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (managingSubCatsFor) {
+                    setEditingSubCats(
+                      getDefaultSubCats(managingSubCatsFor.name),
+                    );
+                  }
+                }}
+                className="text-[10px] text-muted-foreground hover:text-primary text-left cursor-pointer hover:underline underline-offset-2"
+              >
+                Reset to defaults
+              </button>
+            </div>
+
+            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSubCatsDialogOpen(false)}
+                disabled={isSavingSubCats}
+                className="cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSaveSubCategories}
+                disabled={isSavingSubCats || editingSubCats.length === 0}
+                className="min-w-[72px] cursor-pointer"
+              >
+                {isSavingSubCats ? (
+                  <IconLoader className="size-4 animate-spin" />
+                ) : (
+                  "Save"
+                )}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Recommendation Calculator Dialog */}
       <Dialog
         open={recommendationOpen}
@@ -1245,15 +1601,20 @@ export default function SettingsForm({
         <DialogContent className="max-w-[360px] rounded-2xl p-0 max-h-[85vh] flex flex-col overflow-hidden">
           <div className="flex flex-col flex-1 min-h-0 p-5">
             <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
-              <DialogTitle className="font-sans">Budget Recommendation</DialogTitle>
+              <DialogTitle className="font-sans">
+                Budget Recommendation
+              </DialogTitle>
               <DialogDescription className="text-xs">
-                Calculate recommended budget limits based on your monthly income.
+                Calculate recommended budget limits based on your monthly
+                income.
               </DialogDescription>
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto py-4 pr-1 flex flex-col gap-4 min-h-0">
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold">Monthly Income / Salary</Label>
+                <Label className="text-xs font-semibold">
+                  Monthly Income / Salary
+                </Label>
                 <div className="relative flex items-center">
                   <span className="absolute left-3 text-sm font-bold text-muted-foreground">
                     {budgetCurrencySymbol}
@@ -1262,7 +1623,9 @@ export default function SettingsForm({
                     type="text"
                     inputMode="numeric"
                     value={salaryInput}
-                    onChange={(e) => setSalaryInput(formatInputAmount(e.target.value))}
+                    onChange={(e) =>
+                      setSalaryInput(formatInputAmount(e.target.value))
+                    }
                     className={cn(budgetCurrencyPadding, "h-10 font-semibold")}
                     placeholder="200,000"
                     required
@@ -1271,7 +1634,9 @@ export default function SettingsForm({
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold">Savings Target Type</Label>
+                <Label className="text-xs font-semibold">
+                  Savings Target Type
+                </Label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
@@ -1283,7 +1648,7 @@ export default function SettingsForm({
                       "h-9 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
                       savingsType === "percentage"
                         ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                        : "bg-background text-muted-foreground border-border hover:text-foreground"
+                        : "bg-background text-muted-foreground border-border hover:text-foreground",
                     )}
                   >
                     Percentage (%)
@@ -1293,13 +1658,17 @@ export default function SettingsForm({
                     onClick={() => {
                       setSavingsType("nominal");
                       const parsedSalary = parseInputAmount(salaryInput) || 0;
-                      setSavingsValue(formatInputAmount(Math.round(parsedSalary * 0.2).toString()));
+                      setSavingsValue(
+                        formatInputAmount(
+                          Math.round(parsedSalary * 0.2).toString(),
+                        ),
+                      );
                     }}
                     className={cn(
                       "h-9 rounded-xl text-xs font-semibold border transition-all cursor-pointer",
                       savingsType === "nominal"
                         ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                        : "bg-background text-muted-foreground border-border hover:text-foreground"
+                        : "bg-background text-muted-foreground border-border hover:text-foreground",
                     )}
                   >
                     Nominal Amount
@@ -1309,7 +1678,9 @@ export default function SettingsForm({
 
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs font-semibold">
-                  {savingsType === "percentage" ? "Savings Percentage" : "Savings Amount"}
+                  {savingsType === "percentage"
+                    ? "Savings Percentage"
+                    : "Savings Amount"}
                 </Label>
                 <div className="relative flex items-center">
                   {savingsType === "percentage" ? (
@@ -1337,8 +1708,13 @@ export default function SettingsForm({
                         type="text"
                         inputMode="numeric"
                         value={savingsValue}
-                        onChange={(e) => setSavingsValue(formatInputAmount(e.target.value))}
-                        className={cn(budgetCurrencyPadding, "h-10 font-semibold")}
+                        onChange={(e) =>
+                          setSavingsValue(formatInputAmount(e.target.value))
+                        }
+                        className={cn(
+                          budgetCurrencyPadding,
+                          "h-10 font-semibold",
+                        )}
                         placeholder="40,000"
                         required
                       />
@@ -1347,76 +1723,99 @@ export default function SettingsForm({
                 </div>
               </div>
 
-              {parseInputAmount(salaryInput) > 0 && (() => {
-                const parsedSalary = parseInputAmount(salaryInput);
-                let parsedSavings = 0;
-                if (savingsType === "percentage") {
-                  const pct = parseFloat(savingsValue) || 0;
-                  parsedSavings = Math.round(parsedSalary * (pct / 100));
-                } else {
-                  parsedSavings = parseInputAmount(savingsValue) || 0;
-                }
+              {parseInputAmount(salaryInput) > 0 &&
+                (() => {
+                  const parsedSalary = parseInputAmount(salaryInput);
+                  let parsedSavings = 0;
+                  if (savingsType === "percentage") {
+                    const pct = parseFloat(savingsValue) || 0;
+                    parsedSavings = Math.round(parsedSalary * (pct / 100));
+                  } else {
+                    parsedSavings = parseInputAmount(savingsValue) || 0;
+                  }
 
-                const rem = parsedSalary - parsedSavings;
-                let recMonthly = 0;
-                let recPocket = 0;
-                let recShopping = 0;
+                  const rem = parsedSalary - parsedSavings;
+                  let recMonthly = 0;
+                  let recPocket = 0;
+                  let recShopping = 0;
 
-                if (rem >= parsedSalary * 0.5) {
-                  recMonthly = Math.round(parsedSalary * 0.5);
-                  const wants = rem - recMonthly;
-                  recPocket = Math.round(wants * (2 / 3));
-                  recShopping = Math.round(wants * (1 / 3));
-                } else {
-                  recMonthly = Math.max(rem, 0);
-                  recPocket = 0;
-                  recShopping = 0;
-                }
+                  if (rem >= parsedSalary * 0.5) {
+                    recMonthly = Math.round(parsedSalary * 0.5);
+                    const wants = rem - recMonthly;
+                    recPocket = Math.round(wants * (2 / 3));
+                    recShopping = Math.round(wants * (1 / 3));
+                  } else {
+                    recMonthly = Math.max(rem, 0);
+                    recPocket = 0;
+                    recShopping = 0;
+                  }
 
-                const getPercentLabel = (val: number) => {
-                  if (!parsedSalary) return "0%";
-                  const pct = (val / parsedSalary) * 100;
-                  return pct % 1 === 0 ? `${pct}%` : `${pct.toFixed(1)}%`;
-                };
+                  const getPercentLabel = (val: number) => {
+                    if (!parsedSalary) return "0%";
+                    const pct = (val / parsedSalary) * 100;
+                    return pct % 1 === 0 ? `${pct}%` : `${pct.toFixed(1)}%`;
+                  };
 
-                return (
-                  <div className="flex flex-col gap-2 p-3 bg-primary/5 border border-primary/10 rounded-xl mt-1 shrink-0">
-                    <span className="text-[10px] text-primary font-bold uppercase tracking-wider font-sans">
-                      Recommended Allocation:
-                    </span>
-                    
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-muted-foreground">Monthly Expected Budget (Needs: {getPercentLabel(recMonthly)})</span>
-                      <span className="font-bold text-foreground">
-                        {formatCurrency(recMonthly, userSettings.budgetCurrency)}
+                  return (
+                    <div className="flex flex-col gap-2 p-3 bg-primary/5 border border-primary/10 rounded-xl mt-1 shrink-0">
+                      <span className="text-[10px] text-primary font-bold uppercase tracking-wider font-sans">
+                        Recommended Allocation:
                       </span>
-                    </div>
-                    
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-muted-foreground">Pocket Money Limit (Wants: {getPercentLabel(recPocket)})</span>
-                      <span className="font-bold text-foreground">
-                        {formatCurrency(recPocket, userSettings.budgetCurrency)}
-                      </span>
-                    </div>
-                    
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-muted-foreground">Shopping Limit (Wants: {getPercentLabel(recShopping)})</span>
-                      <span className="font-bold text-foreground">
-                        {formatCurrency(recShopping, userSettings.budgetCurrency)}
-                      </span>
-                    </div>
 
-                    <div className="h-px bg-border my-1 opacity-50" />
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-muted-foreground">
+                          Monthly Expected Budget (Needs:{" "}
+                          {getPercentLabel(recMonthly)})
+                        </span>
+                        <span className="font-bold text-foreground">
+                          {formatCurrency(
+                            recMonthly,
+                            userSettings.budgetCurrency,
+                          )}
+                        </span>
+                      </div>
 
-                    <div className="flex justify-between items-center text-xs font-semibold text-emerald-600 dark:text-emerald-500">
-                      <span>Target Savings ({getPercentLabel(parsedSavings)})</span>
-                      <span>
-                        {formatCurrency(parsedSavings, userSettings.budgetCurrency)}
-                      </span>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-muted-foreground">
+                          Pocket Money Limit (Wants:{" "}
+                          {getPercentLabel(recPocket)})
+                        </span>
+                        <span className="font-bold text-foreground">
+                          {formatCurrency(
+                            recPocket,
+                            userSettings.budgetCurrency,
+                          )}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-muted-foreground">
+                          Shopping Limit (Wants: {getPercentLabel(recShopping)})
+                        </span>
+                        <span className="font-bold text-foreground">
+                          {formatCurrency(
+                            recShopping,
+                            userSettings.budgetCurrency,
+                          )}
+                        </span>
+                      </div>
+
+                      <div className="h-px bg-border my-1 opacity-50" />
+
+                      <div className="flex justify-between items-center text-xs font-semibold text-emerald-600 dark:text-emerald-500">
+                        <span>
+                          Target Savings ({getPercentLabel(parsedSavings)})
+                        </span>
+                        <span>
+                          {formatCurrency(
+                            parsedSavings,
+                            userSettings.budgetCurrency,
+                          )}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                );
-              })()}
+                  );
+                })()}
             </div>
 
             <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
@@ -1432,7 +1831,11 @@ export default function SettingsForm({
               <Button
                 size="sm"
                 onClick={handleApplyRecommendation}
-                disabled={isApplyingRecommendation || !salaryInput || parseInputAmount(salaryInput) <= 0}
+                disabled={
+                  isApplyingRecommendation ||
+                  !salaryInput ||
+                  parseInputAmount(salaryInput) <= 0
+                }
                 className="min-w-[72px] cursor-pointer"
               >
                 {isApplyingRecommendation ? (
@@ -1463,7 +1866,6 @@ export default function SettingsForm({
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
-
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs font-semibold">Account Name</Label>
                 <Input
@@ -1531,12 +1933,16 @@ export default function SettingsForm({
 
               {addAccType !== "credit_card" ? (
                 <div className="flex flex-col gap-1.5">
-                  <Label className="text-xs font-semibold">Initial Balance</Label>
+                  <Label className="text-xs font-semibold">
+                    Initial Balance
+                  </Label>
                   <Input
                     type="text"
                     inputMode="numeric"
                     value={addAccBalance}
-                    onChange={(e) => setAddAccBalance(formatInputAmount(e.target.value))}
+                    onChange={(e) =>
+                      setAddAccBalance(formatInputAmount(e.target.value))
+                    }
                     className="h-10 font-semibold"
                     placeholder="0"
                     required
@@ -1544,7 +1950,9 @@ export default function SettingsForm({
                 </div>
               ) : (
                 <div className="flex flex-col gap-1.5 animate-in fade-in-50 duration-200">
-                  <Label className="text-xs font-semibold">Default Payment Source</Label>
+                  <Label className="text-xs font-semibold">
+                    Default Payment Source
+                  </Label>
                   <Select
                     value={addAccDefaultPaymentAccountId}
                     onValueChange={setAddAccDefaultPaymentAccountId}
@@ -1558,11 +1966,16 @@ export default function SettingsForm({
                           (acc) =>
                             acc.currency === addAccCurrency &&
                             acc.type !== "credit_card" &&
-                            acc.isActive
+                            acc.isActive,
                         )
                         .map((acc) => (
-                          <SelectItem key={acc.id} value={acc.id} className="text-xs">
-                            {acc.name} ({formatCurrency(acc.balance, acc.currency)})
+                          <SelectItem
+                            key={acc.id}
+                            value={acc.id}
+                            className="text-xs"
+                          >
+                            {acc.name} (
+                            {formatCurrency(acc.balance, acc.currency)})
                           </SelectItem>
                         ))}
                     </SelectContent>
@@ -1615,7 +2028,6 @@ export default function SettingsForm({
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
-
               <div className="flex flex-col gap-1.5">
                 <Label className="text-xs font-semibold">Account Name</Label>
                 <Input
@@ -1688,7 +2100,9 @@ export default function SettingsForm({
                     type="text"
                     inputMode="numeric"
                     value={editAccBalance}
-                    onChange={(e) => setEditAccBalance(formatInputAmount(e.target.value))}
+                    onChange={(e) =>
+                      setEditAccBalance(formatInputAmount(e.target.value))
+                    }
                     className="h-10 font-semibold"
                     placeholder="0"
                     required
@@ -1696,7 +2110,9 @@ export default function SettingsForm({
                 </div>
               ) : (
                 <div className="flex flex-col gap-1.5 animate-in fade-in-50 duration-200">
-                  <Label className="text-xs font-semibold">Default Payment Source</Label>
+                  <Label className="text-xs font-semibold">
+                    Default Payment Source
+                  </Label>
                   <Select
                     value={editAccDefaultPaymentAccountId}
                     onValueChange={setEditAccDefaultPaymentAccountId}
@@ -1711,11 +2127,16 @@ export default function SettingsForm({
                             acc.currency === editAccCurrency &&
                             acc.id !== editingAccount?.id &&
                             acc.type !== "credit_card" &&
-                            acc.isActive
+                            acc.isActive,
                         )
                         .map((acc) => (
-                          <SelectItem key={acc.id} value={acc.id} className="text-xs">
-                            {acc.name} ({formatCurrency(acc.balance, acc.currency)})
+                          <SelectItem
+                            key={acc.id}
+                            value={acc.id}
+                            className="text-xs"
+                          >
+                            {acc.name} (
+                            {formatCurrency(acc.balance, acc.currency)})
                           </SelectItem>
                         ))}
                     </SelectContent>
@@ -1800,15 +2221,14 @@ export default function SettingsForm({
                 </strong>
                 ?
                 <span className="block mt-1 text-destructive font-semibold">
-                  ⚠️ WARNING: All transactions and recurring bill templates linked
-                  to this account will be permanently deleted! This action cannot
-                  be undone.
+                  ⚠️ WARNING: All transactions and recurring bill templates
+                  linked to this account will be permanently deleted! This
+                  action cannot be undone.
                 </span>
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
-            </div>
+            <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0"></div>
 
             <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2 mt-2">
               <Button
@@ -1855,12 +2275,26 @@ export default function SettingsForm({
                 Reset Account Data
               </DialogTitle>
               <DialogDescription className="text-xs leading-relaxed">
-                This action is <strong className="text-destructive font-bold">permanent</strong> and <strong className="text-destructive font-bold">cannot be undone</strong>.
+                This action is{" "}
+                <strong className="text-destructive font-bold">
+                  permanent
+                </strong>{" "}
+                and{" "}
+                <strong className="text-destructive font-bold">
+                  cannot be undone
+                </strong>
+                .
                 <span className="block mt-2 text-muted-foreground">
-                  All transactions, bank/e-wallet accounts, recurring bills, and ledger records will be deleted. Your budget limits will be reset to 0.
+                  All transactions, bank/e-wallet accounts, recurring bills, and
+                  ledger records will be deleted. Your budget limits will be
+                  reset to 0.
                 </span>
                 <span className="block mt-2 font-medium text-foreground">
-                  Please type <code className="bg-muted px-1.5 py-0.5 rounded text-destructive font-mono font-bold">RESET</code> to confirm.
+                  Please type{" "}
+                  <code className="bg-muted px-1.5 py-0.5 rounded text-destructive font-mono font-bold">
+                    RESET
+                  </code>{" "}
+                  to confirm.
                 </span>
               </DialogDescription>
             </DialogHeader>
@@ -1868,7 +2302,9 @@ export default function SettingsForm({
             <div className="flex-1 py-4 flex flex-col gap-4 min-h-0">
               <Input
                 value={resetConfirmText}
-                onChange={(e) => setResetConfirmText(e.target.value.toUpperCase())}
+                onChange={(e) =>
+                  setResetConfirmText(e.target.value.toUpperCase())
+                }
                 placeholder="RESET"
                 className="h-10 text-center font-mono font-bold uppercase tracking-widest text-destructive"
               />

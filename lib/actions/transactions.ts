@@ -138,7 +138,14 @@ export async function getPaginatedTransactionsAction(params: {
       where.accountId = accountId;
     }
     if (categoryFilter !== "all") {
-      where.category = categoryFilter;
+      // Backward compat: living_expenses also includes legacy pocket_money, personal_spending includes shopping
+      if (categoryFilter === "living_expenses") {
+        where.category = { in: ["living_expenses", "pocket_money"] };
+      } else if (categoryFilter === "personal_spending") {
+        where.category = { in: ["personal_spending", "shopping"] };
+      } else {
+        where.category = categoryFilter;
+      }
     }
 
     // Date range

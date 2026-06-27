@@ -62,7 +62,7 @@ export default async function AppLayout({
   // Fetch active budget categories (excluding monthly) for transaction categories
   const dbBudgets = await prisma.budgetLimit.findMany({
     where: { userId: session.user.id, NOT: { name: "monthly" } },
-    select: { name: true, label: true },
+    select: { name: true, label: true, subCategories: true },
     orderBy: { createdAt: "asc" },
   });
 
