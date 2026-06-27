@@ -248,13 +248,18 @@ export default function AddTransactionFab({
 
   // Copy AI Prompt
   const handleCopyPrompt = () => {
+    const hasUserTax = parseFloat(taxPercentage) > 0;
+    const taxInstructions = hasUserTax
+      ? "Extract the base prices BEFORE tax (excluding any tax, service charge, or fees listed separately)."
+      : "Make sure the prices returned for each item include any tax, service charge, or fees (distribute them proportionally if listed separately).";
+
     const promptText = `Analyze this receipt image. Extract all items and their final prices${
       aiTranslateLang === "id"
         ? ", translating the item names to Indonesian"
         : aiTranslateLang === "en"
           ? ", translating the item names to English"
           : ""
-    }.\nMake sure the prices returned for each item include any tax, service charge, or fees (distribute them proportionally if listed separately).\nReturn the output STRICTLY in JSON format with this structure:\n{\n  "items": [\n    { "name": "Item Name", "price": 1000 }\n  ]\n}\nReturn only the raw JSON. Do not include markdown code block wrapper (like \`\`\`json) or any extra explanation.`;
+    }.\n${taxInstructions}\nReturn the output STRICTLY in JSON format with this structure:\n{\n  "items": [\n    { "name": "Item Name", "price": 1000 }\n  ]\n}\nReturn only the raw JSON. Do not include markdown code block wrapper (like \`\`\`json) or any extra explanation.`;
     navigator.clipboard
       .writeText(promptText)
       .then(() => {
@@ -482,10 +487,12 @@ export default function AddTransactionFab({
 
     try {
       const { base64, mimeType } = await fileToBase64(selectedImage);
+      const hasUserTax = parseFloat(taxPercentage) > 0;
       const res = await parseReceiptImageAction(
         base64,
         mimeType,
         aiTranslateLang,
+        hasUserTax,
       );
 
       if (res.success && res.data && Array.isArray(res.data.items)) {
@@ -1540,9 +1547,22 @@ export default function AddTransactionFab({
                           </Select>
                         </div>
 
+                        {/* Description */}
+                        <div className="flex flex-col gap-1.5">
+                          <Label className="text-xs font-semibold text-muted-foreground">
+                            Description <span className="font-normal opacity-60">(optional)</span>
+                          </Label>
+                          <Input
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            className="h-11 rounded-xl"
+                            placeholder="e.g. Lawson, taxi, dinner"
+                          />
+                        </div>
+
                         {/* 3. Total Amount & Tax side-by-side */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="flex flex-col gap-1.5">
+                        <div className="flex gap-3">
+                          <div className="flex-1 flex flex-col gap-1.5">
                             <Label className="text-xs font-semibold text-muted-foreground">
                               Total Amount <span className="font-normal opacity-60">(optional)</span>
                             </Label>
@@ -1561,23 +1581,25 @@ export default function AddTransactionFab({
                             </div>
                           </div>
 
-                          <div className="flex flex-col gap-1.5">
-                            <Label className="text-xs font-semibold text-muted-foreground">
-                              Tax (%) <span className="font-normal opacity-60">(optional)</span>
+                          <div className="w-[100px] flex flex-col gap-1.5 shrink-0">
+                            <Label className="text-xs font-semibold text-muted-foreground text-center">
+                              Tax (%) <span className="font-normal opacity-60">(opt)</span>
                             </Label>
-                            <div className="relative flex items-center bg-white dark:bg-zinc-900 border border-border/50 rounded-xl px-4 h-12 focus-within:border-primary transition-colors shadow-xs">
+                            <div className="relative flex items-center bg-white dark:bg-zinc-900 border border-border/50 rounded-xl px-3 h-12 focus-within:border-primary transition-colors shadow-xs">
                               <input
                                 type="text"
                                 inputMode="numeric"
                                 value={taxPercentage}
                                 onChange={(e) => {
                                   const val = e.target.value.replace(/[^0-9]/g, "");
-                                  setTaxPercentage(val);
+                                  if (val === "" || (parseInt(val, 10) >= 0 && parseInt(val, 10) < 100)) {
+                                    setTaxPercentage(val);
+                                  }
                                 }}
-                                className="flex-1 h-full text-sm font-semibold font-sans bg-transparent focus:outline-none text-foreground pr-6"
+                                className="flex-1 h-full text-sm font-semibold font-sans bg-transparent focus:outline-none text-foreground pr-5 text-center"
                                 placeholder="0"
                               />
-                              <span className="absolute right-4 text-sm font-bold text-muted-foreground select-none">
+                              <span className="absolute right-3 text-sm font-bold text-muted-foreground select-none">
                                 %
                               </span>
                             </div>
@@ -1640,21 +1662,6 @@ export default function AddTransactionFab({
                           </button>
                         </div>
 
-                        {/* 1. Description */}
-                        <div className="flex flex-col gap-1.5">
-                          <Label className="text-xs font-semibold text-muted-foreground">
-                            Description{" "}
-                            <span className="font-normal opacity-60">
-                              (optional)
-                            </span>
-                          </Label>
-                          <Input
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            className="h-11 rounded-xl"
-                            placeholder="e.g. Lawson, taxi, dinner"
-                          />
-                        </div>
 
                         {/* 2. Receipt Items (Scan & List & Manual inputs) */}
                         <div className="flex flex-col gap-3 p-4 bg-muted/40 border border-border/50 rounded-xl">
@@ -1869,66 +1876,63 @@ export default function AddTransactionFab({
 
                           {(receiptItems.length > 0 || targetTotal) && (
                             <div className="flex flex-col gap-1.5 border-t border-border/40 pt-2 mt-1 px-1 text-xs">
-                              <div className="flex items-center justify-between text-muted-foreground">
-                                <span>Subtotal</span>
-                                <span>
-                                  {currencySymbol}
-                                  {subtotalReceiptAmount.toLocaleString()}
-                                </span>
-                              </div>
                               {taxRate > 0 && (
-                                <div className="flex items-center justify-between text-muted-foreground">
-                                  <span>Tax ({taxRate}%)</span>
-                                  <span>
-                                    {currencySymbol}
-                                    {taxAmount.toLocaleString()}
-                                  </span>
-                                </div>
+                                <>
+                                  <div className="flex items-center justify-between text-muted-foreground">
+                                    <span>Subtotal</span>
+                                    <span>
+                                      {currencySymbol}
+                                      {subtotalReceiptAmount.toLocaleString()}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between text-muted-foreground">
+                                    <span>Tax ({taxRate}%)</span>
+                                    <span>
+                                      {currencySymbol}
+                                      {taxAmount.toLocaleString()}
+                                    </span>
+                                  </div>
+                                </>
                               )}
                               <div className="flex items-center justify-between font-bold text-foreground text-sm border-t border-border/20 pt-1.5 mt-1">
-                                <span>Calculated Total</span>
+                                <span>Total</span>
                                 <span>
                                   {currencySymbol}
                                   {totalReceiptAmount.toLocaleString()}
                                 </span>
                               </div>
 
-                              {targetTotal && (
-                                <>
-                                  <div className="flex items-center justify-between font-semibold border-t border-border/20 pt-1.5 mt-1">
-                                    <span className="text-muted-foreground">Target Total</span>
+                              {targetTotal && parseInputAmount(targetTotal) > 0 && (
+                                <div className="flex items-center justify-between font-semibold border-t border-border/20 pt-1.5 mt-1">
+                                  <span className="text-muted-foreground">Target Total</span>
+                                  <div className="flex items-center gap-2">
                                     <span className="text-foreground">
                                       {currencySymbol}
                                       {parsedTargetTotal.toLocaleString()}
                                     </span>
-                                  </div>
-                                  <div className="flex items-center justify-between font-bold pt-1">
-                                    <span className="text-muted-foreground">Difference</span>
                                     {(() => {
                                       if (receiptDifference === 0) {
                                         return (
-                                          <span className="text-emerald-500 flex items-center gap-1">
-                                            <IconCheck className="size-3.5" /> Matched
+                                          <span className="text-emerald-500 text-[10px] font-bold flex items-center gap-0.5">
+                                            <IconCheck className="size-3" /> Matched
                                           </span>
                                         );
                                       } else if (receiptDifference > 0) {
                                         return (
-                                          <span className="text-amber-500">
-                                            Short by {currencySymbol}
-                                            {receiptDifference.toLocaleString()}
+                                          <span className="text-amber-500 text-[10px] font-bold">
+                                            (Short by {currencySymbol}{receiptDifference.toLocaleString()})
                                           </span>
                                         );
                                       } else {
                                         return (
-                                          <span className="text-red-500">
-                                            Over by {currencySymbol}
-                                            {Math.abs(receiptDifference).toLocaleString()}
+                                          <span className="text-red-500 text-[10px] font-bold">
+                                            (Over by {currencySymbol}{Math.abs(receiptDifference).toLocaleString()})
                                           </span>
                                         );
                                       }
                                     })()}
                                   </div>
-                                </>
+                                </div>
                               )}
                             </div>
                           )}

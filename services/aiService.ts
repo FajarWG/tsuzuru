@@ -152,7 +152,7 @@ Do not include markdown tags, code blocks, or extra text. Return ONLY the raw JS
     }
   },
 
-  async parseReceiptImage(base64Image: string, mimeType: string, userId: string, language?: string) {
+  async parseReceiptImage(base64Image: string, mimeType: string, userId: string, language?: string, excludeTax?: boolean) {
     const statusCheck = await this.checkAiLimit(userId);
     if (statusCheck.limited) {
       throw new Error(`AI is temporarily limited. Try again in ${statusCheck.secondsLeft} seconds.`);
@@ -171,12 +171,16 @@ Do not include markdown tags, code blocks, or extra text. Return ONLY the raw JS
         ? " Translate the item names to English."
         : "";
 
+    const taxInstructions = excludeTax
+      ? "Extract the base prices BEFORE tax (excluding any tax, service charge, or fees listed separately)."
+      : "Make sure the prices returned for each item are inclusive of tax. If tax/pajak, service charge, or any fee is listed in the receipt, calculate the overall tax/fee percentage and distribute it by adding it to each item's price proportionally.";
+
     const systemPrompt = `You are a receipt parsing assistant. Extract items and their final prices from the receipt image.${translationInst}
-Make sure the prices returned for each item are inclusive of tax. If tax/pajak, service charge, or any fee is listed in the receipt, calculate the overall tax/fee percentage and distribute it by adding it to each item's price proportionally.
+${taxInstructions}
 Return the output strictly in JSON format matching this schema:
 {
   "items": [
-    { "name": "string (cleaned item name)", "price": number (price including tax) }
+    { "name": "string (cleaned item name)", "price": number }
   ]
 }
 Do not include markdown tags, code blocks, or extra text. Return ONLY the raw JSON string.`;

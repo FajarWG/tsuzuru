@@ -95,7 +95,7 @@ describe("per-user rate limit tracking", () => {
 
     await parseReceiptImageAction("base64", "image/jpeg", "id");
 
-    expect(mockAiService.parseReceiptImage).toHaveBeenCalledWith("base64", "image/jpeg", "user-1", "id");
+    expect(mockAiService.parseReceiptImage).toHaveBeenCalledWith("base64", "image/jpeg", "user-1", "id", undefined);
   });
 
   it("passes session userId to aiService.parseReceiptTextCustom", async () => {

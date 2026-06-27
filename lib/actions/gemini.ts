@@ -41,12 +41,12 @@ export async function parseReceiptTextCustomAction(text: string, model: string, 
   }
 }
 
-export async function parseReceiptImageAction(base64Data: string, mimeType: string, language?: string) {
+export async function parseReceiptImageAction(base64Data: string, mimeType: string, language?: string, excludeTax?: boolean) {
   try {
     const session = await auth();
     if (!session?.user?.id) return { success: false, error: "Unauthorized" };
 
-    const data = await aiService.parseReceiptImage(base64Data, mimeType, session.user.id, language);
+    const data = await aiService.parseReceiptImage(base64Data, mimeType, session.user.id, language, excludeTax);
     return { success: true, data };
   } catch (err) {
     console.error("parseReceiptImageAction error:", err);
