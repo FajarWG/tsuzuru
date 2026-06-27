@@ -47,6 +47,7 @@ import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { getDefaultSubCats, SubCatOption } from "@/lib/categories";
 
 interface TemplateItem {
   id: string;
@@ -60,6 +61,8 @@ interface TemplateItem {
   splitConfig?: {
     friends: { personName: string; percentage: number }[];
   } | null;
+  category?: string;
+  subCategory?: string;
 }
 
 interface CreditCardBillItem {
@@ -92,6 +95,7 @@ interface TemplatesConfigListProps {
   hideHeader?: boolean;
   paidTemplateNamesThisMonth?: string[];
   friendNames?: string[];
+  budgetCategories?: { name: string; label: string; subCategories?: any }[];
 }
 
 const INTERVAL_OPTIONS = [
@@ -123,7 +127,8 @@ function validateSplitFriends(
       percentage: parseSplitPercentage(friend.percentage),
     }))
     .filter(
-      (friend) => friend.personName.length > 0 || !Number.isNaN(friend.percentage),
+      (friend) =>
+        friend.personName.length > 0 || !Number.isNaN(friend.percentage),
     );
 
   if (normalized.length === 0) {
@@ -167,21 +172,47 @@ export default function TemplatesConfigList({
   hideHeader = false,
   paidTemplateNamesThisMonth = [],
   friendNames = [],
+  budgetCategories,
 }: TemplatesConfigListProps) {
+  // Helper to get subcategory options for a given category.
+  // Dynamically uses custom subcategories if defined in database budget limits, otherwise falls back to defaults.
+  const getSubCategoriesFor = (catName: string): SubCatOption[] => {
+    const matched = budgetCategories?.find((bc) => bc.name === catName);
+    if (
+      matched &&
+      matched.subCategories &&
+      Array.isArray(matched.subCategories) &&
+      matched.subCategories.length > 0
+    ) {
+      return matched.subCategories as SubCatOption[];
+    }
+    return getDefaultSubCats(catName);
+  };
+
   // Create dialog state
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createAmount, setCreateAmount] = useState("");
   const [createAccountId, setCreateAccountId] = useState(accounts[0]?.id || "");
   const [createIntervalMonths, setCreateIntervalMonths] = useState("1");
-  const [createPaymentMode, setCreatePaymentMode] = useState<"self_paid" | "split_with_friends">("self_paid");
-  const [createSplitFriends, setCreateSplitFriends] = useState([EMPTY_SPLIT_FRIEND]);
+  const [createCategory, setCreateCategory] = useState("living_expenses");
+  const [createSubCategory, setCreateSubCategory] = useState("utilities");
+  const [createPaymentMode, setCreatePaymentMode] = useState<
+    "self_paid" | "split_with_friends"
+  >("self_paid");
+  const [createSplitFriends, setCreateSplitFriends] = useState([
+    EMPTY_SPLIT_FRIEND,
+  ]);
   const [isCreating, setIsCreating] = useState(false);
 
   // Autocomplete suggestion states for split bill friends
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [focusedFriendIndex, setFocusedFriendIndex] = useState<number | null>(null);
-  const [focusedFriendType, setFocusedFriendType] = useState<"create" | "edit" | null>(null);
+  const [focusedFriendIndex, setFocusedFriendIndex] = useState<number | null>(
+    null,
+  );
+  const [focusedFriendType, setFocusedFriendType] = useState<
+    "create" | "edit" | null
+  >(null);
   const [activeIndex, setActiveIndex] = useState(-1);
 
   // Edit dialog state
@@ -191,8 +222,14 @@ export default function TemplatesConfigList({
   const [editAccountId, setEditAccountId] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
   const [editIntervalMonths, setEditIntervalMonths] = useState("1");
-  const [editPaymentMode, setEditPaymentMode] = useState<"self_paid" | "split_with_friends">("self_paid");
-  const [editSplitFriends, setEditSplitFriends] = useState([EMPTY_SPLIT_FRIEND]);
+  const [editCategory, setEditCategory] = useState("living_expenses");
+  const [editSubCategory, setEditSubCategory] = useState("utilities");
+  const [editPaymentMode, setEditPaymentMode] = useState<
+    "self_paid" | "split_with_friends"
+  >("self_paid");
+  const [editSplitFriends, setEditSplitFriends] = useState([
+    EMPTY_SPLIT_FRIEND,
+  ]);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Delete dialog state
@@ -220,23 +257,29 @@ export default function TemplatesConfigList({
         : editSplitFriends[focusedFriendIndex]?.personName || "";
 
     return friendNames.filter((name) =>
-      name.toLowerCase().includes(currentInputName.toLowerCase())
+      name.toLowerCase().includes(currentInputName.toLowerCase()),
     );
-  }, [friendNames, focusedFriendIndex, focusedFriendType, createSplitFriends, editSplitFriends]);
+  }, [
+    friendNames,
+    focusedFriendIndex,
+    focusedFriendType,
+    createSplitFriends,
+    editSplitFriends,
+  ]);
 
   const selectSuggestion = (name: string) => {
     if (focusedFriendIndex === null || focusedFriendType === null) return;
     if (focusedFriendType === "create") {
       setCreateSplitFriends((prev) =>
         prev.map((item, idx) =>
-          idx === focusedFriendIndex ? { ...item, personName: name } : item
-        )
+          idx === focusedFriendIndex ? { ...item, personName: name } : item,
+        ),
       );
     } else {
       setEditSplitFriends((prev) =>
         prev.map((item, idx) =>
-          idx === focusedFriendIndex ? { ...item, personName: name } : item
-        )
+          idx === focusedFriendIndex ? { ...item, personName: name } : item,
+        ),
       );
     }
     setShowSuggestions(false);
@@ -254,7 +297,9 @@ export default function TemplatesConfigList({
     }
 
     if (e.key === "ArrowDown") {
-      setActiveIndex((prev) => (prev + 1 < filteredSuggestions.length ? prev + 1 : prev));
+      setActiveIndex((prev) =>
+        prev + 1 < filteredSuggestions.length ? prev + 1 : prev,
+      );
       e.preventDefault();
     } else if (e.key === "ArrowUp") {
       setActiveIndex((prev) => (prev - 1 >= 0 ? prev - 1 : prev));
@@ -310,6 +355,8 @@ export default function TemplatesConfigList({
           createPaymentMode === "split_with_friends" && splitValidation?.value
             ? { friends: splitValidation.value }
             : null,
+        category: createCategory,
+        subCategory: createSubCategory,
       });
 
       if (res.success && res.template) {
@@ -318,6 +365,8 @@ export default function TemplatesConfigList({
         setCreateName("");
         setCreateAmount("");
         setCreateIntervalMonths("1");
+        setCreateCategory("living_expenses");
+        setCreateSubCategory("utilities");
         setCreatePaymentMode("self_paid");
         setCreateSplitFriends([EMPTY_SPLIT_FRIEND]);
         window.dispatchEvent(new CustomEvent("bill-updated"));
@@ -339,9 +388,12 @@ export default function TemplatesConfigList({
     setEditAccountId(item.accountId);
     setEditIsActive(item.isActive);
     setEditIntervalMonths(String(item.intervalMonths));
+    setEditCategory(item.category || "living_expenses");
+    setEditSubCategory(item.subCategory || "utilities");
     setEditPaymentMode(item.paymentMode || "self_paid");
     setEditSplitFriends(
-      item.paymentMode === "split_with_friends" && item.splitConfig?.friends?.length
+      item.paymentMode === "split_with_friends" &&
+        item.splitConfig?.friends?.length
         ? item.splitConfig.friends.map((friend) => ({
             personName: friend.personName,
             percentage: String(friend.percentage),
@@ -391,6 +443,8 @@ export default function TemplatesConfigList({
           editPaymentMode === "split_with_friends" && splitValidation?.value
             ? { friends: splitValidation.value }
             : null,
+        category: editCategory,
+        subCategory: editSubCategory,
       });
 
       if (res.success) {
@@ -437,9 +491,7 @@ export default function TemplatesConfigList({
     setPayingItem(item);
     const isCc = "isCreditCardBill" in item && item.isCreditCardBill;
     if (isCc) {
-      const ccAcc = accounts.find(
-        (a) => a.id === item.creditCardAccountId,
-      );
+      const ccAcc = accounts.find((a) => a.id === item.creditCardAccountId);
       const configuredDefaultId = ccAcc?.defaultPaymentAccountId;
       const defAcc =
         accounts.find((a) => a.id === configuredDefaultId) ||
@@ -537,7 +589,9 @@ export default function TemplatesConfigList({
             if ("isCreditCardBill" in item && item.isCreditCardBill) {
               const cleanCcName = item.name.replace("Credit Card Bill: ", "");
               const ccPaidName = `CC Payoff: ${cleanCcName}`;
-              return paidTemplateNamesThisMonth.some(name => name.includes(ccPaidName));
+              return paidTemplateNamesThisMonth.some((name) =>
+                name.includes(ccPaidName),
+              );
             }
             return paidTemplateNamesThisMonth.includes(item.name);
           };
@@ -548,7 +602,9 @@ export default function TemplatesConfigList({
               if (acc.type !== "credit_card" || !acc.isActive) return false;
               if (acc.balance < 0) return true;
               const ccPaidName = `CC Payoff: ${acc.name}`;
-              return paidTemplateNamesThisMonth.some(name => name.includes(ccPaidName));
+              return paidTemplateNamesThisMonth.some((name) =>
+                name.includes(ccPaidName),
+              );
             })
             .map((acc) => ({
               id: `cc-bill-${acc.id}`,
@@ -587,8 +643,10 @@ export default function TemplatesConfigList({
             const splitFriends =
               ("splitConfig" in item && item.splitConfig?.friends) || [];
             const splitTotal = splitFriends.reduce(
-              (sum: number, friend: { personName: string; percentage: number }) =>
-                sum + friend.percentage,
+              (
+                sum: number,
+                friend: { personName: string; percentage: number },
+              ) => sum + friend.percentage,
               0,
             );
             const isPaying = isPayingId === item.id;
@@ -601,15 +659,18 @@ export default function TemplatesConfigList({
                   "py-2 flex items-center justify-between gap-3 text-xs transition-opacity duration-200",
                   isCreditCardBill &&
                     "bg-rose-500/[0.03] dark:bg-rose-500/[0.015] px-1 [box-shadow:-3px_0_0_0_rgb(244_63_94_/_0.5)] my-1 first:mt-0 last:mb-0",
-                  isPaid && "opacity-60"
+                  isPaid && "opacity-60",
                 )}
               >
                 <div className="flex flex-col gap-0.5 flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className={cn(
-                      "text-xs font-semibold text-foreground truncate",
-                      isPaid && "text-muted-foreground line-through decoration-muted-foreground/30"
-                    )}>
+                    <span
+                      className={cn(
+                        "text-xs font-semibold text-foreground truncate",
+                        isPaid &&
+                          "text-muted-foreground line-through decoration-muted-foreground/30",
+                      )}
+                    >
                       {item.name}
                     </span>
                     {!item.isActive && (
@@ -632,14 +693,15 @@ export default function TemplatesConfigList({
                           `${item.intervalMonths}mo`}
                       </Badge>
                     )}
-                    {"paymentMode" in item && item.paymentMode === "split_with_friends" && (
-                      <Badge
-                        variant="outline"
-                        className="text-[8px] h-3.5 px-1 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-none font-semibold"
-                      >
-                        Split {splitFriends.length} friends
-                      </Badge>
-                    )}
+                    {"paymentMode" in item &&
+                      item.paymentMode === "split_with_friends" && (
+                        <Badge
+                          variant="outline"
+                          className="text-[8px] h-3.5 px-1 bg-amber-500/10 text-amber-700 dark:text-amber-400 border-none font-semibold"
+                        >
+                          Split {splitFriends.length} friends
+                        </Badge>
+                      )}
                     {isCreditCardBill && (
                       <Badge
                         variant="outline"
@@ -664,11 +726,22 @@ export default function TemplatesConfigList({
                       <span className="text-[10px] text-muted-foreground">
                         {linkedAccount?.name || "Unknown account"}
                       </span>
-                      {"paymentMode" in item && item.paymentMode === "split_with_friends" && splitFriends.length > 0 && (
-                        <span className="text-[10px] text-muted-foreground leading-relaxed">
-                          {splitFriends.map((friend: { personName: string; percentage: number }) => `${friend.personName} ${friend.percentage}%`).join(" · ")} · You keep {Math.max(0, 100 - splitTotal)}%
-                        </span>
-                      )}
+                      {"paymentMode" in item &&
+                        item.paymentMode === "split_with_friends" &&
+                        splitFriends.length > 0 && (
+                          <span className="text-[10px] text-muted-foreground leading-relaxed">
+                            {splitFriends
+                              .map(
+                                (friend: {
+                                  personName: string;
+                                  percentage: number;
+                                }) =>
+                                  `${friend.personName} ${friend.percentage}%`,
+                              )
+                              .join(" · ")}{" "}
+                            · You keep {Math.max(0, 100 - splitTotal)}%
+                          </span>
+                        )}
                     </div>
                   )}
                 </div>
@@ -845,6 +918,55 @@ export default function TemplatesConfigList({
                 </Select>
               </div>
 
+              {/* Category */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Category</Label>
+                <Select
+                  value={createCategory}
+                  onValueChange={(val) => {
+                    setCreateCategory(val);
+                    const subCats = getSubCategoriesFor(val);
+                    setCreateSubCategory(subCats[0]?.value || "other");
+                  }}
+                >
+                  <SelectTrigger className="h-10 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="living_expenses" className="text-sm">
+                      Living Expenses
+                    </SelectItem>
+                    <SelectItem value="personal_spending" className="text-sm">
+                      Personal Spending
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Sub-category */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Sub-category</Label>
+                <Select
+                  value={createSubCategory}
+                  onValueChange={setCreateSubCategory}
+                >
+                  <SelectTrigger className="h-10 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getSubCategoriesFor(createCategory).map((opt) => (
+                      <SelectItem
+                        key={opt.value}
+                        value={opt.value}
+                        className="text-sm"
+                      >
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <Separator />
 
               {/* Account */}
@@ -874,7 +996,9 @@ export default function TemplatesConfigList({
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold">Payment Handling</Label>
+                <Label className="text-xs font-semibold">
+                  Payment Handling
+                </Label>
                 <Select
                   value={createPaymentMode}
                   onValueChange={(value: "self_paid" | "split_with_friends") =>
@@ -899,9 +1023,12 @@ export default function TemplatesConfigList({
                 <div className="flex flex-col gap-3 rounded-2xl border border-border/40 bg-muted/30 p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <Label className="text-xs font-semibold">Default Split Friends</Label>
+                      <Label className="text-xs font-semibold">
+                        Default Split Friends
+                      </Label>
                       <p className="mt-1 text-[10px] text-muted-foreground leading-relaxed">
-                        When this bill is paid, Tsuzuru will auto-create Bill Friends entries for these people.
+                        When this bill is paid, Tsuzuru will auto-create Bill
+                        Friends entries for these people.
                       </p>
                     </div>
                     <Button
@@ -922,7 +1049,10 @@ export default function TemplatesConfigList({
 
                   <div className="flex flex-col gap-2">
                     {createSplitFriends.map((friend, index) => (
-                      <div key={`create-friend-${index}`} className="grid grid-cols-[minmax(0,1fr)_80px_32px] gap-2 items-center relative">
+                      <div
+                        key={`create-friend-${index}`}
+                        className="grid grid-cols-[minmax(0,1fr)_80px_32px] gap-2 items-center relative"
+                      >
                         <div className="relative flex flex-col">
                           <Input
                             value={friend.personName}
@@ -976,7 +1106,7 @@ export default function TemplatesConfigList({
                                         "w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer",
                                         idx === activeIndex
                                           ? "bg-primary text-primary-foreground"
-                                          : "hover:bg-muted/80 text-foreground"
+                                          : "hover:bg-muted/80 text-foreground",
                                       )}
                                     >
                                       {name}
@@ -995,7 +1125,10 @@ export default function TemplatesConfigList({
                                   itemIndex === index
                                     ? {
                                         ...item,
-                                        percentage: e.target.value.replace(/[^0-9.]/g, ""),
+                                        percentage: e.target.value.replace(
+                                          /[^0-9.]/g,
+                                          "",
+                                        ),
                                       }
                                     : item,
                                 ),
@@ -1004,7 +1137,9 @@ export default function TemplatesConfigList({
                             className="h-9 pr-6 text-xs"
                             placeholder="25"
                           />
-                          <span className="absolute right-3 text-[10px] text-muted-foreground">%</span>
+                          <span className="absolute right-3 text-[10px] text-muted-foreground">
+                            %
+                          </span>
                         </div>
                         <Button
                           type="button"
@@ -1016,7 +1151,9 @@ export default function TemplatesConfigList({
                             setCreateSplitFriends((prev) =>
                               prev.length === 1
                                 ? prev
-                                : prev.filter((_, itemIndex) => itemIndex !== index),
+                                : prev.filter(
+                                    (_, itemIndex) => itemIndex !== index,
+                                  ),
                             )
                           }
                         >
@@ -1028,7 +1165,8 @@ export default function TemplatesConfigList({
 
                   <Alert className="border-amber-500/20 bg-amber-500/5">
                     <AlertDescription className="text-[10px] leading-relaxed">
-                      Friend percentages must stay below 100% so part of the recurring bill remains your own share.
+                      Friend percentages must stay below 100% so part of the
+                      recurring bill remains your own share.
                     </AlertDescription>
                   </Alert>
                 </div>
@@ -1154,6 +1292,55 @@ export default function TemplatesConfigList({
                   )}
               </div>
 
+              {/* Category */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Category</Label>
+                <Select
+                  value={editCategory}
+                  onValueChange={(val) => {
+                    setEditCategory(val);
+                    const subCats = getSubCategoriesFor(val);
+                    setEditSubCategory(subCats[0]?.value || "other");
+                  }}
+                >
+                  <SelectTrigger className="h-10 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="living_expenses" className="text-sm">
+                      Living Expenses
+                    </SelectItem>
+                    <SelectItem value="personal_spending" className="text-sm">
+                      Personal Spending
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Sub-category */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Sub-category</Label>
+                <Select
+                  value={editSubCategory}
+                  onValueChange={setEditSubCategory}
+                >
+                  <SelectTrigger className="h-10 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getSubCategoriesFor(editCategory).map((opt) => (
+                      <SelectItem
+                        key={opt.value}
+                        value={opt.value}
+                        className="text-sm"
+                      >
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <Separator />
 
               {/* Account */}
@@ -1180,7 +1367,9 @@ export default function TemplatesConfigList({
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs font-semibold">Payment Handling</Label>
+                <Label className="text-xs font-semibold">
+                  Payment Handling
+                </Label>
                 <Select
                   value={editPaymentMode}
                   onValueChange={(value: "self_paid" | "split_with_friends") =>
@@ -1205,9 +1394,12 @@ export default function TemplatesConfigList({
                 <div className="flex flex-col gap-3 rounded-2xl border border-border/40 bg-muted/30 p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <Label className="text-xs font-semibold">Default Split Friends</Label>
+                      <Label className="text-xs font-semibold">
+                        Default Split Friends
+                      </Label>
                       <p className="mt-1 text-[10px] text-muted-foreground leading-relaxed">
-                        Marking this bill as paid will auto-create Bill Friends entries with these percentages.
+                        Marking this bill as paid will auto-create Bill Friends
+                        entries with these percentages.
                       </p>
                     </div>
                     <Button
@@ -1228,7 +1420,10 @@ export default function TemplatesConfigList({
 
                   <div className="flex flex-col gap-2">
                     {editSplitFriends.map((friend, index) => (
-                      <div key={`edit-friend-${index}`} className="grid grid-cols-[minmax(0,1fr)_80px_32px] gap-2 items-center relative">
+                      <div
+                        key={`edit-friend-${index}`}
+                        className="grid grid-cols-[minmax(0,1fr)_80px_32px] gap-2 items-center relative"
+                      >
                         <div className="relative flex flex-col">
                           <Input
                             value={friend.personName}
@@ -1282,7 +1477,7 @@ export default function TemplatesConfigList({
                                         "w-full text-left px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer",
                                         idx === activeIndex
                                           ? "bg-primary text-primary-foreground"
-                                          : "hover:bg-muted/80 text-foreground"
+                                          : "hover:bg-muted/80 text-foreground",
                                       )}
                                     >
                                       {name}
@@ -1301,7 +1496,10 @@ export default function TemplatesConfigList({
                                   itemIndex === index
                                     ? {
                                         ...item,
-                                        percentage: e.target.value.replace(/[^0-9.]/g, ""),
+                                        percentage: e.target.value.replace(
+                                          /[^0-9.]/g,
+                                          "",
+                                        ),
                                       }
                                     : item,
                                 ),
@@ -1310,7 +1508,9 @@ export default function TemplatesConfigList({
                             className="h-9 pr-6 text-xs"
                             placeholder="25"
                           />
-                          <span className="absolute right-3 text-[10px] text-muted-foreground">%</span>
+                          <span className="absolute right-3 text-[10px] text-muted-foreground">
+                            %
+                          </span>
                         </div>
                         <Button
                           type="button"
@@ -1322,7 +1522,9 @@ export default function TemplatesConfigList({
                             setEditSplitFriends((prev) =>
                               prev.length === 1
                                 ? prev
-                                : prev.filter((_, itemIndex) => itemIndex !== index),
+                                : prev.filter(
+                                    (_, itemIndex) => itemIndex !== index,
+                                  ),
                             )
                           }
                         >
@@ -1334,7 +1536,8 @@ export default function TemplatesConfigList({
 
                   <Alert className="border-amber-500/20 bg-amber-500/5">
                     <AlertDescription className="text-[10px] leading-relaxed">
-                      Friend percentages must stay below 100% so part of the recurring bill remains your own share.
+                      Friend percentages must stay below 100% so part of the
+                      recurring bill remains your own share.
                     </AlertDescription>
                   </Alert>
                 </div>
@@ -1463,7 +1666,9 @@ export default function TemplatesConfigList({
                 <span className="text-xs text-muted-foreground mt-1 block">
                   {isPayingItemCc
                     ? "This will pay off the credit card and record a dual-entry transfer transaction."
-                    : (payingItem && "paymentMode" in payingItem && payingItem.paymentMode === "split_with_friends")
+                    : payingItem &&
+                        "paymentMode" in payingItem &&
+                        payingItem.paymentMode === "split_with_friends"
                       ? "This will deduct the full amount, record it in history, and auto-create Bill Friends entries from your saved split defaults."
                       : "This will deduct the full amount from the selected account and record it in history."}
                 </span>

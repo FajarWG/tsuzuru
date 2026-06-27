@@ -242,7 +242,8 @@ export const templateService = {
           type: "expense",
           amount: template.amount,
           currency: template.currency,
-          category: "adjustment",
+          category: template.category || "living_expenses",
+          subCategory: template.subCategory || "utilities",
           description: txDescription,
           splitGroupId: splitGroupId,
           isTemplate: true,
@@ -284,6 +285,8 @@ export const templateService = {
       paymentMode,
       splitConfig: splitConfig ?? Prisma.JsonNull,
       currency: account.currency, // Ensure currency matches account
+      category: data.category || "living_expenses",
+      subCategory: data.subCategory || "utilities",
     });
   },
 
@@ -309,6 +312,8 @@ export const templateService = {
       paymentMode,
       splitConfig: splitConfig ?? Prisma.JsonNull,
       isActive: true,
+      category: data.category || "living_expenses",
+      subCategory: data.subCategory || "utilities",
     });
   },
 
