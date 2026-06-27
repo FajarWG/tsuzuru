@@ -56,6 +56,11 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import {
+  INCOME_SUBCATS,
+  getDefaultSubCats,
+  SubCatOption,
+} from "@/lib/categories";
 
 interface AccountItem {
   id: string;
@@ -66,32 +71,10 @@ interface AccountItem {
 interface AddTransactionFabProps {
   userId: string;
   accounts: AccountItem[];
-  budgetCategories?: { name: string; label: string }[];
+  budgetCategories?: { name: string; label: string; subCategories?: any }[];
 }
 
-const POCKET_MONEY_SUBCATS = [
-  { value: "shopping", label: "Shopping" },
-  { value: "food", label: "Food" },
-  { value: "drinks", label: "Drinks" },
-  { value: "transport", label: "Transport" },
-  { value: "entertainment", label: "Entertainment" },
-  { value: "others", label: "Others" },
-];
 
-const SHOPPING_SUBCATS = [
-  { value: "electronics", label: "Electronics" },
-  { value: "clothing", label: "Clothing" },
-  { value: "household", label: "Household" },
-  { value: "health", label: "Healthcare" },
-  { value: "others", label: "Others" },
-];
-
-const INCOME_SUBCATS = [
-  { value: "salary", label: "Salary" },
-  { value: "bonus", label: "Bonus" },
-  { value: "allowance", label: "Allowance" },
-  { value: "others", label: "Others" },
-];
 
 function fileToBase64(
   file: File,
@@ -192,8 +175,8 @@ export default function AddTransactionFab({
     budgetCategories && budgetCategories.length > 0
       ? budgetCategories
       : [
-          { name: "pocket_money", label: "Pocket Money" },
-          { name: "shopping", label: "Shopping" },
+          { name: "living_expenses", label: "Living Expenses" },
+          { name: "personal_spending", label: "Personal Spending" },
         ];
 
   // Flow state
@@ -210,7 +193,7 @@ export default function AddTransactionFab({
   const [type, setType] = useState<"expense" | "income">("expense");
   const [amount, setAmount] = useState("");
   const [accountId, setAccountId] = useState(accounts[0]?.id || "");
-  const [category, setCategory] = useState<string>("pocket_money");
+  const [category, setCategory] = useState<string>("living_expenses");
   const [subCategory, setSubCategory] = useState("others");
   const [mealNumber, setMealNumber] = useState<number | null>(null);
   const [description, setDescription] = useState("");
@@ -219,6 +202,7 @@ export default function AddTransactionFab({
 
   // Receipt Mode States
   const [isReceipt, setIsReceipt] = useState(false);
+  const [receiptSetupStep, setReceiptSetupStep] = useState<"setup" | "items">("setup");
   const [receiptItems, setReceiptItems] = useState<
     { name: string; price: number; category?: string; subCategory?: string }[]
   >([]);
@@ -356,20 +340,21 @@ export default function AddTransactionFab({
 
   const activeAccount = accounts.find((a) => a.id === accountId);
   const currencySymbol = activeAccount?.currency === "IDR" ? "Rp" : "¥";
-  const subcatOptions =
-    type === "income"
-      ? INCOME_SUBCATS
-      : category === "pocket_money"
-        ? POCKET_MONEY_SUBCATS
-        : category === "shopping"
-          ? SHOPPING_SUBCATS
-          : [
-              { value: "others", label: "Others" },
-              { value: "food", label: "Food" },
-              { value: "transport", label: "Transport" },
-              { value: "shopping", label: "Shopping" },
-              { value: "bills", label: "Bills" },
-            ];
+  // Get subcategory options for the active category.
+  // If the BudgetLimit in DB has custom subCategories, use those; else use defaults.
+  const getSubcatOptionsForCategory = (cat: string): SubCatOption[] => {
+    if (type === "income") return INCOME_SUBCATS;
+    // Find matching budget category which may carry custom subCategories from DB
+    const matchedCat = budgetCategories?.find((bc) => bc.name === cat) as
+      | (typeof budgetCategories extends (infer T)[] | undefined ? T & { subCategories?: SubCatOption[] } : never)
+      | undefined;
+    if (matchedCat && "subCategories" in matchedCat && Array.isArray((matchedCat as { subCategories?: SubCatOption[] }).subCategories) && ((matchedCat as { subCategories?: SubCatOption[] }).subCategories?.length ?? 0) > 0) {
+      return (matchedCat as { subCategories?: SubCatOption[] }).subCategories!;
+    }
+    return getDefaultSubCats(cat);
+  };
+
+  const subcatOptions = getSubcatOptionsForCategory(category);
 
   const resetForm = () => {
     setActiveMode("select");
@@ -378,12 +363,13 @@ export default function AddTransactionFab({
     setType("expense");
     setAmount("");
     setAccountId(accounts[0]?.id || "");
-    setCategory(categoriesToUse[0]?.name || "pocket_money");
+    setCategory(categoriesToUse[0]?.name || "living_expenses");
     setSubCategory("others");
     setMealNumber(null);
     setDescription("");
     setDate(new Date());
     setIsReceipt(false);
+    setReceiptSetupStep("setup");
     setReceiptItems([]);
     setOpenCategoryPickerIdx(null);
     setNewItemName("");
@@ -547,18 +533,20 @@ export default function AddTransactionFab({
     setIsReceipt(receiptMode);
     if (receiptMode) {
       setType("expense");
-      setCategory("pocket_money");
+      setCategory("personal_spending");
       setSubCategory("shopping");
     } else {
       setType("expense");
-      setCategory("pocket_money");
-      setSubCategory("others");
+      setCategory("living_expenses");
+      setSubCategory("other");
     }
   };
 
   const handleCategoryChange = (cat: string) => {
     setCategory(cat);
-    setSubCategory("others");
+    // Default to first subcat of the new category
+    const firstSub = getDefaultSubCats(cat)[0]?.value ?? "other";
+    setSubCategory(firstSub);
     setMealNumber(null);
   };
 
@@ -1289,8 +1277,8 @@ export default function AddTransactionFab({
                                   setCategory("income");
                                   setSubCategory("salary");
                                 } else {
-                                  setCategory("pocket_money");
-                                  setSubCategory("others");
+                                  setCategory("living_expenses");
+                                  setSubCategory("other");
                                 }
                               }}
                               className={cn(
@@ -1494,9 +1482,164 @@ export default function AddTransactionFab({
                           </Popover>
                         </div>
                       </>
-                    ) : (
-                      // === Receipt Mode Layout ===
+                    ) : receiptSetupStep === "setup" ? (
+                      // === Receipt Mode Setup Step 1 ===
                       <>
+                        {/* 1. Category */}
+                        <div className="flex flex-col gap-1.5">
+                          <Label className="text-xs font-semibold text-muted-foreground">
+                            Default Category
+                          </Label>
+                          <div className="flex bg-muted p-1 rounded-lg border border-border/20">
+                            {(["living_expenses", "personal_spending"] as const).map((cat) => (
+                              <button
+                                key={cat}
+                                type="button"
+                                onClick={() => {
+                                  setCategory(cat);
+                                  // Update subcategory defaults
+                                  const defaults = getSubcatOptionsForCategory(cat);
+                                  setSubCategory(defaults[0]?.value ?? "other");
+                                }}
+                                className={cn(
+                                  "flex-1 h-9 rounded-md text-xs font-semibold tracking-wide transition-all capitalize cursor-pointer",
+                                  category === cat
+                                    ? "bg-white dark:bg-zinc-800 text-foreground shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground",
+                                )}
+                              >
+                                {cat === "living_expenses" ? "Living Expenses" : "Personal Spending"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* 2. Sub-category */}
+                        <div className="flex flex-col gap-1.5">
+                          <Label className="text-xs font-semibold text-muted-foreground">
+                            Sub-category <span className="text-red-500">*</span>
+                          </Label>
+                          <Select
+                            value={subCategory}
+                            onValueChange={handleSubCategoryChange}
+                          >
+                            <SelectTrigger className="h-11 rounded-xl text-sm font-semibold">
+                              <SelectValue placeholder="Select sub-category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {subcatOptions.map((opt) => (
+                                <SelectItem
+                                  key={opt.value}
+                                  value={opt.value}
+                                  className="text-sm"
+                                >
+                                  {opt.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* 3. Total Amount & Tax side-by-side */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="flex flex-col gap-1.5">
+                            <Label className="text-xs font-semibold text-muted-foreground">
+                              Total Amount <span className="font-normal opacity-60">(optional)</span>
+                            </Label>
+                            <div className="relative flex items-center bg-white dark:bg-zinc-900 border border-border/50 rounded-xl px-3.5 h-12 focus-within:border-primary transition-colors shadow-xs">
+                              <span className="text-base font-bold text-muted-foreground mr-1.5 select-none">
+                                {currencySymbol}
+                              </span>
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={targetTotal}
+                                onChange={(e) => setTargetTotal(formatInputAmount(e.target.value))}
+                                className="flex-1 h-full text-sm font-bold font-sans bg-transparent focus:outline-none text-foreground"
+                                placeholder="0"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-1.5">
+                            <Label className="text-xs font-semibold text-muted-foreground">
+                              Tax (%) <span className="font-normal opacity-60">(optional)</span>
+                            </Label>
+                            <div className="relative flex items-center bg-white dark:bg-zinc-900 border border-border/50 rounded-xl px-4 h-12 focus-within:border-primary transition-colors shadow-xs">
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={taxPercentage}
+                                onChange={(e) => {
+                                  const val = e.target.value.replace(/[^0-9]/g, "");
+                                  setTaxPercentage(val);
+                                }}
+                                className="flex-1 h-full text-sm font-semibold font-sans bg-transparent focus:outline-none text-foreground pr-6"
+                                placeholder="0"
+                              />
+                              <span className="absolute right-4 text-sm font-bold text-muted-foreground select-none">
+                                %
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Next Button */}
+                        <Button
+                          type="button"
+                          className="w-full h-11 rounded-xl font-semibold mt-2 cursor-pointer flex items-center justify-center gap-1.5"
+                          onClick={() => {
+                            if (!category) {
+                              toast.error("Please select a category");
+                              return;
+                            }
+                            if (!subCategory) {
+                              toast.error("Please select a sub-category");
+                              return;
+                            }
+                            // Move to items step!
+                            setReceiptSetupStep("items");
+                          }}
+                        >
+                          Continue to Items
+                        </Button>
+                      </>
+                    ) : (
+                      // === Receipt Mode Layout (Step 2: Items) ===
+                      <>
+                        {/* Summary Card of Setup */}
+                        <div className="flex items-center justify-between p-3.5 bg-muted/40 border border-border/50 rounded-xl text-xs">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-semibold text-muted-foreground">
+                              {category === "living_expenses" ? "Living Expenses" : "Personal Spending"}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground/80">
+                              Sub-category: <strong className="text-foreground">{subcatOptions.find(s => s.value === subCategory)?.label ?? subCategory}</strong>
+                            </span>
+                          </div>
+                          <div className="flex flex-col items-end gap-0.5">
+                            {parseInputAmount(targetTotal) > 0 ? (
+                              <span className="font-bold text-foreground">
+                                {currencySymbol}{parseInputAmount(targetTotal).toLocaleString()}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground">No Target Total</span>
+                            )}
+                            {parseFloat(taxPercentage) > 0 && (
+                              <span className="text-[10px] text-muted-foreground">
+                                Tax: {taxPercentage}%
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setReceiptSetupStep("setup")}
+                            className="text-[10px] text-primary hover:underline font-semibold ml-3 cursor-pointer shrink-0"
+                          >
+                            Edit Setup
+                          </button>
+                        </div>
+
                         {/* 1. Description */}
                         <div className="flex flex-col gap-1.5">
                           <Label className="text-xs font-semibold text-muted-foreground">
@@ -1511,49 +1654,6 @@ export default function AddTransactionFab({
                             className="h-11 rounded-xl"
                             placeholder="e.g. Lawson, taxi, dinner"
                           />
-                        </div>
-
-                        {/* Target Total & Tax % */}
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="flex flex-col gap-1.5">
-                            <Label className="text-xs font-semibold text-muted-foreground">
-                              Target Total
-                            </Label>
-                            <div className="relative flex items-center bg-white dark:bg-zinc-900 border border-border/50 rounded-xl px-3 h-10 focus-within:border-primary transition-colors shadow-xs">
-                              <span className="text-sm font-bold text-muted-foreground mr-1.5 select-none">
-                                {currencySymbol}
-                              </span>
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={targetTotal}
-                                onChange={(e) => setTargetTotal(formatInputAmount(e.target.value))}
-                                className="flex-1 h-full text-sm font-bold font-sans bg-transparent focus:outline-none text-foreground"
-                                placeholder="0"
-                              />
-                            </div>
-                          </div>
-                          <div className="flex flex-col gap-1.5">
-                            <Label className="text-xs font-semibold text-muted-foreground">
-                              Tax (%)
-                            </Label>
-                            <div className="relative flex items-center bg-white dark:bg-zinc-900 border border-border/50 rounded-xl px-3 h-10 focus-within:border-primary transition-colors shadow-xs">
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={taxPercentage}
-                                onChange={(e) => {
-                                  const val = e.target.value.replace(/[^0-9]/g, "");
-                                  setTaxPercentage(val);
-                                }}
-                                className="flex-1 h-full text-sm font-bold font-sans bg-transparent focus:outline-none text-foreground pr-4"
-                                placeholder="0"
-                              />
-                              <span className="absolute right-3 text-sm font-bold text-muted-foreground select-none">
-                                %
-                              </span>
-                            </div>
-                          </div>
                         </div>
 
                         {/* 2. Receipt Items (Scan & List & Manual inputs) */}
@@ -1587,18 +1687,16 @@ export default function AddTransactionFab({
                                 const isOverridden = !!item.category;
                                 const catLabel = categoriesToUse.find(c => c.name === effectiveCat)?.label ?? effectiveCat;
                                 const allSubcats = [
-                                  ...POCKET_MONEY_SUBCATS,
-                                  ...SHOPPING_SUBCATS,
+                                  ...getDefaultSubCats("living_expenses"),
+                                  ...getDefaultSubCats("personal_spending"),
                                   ...INCOME_SUBCATS,
-                                  { value: "bills", label: "Bills" },
-                                  { value: "transport", label: "Transport" },
                                 ];
                                 const subCatLabel = allSubcats.find(s => s.value === effectiveSubCat)?.label ?? effectiveSubCat;
-                                const catColor = effectiveCat === "pocket_money"
+                                const catColor = effectiveCat === "living_expenses"
                                   ? isOverridden
                                     ? "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50"
                                     : "bg-muted text-muted-foreground border-border/30"
-                                  : effectiveCat === "shopping"
+                                  : effectiveCat === "personal_spending"
                                   ? isOverridden
                                     ? "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:border-violet-800/50"
                                     : "bg-muted text-muted-foreground border-border/30"
@@ -1705,11 +1803,7 @@ export default function AddTransactionFab({
                                               key={cat.name}
                                               type="button"
                                               onClick={() => {
-                                                const defaultSub = cat.name === "pocket_money"
-                                                  ? "food"
-                                                  : cat.name === "shopping"
-                                                  ? "others"
-                                                  : "others";
+                                                const defaultSub = getDefaultSubCats(cat.name)[0]?.value ?? "other";
                                                 setReceiptItems((prev) =>
                                                   prev.map((it, i) =>
                                                     i === idx
@@ -1731,12 +1825,7 @@ export default function AddTransactionFab({
                                         </div>
                                         {/* Sub-category selector */}
                                         <div className="flex flex-wrap gap-1">
-                                          {(effectiveCat === "pocket_money"
-                                            ? POCKET_MONEY_SUBCATS
-                                            : effectiveCat === "shopping"
-                                            ? SHOPPING_SUBCATS
-                                            : INCOME_SUBCATS
-                                          ).map((sub) => (
+                                          {getSubcatOptionsForCategory(effectiveCat).map((sub) => (
                                             <button
                                               key={sub.value}
                                               type="button"
@@ -1931,57 +2020,7 @@ export default function AddTransactionFab({
                           </Select>
                         </div>
 
-                        {/* 4. Category */}
-                        <div className="flex flex-col gap-1.5">
-                          <Label className="text-xs font-semibold text-muted-foreground">
-                            Category
-                          </Label>
-                          <div className="flex gap-2">
-                            {categoriesToUse.map((cat) => (
-                              <button
-                                key={cat.name}
-                                type="button"
-                                onClick={() => handleCategoryChange(cat.name)}
-                                className={cn(
-                                  "flex-1 h-9 rounded-xl border text-xs font-semibold transition-all cursor-pointer",
-                                  category === cat.name
-                                    ? "bg-primary text-primary-foreground border-transparent"
-                                    : "bg-white dark:bg-zinc-900 border-border text-foreground hover:bg-muted",
-                                )}
-                              >
-                                {cat.label}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* 5. Sub-category */}
-                        <div className="flex flex-col gap-1.5">
-                          <Label className="text-xs font-semibold text-muted-foreground">
-                            Sub-category
-                          </Label>
-                          <Select
-                            value={subCategory}
-                            onValueChange={handleSubCategoryChange}
-                          >
-                            <SelectTrigger className="h-11 rounded-xl text-sm font-semibold">
-                              <SelectValue placeholder="Select sub-category" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {subcatOptions.map((opt) => (
-                                <SelectItem
-                                  key={opt.value}
-                                  value={opt.value}
-                                  className="text-sm"
-                                >
-                                  {opt.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        {/* 6. Date */}
+                        {/* 4. Date */}
                         <div className="flex flex-col gap-1.5">
                           <Label className="text-xs font-semibold text-muted-foreground">
                             Date
@@ -1999,7 +2038,7 @@ export default function AddTransactionFab({
                                   month: "short",
                                   day: "numeric",
                                   year: "numeric",
-                                })}
+                                }).trim()}
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent
@@ -2019,13 +2058,14 @@ export default function AddTransactionFab({
                         </div>
                       </>
                     )}
+
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
 
             {/* Submit */}
-            {!showSplitPrompt && activeMode !== "select" && (
+            {!showSplitPrompt && activeMode !== "select" && !(isReceipt && receiptSetupStep === "setup") && (
               <div className="shrink-0 pt-4 mt-auto border-t border-border/20">
                 <Button
                   type="submit"
