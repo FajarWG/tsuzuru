@@ -40,7 +40,7 @@ model Transaction {
   type         String   // "expense" | "income"
   amount       Float
   currency     String
-  category     String   // "pocket_money" | "shopping" | "income" | "adjustment"
+  category     String   // "living_expenses" | "personal_spending" | "income" | "adjustment" (legacy: "pocket_money" | "shopping")
   subCategory  String?  // "food", "drinks", etc.
   mealNumber   Int?     // 1-4, only for food
   description  String?
@@ -64,6 +64,8 @@ model MonthlyTemplate {
   intervalMonths Int     @default(1) // 1=monthly, 2=every 2 months, 3=quarterly, etc.
   paymentMode    String  @default("self_paid") // "self_paid" | "split_with_friends"
   splitConfig    Json?
+  category       String  @default("living_expenses")
+  subCategory    String  @default("utilities")
   user           User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
@@ -96,13 +98,14 @@ model BillFriend {
 }
 
 model BudgetLimit {
-  id        String   @id @default(cuid())
-  userId    String
-  name      String   // slug/unique name for category matching (e.g. "pocket_money")
-  label     String   // display name (e.g. "Pocket Money")
-  limit     Float
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  id            String   @id @default(cuid())
+  userId        String
+  name          String   // slug/unique name for category matching (e.g. "living_expenses")
+  label         String   // display name (e.g. "Living Expenses")
+  limit         Float
+  subCategories Json?    // [{ value: string, label: string }]
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
 
   @@unique([userId, name])
 }

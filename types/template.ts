@@ -16,6 +16,8 @@ export interface CreateTemplateInput {
   intervalMonths: number;
   paymentMode?: TemplatePaymentMode;
   splitConfig?: TemplateSplitConfigInput | null;
+  category?: string;
+  subCategory?: string;
 }
 
 export interface UpdateTemplateInput {
@@ -26,4 +28,6 @@ export interface UpdateTemplateInput {
   intervalMonths: number;
   paymentMode?: TemplatePaymentMode;
   splitConfig?: TemplateSplitConfigInput | null;
+  category?: string;
+  subCategory?: string;
 }

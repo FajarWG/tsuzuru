@@ -1,6 +1,7 @@
 import { budgetRepository } from "@/repositories/budgetRepository";
 import { settingsRepository } from "@/repositories/settingsRepository";
 import { seedBudgetLimitsIfEmpty } from "@/lib/seedBudgetLimits";
+import { SubCatOption } from "@/lib/categories";
 
 export const budgetService = {
   async getBudgetLimits(userId: string) {
@@ -18,7 +19,13 @@ export const budgetService = {
       .replace(/\s+/g, "_")
       .replace(/[^a-z0-9_]/g, "");
 
-    if (!name || name === "monthly" || name === "income" || name === "template" || name === "adjustment") {
+    if (
+      !name ||
+      name === "monthly" ||
+      name === "income" ||
+      name === "template" ||
+      name === "adjustment"
+    ) {
       throw new Error("Invalid category name. Please choose a different label.");
     }
 
@@ -44,8 +51,9 @@ export const budgetService = {
     const existing = await budgetRepository.findFirstById(id, userId);
     if (!existing) throw new Error("Budget limit not found");
 
-    // Prevent changing name slug for system defaults (monthly, pocket_money, shopping) to keep functionality
-    const isSystemDefault = ["monthly", "pocket_money", "shopping"].includes(existing.name);
+    // Prevent changing name slug for system defaults to keep functionality
+    const systemDefaults = ["monthly", "living_expenses", "personal_spending"];
+    const isSystemDefault = systemDefaults.includes(existing.name);
     const updatedName = isSystemDefault
       ? existing.name
       : trimmedLabel
@@ -62,13 +70,26 @@ export const budgetService = {
     // Sync back to UserSettings columns for backwards compatibility and fallback support
     if (existing.name === "monthly") {
       await settingsRepository.updateUserSettings(userId, { monthlyBudget: limit });
-    } else if (existing.name === "pocket_money") {
+    } else if (existing.name === "living_expenses") {
       await settingsRepository.updateUserSettings(userId, { pocketMoneyLimit: limit });
-    } else if (existing.name === "shopping") {
+    } else if (existing.name === "personal_spending") {
       await settingsRepository.updateUserSettings(userId, { shoppingLimit: limit });
     }
 
     return updated;
+  },
+
+  async updateBudgetSubCategories(
+    id: string,
+    subCategories: SubCatOption[],
+    userId: string
+  ) {
+    const existing = await budgetRepository.findFirstById(id, userId);
+    if (!existing) throw new Error("Budget limit not found");
+
+    return budgetRepository.update(id, userId, {
+      subCategories: subCategories as unknown as never,
+    });
   },
 
   async deleteBudgetLimit(id: string, userId: string) {
@@ -82,9 +103,9 @@ export const budgetService = {
     await budgetRepository.delete(id, userId);
 
     // Reset fallback values in UserSettings if system defaults are deleted
-    if (existing.name === "pocket_money") {
+    if (existing.name === "living_expenses") {
       await settingsRepository.updateUserSettings(userId, { pocketMoneyLimit: 0 });
-    } else if (existing.name === "shopping") {
+    } else if (existing.name === "personal_spending") {
       await settingsRepository.updateUserSettings(userId, { shoppingLimit: 0 });
     }
   },

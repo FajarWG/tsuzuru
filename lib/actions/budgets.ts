@@ -3,6 +3,7 @@
 import { auth } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { budgetService } from "@/services/budgetService";
+import { SubCatOption } from "@/lib/categories";
 
 export async function getBudgetLimitsAction() {
   try {
@@ -47,6 +48,32 @@ export async function updateBudgetLimitAction(id: string, label: string, limit: 
   } catch (err) {
     console.error("updateBudgetLimitAction error:", err);
     return { success: false, error: (err as Error).message || "Failed to update budget limit" };
+  }
+}
+
+export async function updateBudgetSubCategoriesAction(
+  id: string,
+  subCategories: SubCatOption[]
+) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+    const updated = await budgetService.updateBudgetSubCategories(
+      id,
+      subCategories,
+      session.user.id
+    );
+
+    revalidatePath("/settings");
+    revalidatePath("/");
+    return { success: true, data: updated };
+  } catch (err) {
+    console.error("updateBudgetSubCategoriesAction error:", err);
+    return {
+      success: false,
+      error: (err as Error).message || "Failed to update subcategories",
+    };
   }
 }
 
