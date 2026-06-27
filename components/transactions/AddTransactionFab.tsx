@@ -74,8 +74,6 @@ interface AddTransactionFabProps {
   budgetCategories?: { name: string; label: string; subCategories?: any }[];
 }
 
-
-
 function fileToBase64(
   file: File,
 ): Promise<{ base64: string; mimeType: string }> {
@@ -202,11 +200,15 @@ export default function AddTransactionFab({
 
   // Receipt Mode States
   const [isReceipt, setIsReceipt] = useState(false);
-  const [receiptSetupStep, setReceiptSetupStep] = useState<"setup" | "items">("setup");
+  const [receiptSetupStep, setReceiptSetupStep] = useState<"setup" | "items">(
+    "setup",
+  );
   const [receiptItems, setReceiptItems] = useState<
     { name: string; price: number; category?: string; subCategory?: string }[]
   >([]);
-  const [openCategoryPickerIdx, setOpenCategoryPickerIdx] = useState<number | null>(null);
+  const [openCategoryPickerIdx, setOpenCategoryPickerIdx] = useState<
+    number | null
+  >(null);
   const [newItemName, setNewItemName] = useState("");
   const [newItemPrice, setNewItemPrice] = useState("");
   const [isAiImportOpen, setIsAiImportOpen] = useState(false);
@@ -217,7 +219,6 @@ export default function AddTransactionFab({
   const [aiImportText, setAiImportText] = useState("");
   const [targetTotal, setTargetTotal] = useState("");
   const [taxPercentage, setTaxPercentage] = useState("");
-
 
   // Split Bill States
   const [showSplitPrompt, setShowSplitPrompt] = useState(false);
@@ -318,7 +319,10 @@ export default function AddTransactionFab({
       }
 
       setReceiptItems((prev) => [...prev, ...validItems]);
-      const importedTotal = validItems.reduce((sum: number, item: { price: number }) => sum + item.price, 0);
+      const importedTotal = validItems.reduce(
+        (sum: number, item: { price: number }) => sum + item.price,
+        0,
+      );
       setTargetTotal(importedTotal.toString());
       toast.success(`Successfully imported ${validItems.length} items!`);
       setIsAiImportOpen(false);
@@ -342,7 +346,6 @@ export default function AddTransactionFab({
   const parsedTargetTotal = parseInputAmount(targetTotal);
   const receiptDifference = parsedTargetTotal - totalReceiptAmount;
 
-
   const activeAccount = accounts.find((a) => a.id === accountId);
   const currencySymbol = activeAccount?.currency === "IDR" ? "Rp" : "¥";
   // Get subcategory options for the active category.
@@ -351,9 +354,19 @@ export default function AddTransactionFab({
     if (type === "income") return INCOME_SUBCATS;
     // Find matching budget category which may carry custom subCategories from DB
     const matchedCat = budgetCategories?.find((bc) => bc.name === cat) as
-      | (typeof budgetCategories extends (infer T)[] | undefined ? T & { subCategories?: SubCatOption[] } : never)
+      | (typeof budgetCategories extends (infer T)[] | undefined
+          ? T & { subCategories?: SubCatOption[] }
+          : never)
       | undefined;
-    if (matchedCat && "subCategories" in matchedCat && Array.isArray((matchedCat as { subCategories?: SubCatOption[] }).subCategories) && ((matchedCat as { subCategories?: SubCatOption[] }).subCategories?.length ?? 0) > 0) {
+    if (
+      matchedCat &&
+      "subCategories" in matchedCat &&
+      Array.isArray(
+        (matchedCat as { subCategories?: SubCatOption[] }).subCategories,
+      ) &&
+      ((matchedCat as { subCategories?: SubCatOption[] }).subCategories
+        ?.length ?? 0) > 0
+    ) {
       return (matchedCat as { subCategories?: SubCatOption[] }).subCategories!;
     }
     return getDefaultSubCats(cat);
@@ -503,7 +516,10 @@ export default function AddTransactionFab({
 
         if (parsedItems.length > 0) {
           setReceiptItems((prev) => [...prev, ...parsedItems]);
-          const importedTotal = parsedItems.reduce((sum: number, item: { price: number }) => sum + item.price, 0);
+          const importedTotal = parsedItems.reduce(
+            (sum: number, item: { price: number }) => sum + item.price,
+            0,
+          );
           setTargetTotal(importedTotal.toString());
           toast.success(
             `Successfully imported ${parsedItems.length} items from receipt!`,
@@ -589,7 +605,9 @@ export default function AddTransactionFab({
 
       const friendShareWithTax = friendShare * (1 + taxRate / 100);
       const finalShare =
-        currency === "JPY" ? Math.round(friendShareWithTax) : friendShareWithTax;
+        currency === "JPY"
+          ? Math.round(friendShareWithTax)
+          : friendShareWithTax;
 
       if (finalShare > 0) {
         billsToCreate.push({
@@ -878,7 +896,10 @@ export default function AddTransactionFab({
 
             <div
               className="flex-1 overflow-y-auto overflow-x-hidden px-1 flex flex-col gap-4 py-3"
-              onClick={() => { setShowFriendSuggestions(false); setOpenCategoryPickerIdx(null); }}
+              onClick={() => {
+                setShowFriendSuggestions(false);
+                setOpenCategoryPickerIdx(null);
+              }}
             >
               <AnimatePresence mode="wait">
                 {showSplitPrompt ? (
@@ -1498,14 +1519,17 @@ export default function AddTransactionFab({
                             Default Category
                           </Label>
                           <div className="flex bg-muted p-1 rounded-lg border border-border/20">
-                            {(["living_expenses", "personal_spending"] as const).map((cat) => (
+                            {(
+                              ["living_expenses", "personal_spending"] as const
+                            ).map((cat) => (
                               <button
                                 key={cat}
                                 type="button"
                                 onClick={() => {
                                   setCategory(cat);
                                   // Update subcategory defaults
-                                  const defaults = getSubcatOptionsForCategory(cat);
+                                  const defaults =
+                                    getSubcatOptionsForCategory(cat);
                                   setSubCategory(defaults[0]?.value ?? "other");
                                 }}
                                 className={cn(
@@ -1515,7 +1539,9 @@ export default function AddTransactionFab({
                                     : "text-muted-foreground hover:text-foreground",
                                 )}
                               >
-                                {cat === "living_expenses" ? "Living Expenses" : "Personal Spending"}
+                                {cat === "living_expenses"
+                                  ? "Living Expenses"
+                                  : "Personal Spending"}
                               </button>
                             ))}
                           </div>
@@ -1550,7 +1576,10 @@ export default function AddTransactionFab({
                         {/* Description */}
                         <div className="flex flex-col gap-1.5">
                           <Label className="text-xs font-semibold text-muted-foreground">
-                            Description <span className="font-normal opacity-60">(optional)</span>
+                            Description{" "}
+                            <span className="font-normal opacity-60">
+                              (optional)
+                            </span>
                           </Label>
                           <Input
                             value={description}
@@ -1561,10 +1590,13 @@ export default function AddTransactionFab({
                         </div>
 
                         {/* 3. Total Amount & Tax side-by-side */}
-                        <div className="flex gap-3">
-                          <div className="flex-1 flex flex-col gap-1.5">
+                        <div className="flex gap-2 w-full">
+                          <div className="flex-1 min-w-0 flex flex-col gap-1.5">
                             <Label className="text-xs font-semibold text-muted-foreground">
-                              Total Amount <span className="font-normal opacity-60">(optional)</span>
+                              Total Amount{" "}
+                              <span className="font-normal opacity-60">
+                                (optional)
+                              </span>
                             </Label>
                             <div className="relative flex items-center bg-white dark:bg-zinc-900 border border-border/50 rounded-xl px-3.5 h-12 focus-within:border-primary transition-colors shadow-xs">
                               <span className="text-base font-bold text-muted-foreground mr-1.5 select-none">
@@ -1574,32 +1606,43 @@ export default function AddTransactionFab({
                                 type="text"
                                 inputMode="numeric"
                                 value={targetTotal}
-                                onChange={(e) => setTargetTotal(formatInputAmount(e.target.value))}
-                                className="flex-1 h-full text-sm font-bold font-sans bg-transparent focus:outline-none text-foreground"
+                                onChange={(e) =>
+                                  setTargetTotal(
+                                    formatInputAmount(e.target.value),
+                                  )
+                                }
+                                className="flex-1 min-w-0 h-full text-sm font-bold font-sans bg-transparent focus:outline-none text-foreground"
                                 placeholder="0"
                               />
                             </div>
                           </div>
 
-                          <div className="w-[100px] flex flex-col gap-1.5 shrink-0">
+                          <div className="w-20 shrink-0 flex flex-col gap-1.5">
                             <Label className="text-xs font-semibold text-muted-foreground text-center">
-                              Tax (%) <span className="font-normal opacity-60">(opt)</span>
+                              Tax (%){" "}
                             </Label>
-                            <div className="relative flex items-center bg-white dark:bg-zinc-900 border border-border/50 rounded-xl px-3 h-12 focus-within:border-primary transition-colors shadow-xs">
+                            <div className="relative flex items-center bg-white dark:bg-zinc-900 border border-border/50 rounded-xl px-2 h-12 focus-within:border-primary transition-colors shadow-xs">
                               <input
                                 type="text"
                                 inputMode="numeric"
                                 value={taxPercentage}
                                 onChange={(e) => {
-                                  const val = e.target.value.replace(/[^0-9]/g, "");
-                                  if (val === "" || (parseInt(val, 10) >= 0 && parseInt(val, 10) < 100)) {
+                                  const val = e.target.value.replace(
+                                    /[^0-9]/g,
+                                    "",
+                                  );
+                                  if (
+                                    val === "" ||
+                                    (parseInt(val, 10) >= 0 &&
+                                      parseInt(val, 10) < 100)
+                                  ) {
                                     setTaxPercentage(val);
                                   }
                                 }}
-                                className="flex-1 h-full text-sm font-semibold font-sans bg-transparent focus:outline-none text-foreground pr-5 text-center"
+                                className="flex-1 min-w-0 h-full text-sm font-semibold font-sans bg-transparent focus:outline-none text-foreground pr-4 text-center"
                                 placeholder="0"
                               />
-                              <span className="absolute right-3 text-sm font-bold text-muted-foreground select-none">
+                              <span className="absolute right-2 text-xs font-bold text-muted-foreground select-none">
                                 %
                               </span>
                             </div>
@@ -1633,19 +1676,29 @@ export default function AddTransactionFab({
                         <div className="flex items-center justify-between p-3.5 bg-muted/40 border border-border/50 rounded-xl text-xs">
                           <div className="flex flex-col gap-0.5">
                             <span className="font-semibold text-muted-foreground">
-                              {category === "living_expenses" ? "Living Expenses" : "Personal Spending"}
+                              {category === "living_expenses"
+                                ? "Living Expenses"
+                                : "Personal Spending"}
                             </span>
                             <span className="text-[10px] text-muted-foreground/80">
-                              Sub-category: <strong className="text-foreground">{subcatOptions.find(s => s.value === subCategory)?.label ?? subCategory}</strong>
+                              Sub-category:{" "}
+                              <strong className="text-foreground">
+                                {subcatOptions.find(
+                                  (s) => s.value === subCategory,
+                                )?.label ?? subCategory}
+                              </strong>
                             </span>
                           </div>
                           <div className="flex flex-col items-end gap-0.5">
                             {parseInputAmount(targetTotal) > 0 ? (
                               <span className="font-bold text-foreground">
-                                {currencySymbol}{parseInputAmount(targetTotal).toLocaleString()}
+                                {currencySymbol}
+                                {parseInputAmount(targetTotal).toLocaleString()}
                               </span>
                             ) : (
-                              <span className="text-[10px] text-muted-foreground">No Target Total</span>
+                              <span className="text-[10px] text-muted-foreground">
+                                No Target Total
+                              </span>
                             )}
                             {parseFloat(taxPercentage) > 0 && (
                               <span className="text-[10px] text-muted-foreground">
@@ -1661,7 +1714,6 @@ export default function AddTransactionFab({
                             Edit Setup
                           </button>
                         </div>
-
 
                         {/* 2. Receipt Items (Scan & List & Manual inputs) */}
                         <div className="flex flex-col gap-3 p-4 bg-muted/40 border border-border/50 rounded-xl">
@@ -1690,26 +1742,34 @@ export default function AddTransactionFab({
                             <div className="flex flex-col gap-1.5 max-h-[220px] overflow-y-auto overflow-x-hidden pr-1">
                               {receiptItems.map((item, idx) => {
                                 const effectiveCat = item.category ?? category;
-                                const effectiveSubCat = item.subCategory ?? subCategory;
+                                const effectiveSubCat =
+                                  item.subCategory ?? subCategory;
                                 const isOverridden = !!item.category;
-                                const catLabel = categoriesToUse.find(c => c.name === effectiveCat)?.label ?? effectiveCat;
+                                const catLabel =
+                                  categoriesToUse.find(
+                                    (c) => c.name === effectiveCat,
+                                  )?.label ?? effectiveCat;
                                 const allSubcats = [
                                   ...getDefaultSubCats("living_expenses"),
                                   ...getDefaultSubCats("personal_spending"),
                                   ...INCOME_SUBCATS,
                                 ];
-                                const subCatLabel = allSubcats.find(s => s.value === effectiveSubCat)?.label ?? effectiveSubCat;
-                                const catColor = effectiveCat === "living_expenses"
-                                  ? isOverridden
-                                    ? "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50"
-                                    : "bg-muted text-muted-foreground border-border/30"
-                                  : effectiveCat === "personal_spending"
-                                  ? isOverridden
-                                    ? "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:border-violet-800/50"
-                                    : "bg-muted text-muted-foreground border-border/30"
-                                  : isOverridden
-                                    ? "bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-400 dark:border-sky-800/50"
-                                    : "bg-muted text-muted-foreground border-border/30";
+                                const subCatLabel =
+                                  allSubcats.find(
+                                    (s) => s.value === effectiveSubCat,
+                                  )?.label ?? effectiveSubCat;
+                                const catColor =
+                                  effectiveCat === "living_expenses"
+                                    ? isOverridden
+                                      ? "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50"
+                                      : "bg-muted text-muted-foreground border-border/30"
+                                    : effectiveCat === "personal_spending"
+                                      ? isOverridden
+                                        ? "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:border-violet-800/50"
+                                        : "bg-muted text-muted-foreground border-border/30"
+                                      : isOverridden
+                                        ? "bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-950/40 dark:text-sky-400 dark:border-sky-800/50"
+                                        : "bg-muted text-muted-foreground border-border/30";
 
                                 return (
                                   <div
@@ -1724,7 +1784,9 @@ export default function AddTransactionFab({
                                           const newName = e.target.value;
                                           setReceiptItems((prev) =>
                                             prev.map((it, i) =>
-                                              i === idx ? { ...it, name: newName } : it,
+                                              i === idx
+                                                ? { ...it, name: newName }
+                                                : it,
                                             ),
                                           );
                                         }}
@@ -1737,13 +1799,23 @@ export default function AddTransactionFab({
                                           <input
                                             type="text"
                                             inputMode="numeric"
-                                            value={item.price === 0 ? "" : item.price}
+                                            value={
+                                              item.price === 0 ? "" : item.price
+                                            }
                                             onChange={(e) => {
-                                              const val = e.target.value.replace(/[^0-9]/g, "");
-                                              const newPrice = val ? parseInt(val, 10) : 0;
+                                              const val =
+                                                e.target.value.replace(
+                                                  /[^0-9]/g,
+                                                  "",
+                                                );
+                                              const newPrice = val
+                                                ? parseInt(val, 10)
+                                                : 0;
                                               setReceiptItems((prev) =>
                                                 prev.map((it, i) =>
-                                                  i === idx ? { ...it, price: newPrice } : it,
+                                                  i === idx
+                                                    ? { ...it, price: newPrice }
+                                                    : it,
                                                 ),
                                               );
                                             }}
@@ -1754,8 +1826,11 @@ export default function AddTransactionFab({
                                         <button
                                           type="button"
                                           onClick={() => {
-                                            setReceiptItems((prev) => prev.filter((_, i) => i !== idx));
-                                            if (openCategoryPickerIdx === idx) setOpenCategoryPickerIdx(null);
+                                            setReceiptItems((prev) =>
+                                              prev.filter((_, i) => i !== idx),
+                                            );
+                                            if (openCategoryPickerIdx === idx)
+                                              setOpenCategoryPickerIdx(null);
                                           }}
                                           className="p-1 hover:bg-red-50 dark:hover:bg-red-950/20 text-red-500 rounded-md transition-colors cursor-pointer ml-0.5"
                                         >
@@ -1770,7 +1845,11 @@ export default function AddTransactionFab({
                                         type="button"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          setOpenCategoryPickerIdx(openCategoryPickerIdx === idx ? null : idx);
+                                          setOpenCategoryPickerIdx(
+                                            openCategoryPickerIdx === idx
+                                              ? null
+                                              : idx,
+                                          );
                                         }}
                                         className={cn(
                                           "inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] font-bold transition-all cursor-pointer",
@@ -1778,7 +1857,20 @@ export default function AddTransactionFab({
                                         )}
                                       >
                                         {catLabel}/{subCatLabel}
-                                        <svg className="size-2.5 opacity-60" viewBox="0 0 10 10" fill="currentColor"><path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                        <svg
+                                          className="size-2.5 opacity-60"
+                                          viewBox="0 0 10 10"
+                                          fill="currentColor"
+                                        >
+                                          <path
+                                            d="M2 3.5l3 3 3-3"
+                                            stroke="currentColor"
+                                            strokeWidth="1.5"
+                                            fill="none"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                          />
+                                        </svg>
                                       </button>
                                       {isOverridden && (
                                         <button
@@ -1786,7 +1878,13 @@ export default function AddTransactionFab({
                                           onClick={() =>
                                             setReceiptItems((prev) =>
                                               prev.map((it, i) =>
-                                                i === idx ? { ...it, category: undefined, subCategory: undefined } : it,
+                                                i === idx
+                                                  ? {
+                                                      ...it,
+                                                      category: undefined,
+                                                      subCategory: undefined,
+                                                    }
+                                                  : it,
                                               ),
                                             )
                                           }
@@ -1810,11 +1908,18 @@ export default function AddTransactionFab({
                                               key={cat.name}
                                               type="button"
                                               onClick={() => {
-                                                const defaultSub = getDefaultSubCats(cat.name)[0]?.value ?? "other";
+                                                const defaultSub =
+                                                  getDefaultSubCats(cat.name)[0]
+                                                    ?.value ?? "other";
                                                 setReceiptItems((prev) =>
                                                   prev.map((it, i) =>
                                                     i === idx
-                                                      ? { ...it, category: cat.name, subCategory: defaultSub }
+                                                      ? {
+                                                          ...it,
+                                                          category: cat.name,
+                                                          subCategory:
+                                                            defaultSub,
+                                                        }
                                                       : it,
                                                   ),
                                                 );
@@ -1832,14 +1937,24 @@ export default function AddTransactionFab({
                                         </div>
                                         {/* Sub-category selector */}
                                         <div className="flex flex-wrap gap-1">
-                                          {getSubcatOptionsForCategory(effectiveCat).map((sub) => (
+                                          {getSubcatOptionsForCategory(
+                                            effectiveCat,
+                                          ).map((sub) => (
                                             <button
                                               key={sub.value}
                                               type="button"
                                               onClick={() =>
                                                 setReceiptItems((prev) =>
                                                   prev.map((it, i) =>
-                                                    i === idx ? { ...it, subCategory: sub.value, category: effectiveCat } : it,
+                                                    i === idx
+                                                      ? {
+                                                          ...it,
+                                                          subCategory:
+                                                            sub.value,
+                                                          category:
+                                                            effectiveCat,
+                                                        }
+                                                      : it,
                                                   ),
                                                 )
                                               }
@@ -1856,7 +1971,9 @@ export default function AddTransactionFab({
                                         </div>
                                         <button
                                           type="button"
-                                          onClick={() => setOpenCategoryPickerIdx(null)}
+                                          onClick={() =>
+                                            setOpenCategoryPickerIdx(null)
+                                          }
                                           className="text-[10px] font-semibold text-primary hover:text-primary/80 text-right cursor-pointer transition-colors"
                                         >
                                           Done ✓
@@ -1902,38 +2019,48 @@ export default function AddTransactionFab({
                                 </span>
                               </div>
 
-                              {targetTotal && parseInputAmount(targetTotal) > 0 && (
-                                <div className="flex items-center justify-between font-semibold border-t border-border/20 pt-1.5 mt-1">
-                                  <span className="text-muted-foreground">Target Total</span>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-foreground">
-                                      {currencySymbol}
-                                      {parsedTargetTotal.toLocaleString()}
+                              {targetTotal &&
+                                parseInputAmount(targetTotal) > 0 && (
+                                  <div className="flex items-center justify-between font-semibold border-t border-border/20 pt-1.5 mt-1">
+                                    <span className="text-muted-foreground">
+                                      Target Total
                                     </span>
-                                    {(() => {
-                                      if (receiptDifference === 0) {
-                                        return (
-                                          <span className="text-emerald-500 text-[10px] font-bold flex items-center gap-0.5">
-                                            <IconCheck className="size-3" /> Matched
-                                          </span>
-                                        );
-                                      } else if (receiptDifference > 0) {
-                                        return (
-                                          <span className="text-amber-500 text-[10px] font-bold">
-                                            (Short by {currencySymbol}{receiptDifference.toLocaleString()})
-                                          </span>
-                                        );
-                                      } else {
-                                        return (
-                                          <span className="text-red-500 text-[10px] font-bold">
-                                            (Over by {currencySymbol}{Math.abs(receiptDifference).toLocaleString()})
-                                          </span>
-                                        );
-                                      }
-                                    })()}
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-foreground">
+                                        {currencySymbol}
+                                        {parsedTargetTotal.toLocaleString()}
+                                      </span>
+                                      {(() => {
+                                        if (receiptDifference === 0) {
+                                          return (
+                                            <span className="text-emerald-500 text-[10px] font-bold flex items-center gap-0.5">
+                                              <IconCheck className="size-3" />{" "}
+                                              Matched
+                                            </span>
+                                          );
+                                        } else if (receiptDifference > 0) {
+                                          return (
+                                            <span className="text-amber-500 text-[10px] font-bold">
+                                              (Short by {currencySymbol}
+                                              {receiptDifference.toLocaleString()}
+                                              )
+                                            </span>
+                                          );
+                                        } else {
+                                          return (
+                                            <span className="text-red-500 text-[10px] font-bold">
+                                              (Over by {currencySymbol}
+                                              {Math.abs(
+                                                receiptDifference,
+                                              ).toLocaleString()}
+                                              )
+                                            </span>
+                                          );
+                                        }
+                                      })()}
+                                    </div>
                                   </div>
-                                </div>
-                              )}
+                                )}
                             </div>
                           )}
 
@@ -2037,12 +2164,14 @@ export default function AddTransactionFab({
                                 className="h-11 justify-start rounded-xl bg-white px-3 text-sm font-semibold dark:bg-zinc-900"
                               >
                                 <IconCalendar className="size-4 text-muted-foreground" />
-                                {date.toLocaleDateString("en-US", {
-                                  weekday: "short",
-                                  month: "short",
-                                  day: "numeric",
-                                  year: "numeric",
-                                }).trim()}
+                                {date
+                                  .toLocaleDateString("en-US", {
+                                    weekday: "short",
+                                    month: "short",
+                                    day: "numeric",
+                                    year: "numeric",
+                                  })
+                                  .trim()}
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent
@@ -2062,32 +2191,33 @@ export default function AddTransactionFab({
                         </div>
                       </>
                     )}
-
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
 
             {/* Submit */}
-            {!showSplitPrompt && activeMode !== "select" && !(isReceipt && receiptSetupStep === "setup") && (
-              <div className="shrink-0 pt-4 mt-auto border-t border-border/20">
-                <Button
-                  type="submit"
-                  className="w-full h-11 rounded-xl text-sm font-semibold"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <IconLoader className="size-4 animate-spin" /> Saving...
-                    </>
-                  ) : isSplitMode ? (
-                    "Save Split Bill"
-                  ) : (
-                    "Save Transaction"
-                  )}
-                </Button>
-              </div>
-            )}
+            {!showSplitPrompt &&
+              activeMode !== "select" &&
+              !(isReceipt && receiptSetupStep === "setup") && (
+                <div className="shrink-0 pt-4 mt-auto border-t border-border/20">
+                  <Button
+                    type="submit"
+                    className="w-full h-11 rounded-xl text-sm font-semibold"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <IconLoader className="size-4 animate-spin" /> Saving...
+                      </>
+                    ) : isSplitMode ? (
+                      "Save Split Bill"
+                    ) : (
+                      "Save Transaction"
+                    )}
+                  </Button>
+                </div>
+              )}
           </form>
         </DialogContent>
       </Dialog>
