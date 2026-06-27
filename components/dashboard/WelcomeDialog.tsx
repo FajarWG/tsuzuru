@@ -865,7 +865,7 @@ export default function WelcomeDialog({
                   <div className="grid grid-cols-2 gap-3.5">
                     <div className="flex flex-col gap-1.5">
                       <Label className="text-xs font-semibold text-muted-foreground">
-                        Pocket Money Limit
+                        Living Expenses Limit
                       </Label>
                       <div className="relative flex items-center">
                         <span className="absolute left-3 text-xs font-bold text-muted-foreground">
@@ -891,7 +891,7 @@ export default function WelcomeDialog({
 
                     <div className="flex flex-col gap-1.5">
                       <Label className="text-xs font-semibold text-muted-foreground">
-                        Shopping Limit
+                        Personal Spending Limit
                       </Label>
                       <div className="relative flex items-center">
                         <span className="absolute left-3 text-xs font-bold text-muted-foreground">
@@ -939,6 +939,16 @@ export default function WelcomeDialog({
                     <IconActivity className="size-3.5 text-primary" /> Calculate
                     Recommendation
                   </Button>
+                </div>
+
+                {/* Subcategory tip */}
+                <div className="p-3 bg-primary/5 border border-primary/15 rounded-2xl flex gap-2.5 items-start">
+                  <IconInfoCircle className="size-4 text-primary shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-muted-foreground leading-relaxed font-sans">
+                    You can customize subcategories (e.g. Groceries, Coffee,
+                    Utilities) for each budget later from{" "}
+                    <strong>Settings → Budget</strong>.
+                  </p>
                 </div>
 
                 <div className="pt-4 border-t border-border/20 flex gap-2.5 shrink-0">
@@ -1443,32 +1453,35 @@ export default function WelcomeDialog({
 
                   <div className="flex flex-col border-t border-border/10 pt-2">
                     <span className="font-bold text-foreground font-sans text-[11px] leading-tight">
-                      Pocket Money Limit
+                      Living Expenses Limit
                     </span>
                     <p className="text-[10px] leading-relaxed mt-0.5">
-                      Allowance allocated for daily items, snacks, transport,
-                      and other flexible pocket money expenses.
+                      Budget for essential living costs: groceries, utilities
+                      (gas, electricity, water), rent, household supplies, and
+                      healthcare.
                     </p>
                   </div>
 
                   <div className="flex flex-col border-t border-border/10 pt-2">
                     <span className="font-bold text-foreground font-sans text-[11px] leading-tight">
-                      Shopping Limit
+                      Personal Spending Limit
                     </span>
                     <p className="text-[10px] leading-relaxed mt-0.5">
-                      Allocation designated for non-daily purchases like buying
-                      clothing, electronics, and household goods.
+                      Budget for discretionary spending: dining out, coffee,
+                      snacks, drinks, shopping, entertainment, and hobbies.
                     </p>
                   </div>
 
                   <div className="flex flex-col gap-1 border-t border-border/10 pt-2 bg-primary/5 p-2 rounded-xl border border-primary/10 mt-1">
                     <span className="font-bold text-primary font-sans text-[10px] uppercase tracking-wider leading-tight">
-                      Adding Custom Limits
+                      Adding Custom Limits & Subcategories
                     </span>
                     <p className="text-[10px] leading-relaxed mt-0.5">
                       In addition to these three core budgets, you can freely
-                      create and configure your own custom budget
-                      categories/limits later from the Settings page.
+                      create custom budget categories. You can also customize
+                      the subcategories (e.g. Groceries, Coffee, Utilities) for
+                      Living Expenses and Personal Spending from the{" "}
+                      <strong>Settings → Budget</strong> page.
                     </p>
                   </div>
                 </div>
@@ -1607,76 +1620,88 @@ export default function WelcomeDialog({
                     </div>
                   </div>
 
-                  {parseInputAmount(salaryInput) > 0 && (() => {
-                    const parsedSalary = parseInputAmount(salaryInput);
-                    let parsedSavings = 0;
-                    if (savingsType === "percentage") {
-                      const pct = parseFloat(savingsValue) || 0;
-                      parsedSavings = Math.round(parsedSalary * (pct / 100));
-                    } else {
-                      parsedSavings = parseInputAmount(savingsValue) || 0;
-                    }
+                  {parseInputAmount(salaryInput) > 0 &&
+                    (() => {
+                      const parsedSalary = parseInputAmount(salaryInput);
+                      let parsedSavings = 0;
+                      if (savingsType === "percentage") {
+                        const pct = parseFloat(savingsValue) || 0;
+                        parsedSavings = Math.round(parsedSalary * (pct / 100));
+                      } else {
+                        parsedSavings = parseInputAmount(savingsValue) || 0;
+                      }
 
-                    const rem = parsedSalary - parsedSavings;
-                    let recMonthly = 0;
-                    let recPocket = 0;
-                    let recShopping = 0;
+                      const rem = parsedSalary - parsedSavings;
+                      let recMonthly = 0;
+                      let recPocket = 0;
+                      let recShopping = 0;
 
-                    if (rem >= parsedSalary * 0.5) {
-                      recMonthly = Math.round(parsedSalary * 0.5);
-                      const wants = rem - recMonthly;
-                      recPocket = Math.round(wants * (2 / 3));
-                      recShopping = Math.round(wants * (1 / 3));
-                    } else {
-                      recMonthly = Math.max(rem, 0);
-                      recPocket = 0;
-                      recShopping = 0;
-                    }
+                      if (rem >= parsedSalary * 0.5) {
+                        recMonthly = Math.round(parsedSalary * 0.5);
+                        const wants = rem - recMonthly;
+                        recPocket = Math.round(wants * (2 / 3));
+                        recShopping = Math.round(wants * (1 / 3));
+                      } else {
+                        recMonthly = Math.max(rem, 0);
+                        recPocket = 0;
+                        recShopping = 0;
+                      }
 
-                    const getPercentLabel = (val: number) => {
-                      if (!parsedSalary) return "0%";
-                      const pct = (val / parsedSalary) * 100;
-                      return pct % 1 === 0 ? `${pct}%` : `${pct.toFixed(1)}%`;
-                    };
+                      const getPercentLabel = (val: number) => {
+                        if (!parsedSalary) return "0%";
+                        const pct = (val / parsedSalary) * 100;
+                        return pct % 1 === 0 ? `${pct}%` : `${pct.toFixed(1)}%`;
+                      };
 
-                    return (
-                      <div className="flex flex-col gap-2 p-3 bg-primary/5 border border-primary/10 rounded-xl mt-1 shrink-0">
-                        <span className="text-[10px] text-primary font-bold uppercase tracking-wider font-sans">
-                          Recommended Allocation:
-                        </span>
-                        
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-muted-foreground">Monthly Expected Budget (Needs: {getPercentLabel(recMonthly)})</span>
-                          <span className="font-bold text-foreground">
-                            {formatCurrency(recMonthly, currency)}
+                      return (
+                        <div className="flex flex-col gap-2 p-3 bg-primary/5 border border-primary/10 rounded-xl mt-1 shrink-0">
+                          <span className="text-[10px] text-primary font-bold uppercase tracking-wider font-sans">
+                            Recommended Allocation:
                           </span>
-                        </div>
-                        
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-muted-foreground">Pocket Money Limit (Wants: {getPercentLabel(recPocket)})</span>
-                          <span className="font-bold text-foreground">
-                            {formatCurrency(recPocket, currency)}
-                          </span>
-                        </div>
-                        
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-muted-foreground">Shopping Limit (Wants: {getPercentLabel(recShopping)})</span>
-                          <span className="font-bold text-foreground">
-                            {formatCurrency(recShopping, currency)}
-                          </span>
-                        </div>
 
-                        <div className="h-px bg-border my-1 opacity-50" />
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-muted-foreground">
+                              Monthly Expected Budget (Needs:{" "}
+                              {getPercentLabel(recMonthly)})
+                            </span>
+                            <span className="font-bold text-foreground">
+                              {formatCurrency(recMonthly, currency)}
+                            </span>
+                          </div>
 
-                        <div className="flex justify-between items-center text-xs font-semibold text-emerald-600 dark:text-emerald-500">
-                          <span>Target Savings ({getPercentLabel(parsedSavings)})</span>
-                          <span>
-                            {formatCurrency(parsedSavings, currency)}
-                          </span>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-muted-foreground">
+                              Living Expenses Limit (Wants:{" "}
+                              {getPercentLabel(recPocket)})
+                            </span>
+                            <span className="font-bold text-foreground">
+                              {formatCurrency(recPocket, currency)}
+                            </span>
+                          </div>
+
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-muted-foreground">
+                              Personal Spending Limit (Wants:{" "}
+                              {getPercentLabel(recShopping)})
+                            </span>
+                            <span className="font-bold text-foreground">
+                              {formatCurrency(recShopping, currency)}
+                            </span>
+                          </div>
+
+                          <div className="h-px bg-border my-1 opacity-50" />
+
+                          <div className="flex justify-between items-center text-xs font-semibold text-emerald-600 dark:text-emerald-500">
+                            <span>
+                              Target Savings ({getPercentLabel(parsedSavings)})
+                            </span>
+                            <span>
+                              {formatCurrency(parsedSavings, currency)}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })()}
+                      );
+                    })()}
                 </div>
 
                 <div className="flex gap-2 pt-3 border-t border-border/20 justify-end shrink-0">

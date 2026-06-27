@@ -80,8 +80,8 @@ interface DashboardData {
 function BudgetIcon({ name, isLow }: { name: string; isLow: boolean }) {
   const className = isLow ? "size-4 text-destructive" : "size-4 text-primary";
   if (name === "monthly") return <IconCurrencyYen className={className} />;
-  if (name === "pocket_money") return <IconPizza className={className} />;
-  if (name === "shopping") return <IconShirt className={className} />;
+  if (name === "living_expenses" || name === "pocket_money") return <IconPizza className={className} />;
+  if (name === "personal_spending" || name === "shopping") return <IconShirt className={className} />;
   return <IconCoins className={className} />;
 }
 
@@ -139,25 +139,25 @@ function BudgetProgressSkeleton() {
           </div>
         </div>
 
-        {/* Pocket Money Remaining */}
+        {/* Living Expenses Remaining */}
         <div className="flex items-start gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
           <div className="p-2 bg-primary/10 text-primary rounded-lg shrink-0">
             <IconPizza className="size-4" />
           </div>
           <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Pocket Money</span>
+            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Living Expenses</span>
             <Skeleton className="h-4 w-28 mt-0.5" />
             <Skeleton className="h-3 w-44 mt-1" />
           </div>
         </div>
 
-        {/* Shopping Remaining */}
+        {/* Personal Spending Remaining */}
         <div className="flex items-start gap-3 p-3 bg-muted/30 border border-border/30 rounded-xl">
           <div className="p-2 bg-primary/10 text-primary rounded-lg shrink-0">
             <IconShirt className="size-4" />
           </div>
           <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Shopping</span>
+            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Personal Spending</span>
             <Skeleton className="h-4 w-28 mt-0.5" />
             <Skeleton className="h-3 w-44 mt-1" />
           </div>
@@ -342,13 +342,15 @@ export default function DashboardClient() {
   const monthlyExpenses = activeData.monthlyExpenses;
   const actualSpentTotal = monthlyExpenses.reduce((s, t) => s + t.amount, 0);
   const actualPocketSpent = monthlyExpenses
-    .filter((t) => t.category === "pocket_money")
+    // Backward compat: count both new and legacy slugs
+    .filter((t) => t.category === "living_expenses" || t.category === "pocket_money")
     .reduce((s, t) => s + t.amount, 0);
 
   const monthlyIncome = activeData.monthlyIncome || [];
   const actualIncomeTotal = monthlyIncome.reduce((s, t) => s + t.amount, 0);
   const actualShoppingSpent = monthlyExpenses
-    .filter((t) => t.category === "shopping")
+    // Backward compat: count both new and legacy slugs
+    .filter((t) => t.category === "personal_spending" || t.category === "shopping")
     .reduce((s, t) => s + t.amount, 0);
 
   const pocketPercent = Math.min((actualPocketSpent / pocketLimit) * 100, 100);
@@ -483,8 +485,8 @@ export default function DashboardClient() {
                 ? activeData.budgetLimits
                 : [
                     { id: "monthly", name: "monthly", label: "Monthly Expected Budget", limit: budgetExpectation, spent: actualSpentTotal },
-                    { id: "pocket", name: "pocket_money", label: "Pocket Money", limit: pocketLimit, spent: actualPocketSpent },
-                    { id: "shopping", name: "shopping", label: "Shopping", limit: shoppingLimit, spent: actualShoppingSpent },
+                    { id: "pocket", name: "living_expenses", label: "Living Expenses", limit: pocketLimit, spent: actualPocketSpent },
+                    { id: "shopping", name: "personal_spending", label: "Personal Spending", limit: shoppingLimit, spent: actualShoppingSpent },
                   ];
 
               return budgetLimitsToUse.map((limit) => {

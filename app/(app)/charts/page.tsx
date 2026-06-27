@@ -122,20 +122,20 @@ export default async function ChartsPage() {
     return tx.type === "expense" && txDate >= startOfMonth;
   });
 
-  // Category breakdown
+  // Category breakdown (backward compat: handle both legacy and new slugs)
   let pocketMoneySpent = 0;
   let shoppingSpent = 0;
   let adjustmentSpent = 0;
 
   currentMonthExpenses.forEach((tx) => {
-    if (tx.category === "pocket_money") pocketMoneySpent += tx.amount;
-    else if (tx.category === "shopping") shoppingSpent += tx.amount;
+    if (tx.category === "living_expenses" || tx.category === "pocket_money") pocketMoneySpent += tx.amount;
+    else if (tx.category === "personal_spending" || tx.category === "shopping") shoppingSpent += tx.amount;
     else if (tx.category === "adjustment") adjustmentSpent += tx.amount;
   });
 
   const categoryBreakdownData = [
-    { name: "Pocket Money", value: pocketMoneySpent },
-    { name: "Shopping", value: shoppingSpent },
+    { name: "Living Expenses", value: pocketMoneySpent },
+    { name: "Personal Spending", value: shoppingSpent },
     { name: "Adjustments", value: adjustmentSpent },
   ];
 
