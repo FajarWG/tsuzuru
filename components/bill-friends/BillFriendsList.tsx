@@ -167,6 +167,7 @@ export default function BillFriendsList({
   const [settleOpen, setSettleOpen] = useState(false);
   const [settleBillTarget, setSettleBillTarget] = useState<BillItem | null>(null);
   const [allocations, setAllocations] = useState<Record<string, string>>({});
+  const [selectedSettleAccountIds, setSelectedSettleAccountIds] = useState<string[]>([]);
   const [isSettling, setIsSettling] = useState(false);
 
   const activeBills = bills.filter((b) => !b.isSettled);
@@ -304,6 +305,7 @@ export default function BillFriendsList({
       initialAllocations[acc.id] = idx === 0 ? bill.amount.toString() : "";
     });
     setAllocations(initialAllocations);
+    setSelectedSettleAccountIds(matching.length > 0 ? [matching[0].id] : []);
     setSettleOpen(true);
   };
 
@@ -319,11 +321,34 @@ export default function BillFriendsList({
     );
   };
 
+  const toggleSettleAccount = (accountId: string) => {
+    setSelectedSettleAccountIds((prev) => {
+      const isSelected = prev.includes(accountId);
+      let updated: string[];
+      if (isSelected) {
+        updated = prev.filter((id) => id !== accountId);
+        setAllocations((all) => ({ ...all, [accountId]: "" }));
+      } else {
+        updated = [...prev, accountId];
+      }
+
+      if (updated.length === 1 && settleBillTarget) {
+        setAllocations((all) => ({
+          ...all,
+          [updated[0]]: settleBillTarget.amount.toString(),
+        }));
+      }
+
+      return updated;
+    });
+  };
+
   const matchingAccounts = settleBillTarget
     ? accounts.filter((a) => a.currency === settleBillTarget.currency)
     : [];
 
   const totalAllocated = matchingAccounts.reduce((sum, acc) => {
+    if (!selectedSettleAccountIds.includes(acc.id)) return sum;
     const val = parseInputAmount(allocations[acc.id] || "");
     return sum + val;
   }, 0);
@@ -337,6 +362,7 @@ export default function BillFriendsList({
     setIsSettling(true);
     try {
       const activeAllocations = matchingAccounts
+        .filter((acc) => selectedSettleAccountIds.includes(acc.id))
         .map((acc) => ({
           accountId: acc.id,
           amount: parseInputAmount(allocations[acc.id] || ""),
@@ -1040,40 +1066,82 @@ export default function BillFriendsList({
                       </AlertDescription>
                     </Alert>
                   ) : (
-                    <div className="flex flex-col gap-3">
-                      <Label className="text-xs font-semibold">Allocate Settlement to Accounts *</Label>
-                      <p className="text-[10px] text-muted-foreground leading-normal">
-                        Choose how the amount is split across your accounts.
-                      </p>
-
-                      <div className="flex flex-col gap-2">
-                        {matchingAccounts.map((acc) => (
-                          <div key={acc.id} className="flex items-center justify-between gap-3 p-2 border border-border/30 rounded-xl bg-white dark:bg-zinc-900">
-                            <div className="flex flex-col gap-0.5 min-w-0">
-                              <span className="text-xs font-bold truncate text-foreground">{acc.name}</span>
-                              <span className="text-[10px] text-muted-foreground">
-                                Current: {formatAmount(acc.balance, acc.currency)}
-                              </span>
-                            </div>
-                            <div className="relative flex items-center w-36 shrink-0">
-                              <span className="absolute left-3 text-xs font-bold text-muted-foreground select-none">
-                                {settleBillTarget.currency === "JPY" ? "¥" : "Rp"}
-                              </span>
-                              <Input
-                                type="text"
-                                inputMode="numeric"
-                                value={allocations[acc.id] || ""}
-                                onChange={(e) => {
-                                  const val = formatInputAmount(e.target.value);
-                                  setAllocations((prev) => ({ ...prev, [acc.id]: val }));
-                                }}
-                                placeholder="0"
-                                className="pl-7 h-9 font-semibold text-xs text-right pr-2"
-                              />
-                            </div>
-                          </div>
-                        ))}
+                    <div className="flex flex-col gap-4">
+                      {/* 1. Account selection buttons (Multi-select) */}
+                      <div className="flex flex-col gap-1.5">
+                        <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                          Select Accounts to Pay/Receive *
+                        </Label>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {matchingAccounts.map((acc) => {
+                            const isSelected = selectedSettleAccountIds.includes(acc.id);
+                            return (
+                              <button
+                                key={acc.id}
+                                type="button"
+                                onClick={() => toggleSettleAccount(acc.id)}
+                                className={cn(
+                                  "inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer hover:scale-[1.01] active:scale-95",
+                                  isSelected
+                                    ? "bg-primary/10 text-primary border-primary/30"
+                                    : "bg-white dark:bg-zinc-900 border-border text-foreground hover:bg-muted/40"
+                                )}
+                              >
+                                <span className={cn(
+                                  "size-2 rounded-full",
+                                  isSelected ? "bg-primary" : "bg-muted-foreground/30"
+                                )} />
+                                {acc.name} ({formatAmount(acc.balance, acc.currency)})
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
+
+                      {/* 2. Allocation Inputs for selected accounts */}
+                      {selectedSettleAccountIds.length > 0 ? (
+                        <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-border/10">
+                          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                            Enter Allocation Amounts
+                          </Label>
+                          <div className="flex flex-col gap-2 max-h-[180px] overflow-y-auto pr-1">
+                            {matchingAccounts
+                              .filter((acc) => selectedSettleAccountIds.includes(acc.id))
+                              .map((acc) => (
+                                <div key={acc.id} className="flex items-center justify-between gap-3 p-2.5 border border-border/30 rounded-xl bg-white dark:bg-zinc-900 animate-in fade-in slide-in-from-top-1 duration-150">
+                                  <div className="flex flex-col gap-0.5 min-w-0">
+                                    <span className="text-xs font-bold truncate text-foreground">{acc.name}</span>
+                                    <span className="text-[10px] text-muted-foreground">
+                                      Current: {formatAmount(acc.balance, acc.currency)}
+                                    </span>
+                                  </div>
+                                  <div className="relative flex items-center w-32 shrink-0">
+                                    <span className="absolute left-3 text-xs font-bold text-muted-foreground select-none">
+                                      {settleBillTarget.currency === "JPY" ? "¥" : "Rp"}
+                                    </span>
+                                    <Input
+                                      type="text"
+                                      inputMode="numeric"
+                                      value={allocations[acc.id] || ""}
+                                      onChange={(e) => {
+                                        const val = formatInputAmount(e.target.value);
+                                        setAllocations((prev) => ({ ...prev, [acc.id]: val }));
+                                      }}
+                                      placeholder="0"
+                                      className="pl-7 h-9 font-semibold text-xs text-right pr-2"
+                                    />
+                                  </div>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-6 px-4 bg-muted/20 border border-dashed border-border/80 rounded-2xl mt-2 animate-in fade-in duration-150">
+                          <p className="text-xs text-muted-foreground font-medium">
+                            Please select at least one account above to allocate the settlement.
+                          </p>
+                        </div>
+                      )}
 
                       {/* Allocation Status Indicator */}
                       <div className="flex justify-between items-center px-1 pt-2 border-t border-border/10 text-xs">

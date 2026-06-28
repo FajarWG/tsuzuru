@@ -605,7 +605,7 @@ export default function AddTransactionFab({
 
       const friendShareWithTax = friendShare * (1 + taxRate / 100);
       const finalShare =
-        currency === "JPY"
+        currency === "JPY" || currency === "IDR"
           ? Math.round(friendShareWithTax)
           : friendShareWithTax;
 
@@ -1202,6 +1202,12 @@ export default function AddTransactionFab({
                             }
                           });
 
+                          const shareTotalWithTax = shareTotal * (1 + taxRate / 100);
+                          const finalShareDisplay =
+                            activeAccount?.currency === "JPY" || activeAccount?.currency === "IDR"
+                              ? Math.round(shareTotalWithTax)
+                              : Number(shareTotalWithTax.toFixed(2));
+
                           return (
                             <div
                               key={person}
@@ -1212,7 +1218,7 @@ export default function AddTransactionFab({
                               </span>
                               <span className="font-bold text-foreground">
                                 {currencySymbol}
-                                {Math.round(shareTotal).toLocaleString()}
+                                {finalShareDisplay.toLocaleString()}
                               </span>
                             </div>
                           );
