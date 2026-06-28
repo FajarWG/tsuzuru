@@ -15,7 +15,22 @@ export const transactionRepository = {
 
   async findMany(userId: string) {
     return prisma.transaction.findMany({
-      where: { userId },
+      where: {
+        userId,
+        NOT: [
+          {
+            category: "adjustment",
+            description: { contains: "[tx_id:" },
+          },
+          {
+            description: { startsWith: "Settled Bill with" },
+            OR: [
+              { description: { contains: "[tx_id:split_" } },
+              { splitGroupId: { startsWith: "split_" } },
+            ],
+          },
+        ],
+      },
       orderBy: { date: "desc" },
       include: {
         account: {

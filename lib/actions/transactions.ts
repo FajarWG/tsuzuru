@@ -125,10 +125,19 @@ export async function getPaginatedTransactionsAction(params: {
     const where: any = {
       userId,
       // Always exclude internal adjustment transactions that are split settlements
-      NOT: {
-        category: "adjustment",
-        description: { contains: "[tx_id:" },
-      },
+      NOT: [
+        {
+          category: "adjustment",
+          description: { contains: "[tx_id:" },
+        },
+        {
+          description: { startsWith: "Settled Bill with" },
+          OR: [
+            { description: { contains: "[tx_id:split_" } },
+            { splitGroupId: { startsWith: "split_" } },
+          ],
+        },
+      ],
     };
 
     if (typeFilter !== "all") {
@@ -215,17 +224,31 @@ export async function getPaginatedTransactionsAction(params: {
     });
 
     let adjustmentsMap: Record<string, number> = {};
+    let billFriendsMap: Record<string, any[]> = {};
     if (splitGroupIds.length > 0) {
       // Fetch adjustment transactions linked by splitGroupId OR legacy description pattern
       const adjustments = await prisma.transaction.findMany({
         where: {
           userId,
-          category: "adjustment",
           OR: [
-            { splitGroupId: { in: splitGroupIds } },
-            ...splitGroupIds.map((id) => ({
-              description: { contains: `[tx_id:${id}]` },
-            })),
+            {
+              category: "adjustment",
+              OR: [
+                { splitGroupId: { in: splitGroupIds } },
+                ...splitGroupIds.map((id) => ({
+                  description: { contains: `[tx_id:${id}]` },
+                })),
+              ],
+            },
+            {
+              description: { startsWith: "Settled Bill with" },
+              OR: [
+                { splitGroupId: { in: splitGroupIds } },
+                ...splitGroupIds.map((id) => ({
+                  description: { contains: `[tx_id:${id}]` },
+                })),
+              ],
+            },
           ],
         },
         select: {
@@ -239,6 +262,35 @@ export async function getPaginatedTransactionsAction(params: {
         const id = resolveSplitGroupId(tx);
         if (id) {
           adjustmentsMap[id] = (adjustmentsMap[id] || 0) + tx.amount;
+        }
+      });
+
+      // Fetch BillFriends to get current split status (ceklis or pending)
+      const billFriends = await prisma.billFriend.findMany({
+        where: {
+          userId,
+          OR: splitGroupIds.map((id) => ({
+            description: { contains: `[tx_id:${id}]` },
+          })),
+        },
+      });
+
+      billFriends.forEach((bf) => {
+        const match = bf.description ? bf.description.match(/\[tx_id:([^\]]+)\]/) : null;
+        const id = match ? match[1] : null;
+        if (id) {
+          if (!billFriendsMap[id]) {
+            billFriendsMap[id] = [];
+          }
+          billFriendsMap[id].push({
+            id: bf.id,
+            personName: bf.personName,
+            amount: bf.amount,
+            currency: bf.currency,
+            direction: bf.direction,
+            isSettled: bf.isSettled,
+            settledAt: bf.settledAt ? bf.settledAt.toISOString() : null,
+          });
         }
       });
     }
@@ -298,6 +350,7 @@ export async function getPaginatedTransactionsAction(params: {
         originalAmount: tx.amount,
         settledAmount,
         date: tx.date.toISOString(),
+        splitBills: splitGroupId ? (billFriendsMap[splitGroupId] || []) : [],
       };
     });
 

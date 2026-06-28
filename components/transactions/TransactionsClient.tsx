@@ -17,6 +17,10 @@ interface TransactionItem {
   description: string | null;
   date: string;
   isTemplate: boolean;
+  isReceipt?: boolean;
+  receiptItems?: any;
+  splitGroupId?: string | null;
+  splitBills?: any[];
   account: {
     id: string;
     name: string;

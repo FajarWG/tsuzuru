@@ -95,6 +95,8 @@ interface TransactionItem {
   isTemplate: boolean;
   isReceipt?: boolean;
   receiptItems?: any;
+  splitGroupId?: string | null;
+  splitBills?: any[];
   account: {
     id: string;
     name: string;
@@ -427,14 +429,21 @@ export default function TransactionsList({
     const settlementsMap: Record<string, { total: number; items: any[] }> = {};
 
     transactions.forEach((tx) => {
-      if (
+      const isLegacyAdjustment =
         tx.category === "adjustment" &&
         tx.description &&
-        tx.description.includes("[tx_id:")
-      ) {
+        tx.description.includes("[tx_id:");
+
+      const isReceiptSettlement =
+        tx.description &&
+        tx.description.includes("Settled Bill with") &&
+        (tx.description.includes("[tx_id:split_") ||
+         (tx.splitGroupId && tx.splitGroupId.startsWith("split_")));
+
+      if (isLegacyAdjustment || isReceiptSettlement) {
         const match = tx.description.match(/\[tx_id:([^\]]+)\]/);
-        if (match && match[1]) {
-          const splitGroupId = match[1];
+        const splitGroupId = match ? match[1] : tx.splitGroupId;
+        if (splitGroupId) {
           if (!settlementsMap[splitGroupId]) {
             settlementsMap[splitGroupId] = { total: 0, items: [] };
           }
@@ -446,29 +455,40 @@ export default function TransactionsList({
 
     return transactions
       .filter((tx) => {
-        if (
+        const isLegacyAdjustment =
           tx.category === "adjustment" &&
           tx.description &&
-          tx.description.includes("[tx_id:")
-        ) {
-          return false;
-        }
-        return true;
+          tx.description.includes("[tx_id:");
+
+        const isReceiptSettlement =
+          tx.description &&
+          tx.description.includes("Settled Bill with") &&
+          (tx.description.includes("[tx_id:split_") ||
+           (tx.splitGroupId && tx.splitGroupId.startsWith("split_")));
+
+        return !(isLegacyAdjustment || isReceiptSettlement);
       })
       .map((tx) => {
         const match = tx.description
           ? tx.description.match(/\[tx_id:([^\]]+)\]/)
           : null;
-        const splitGroupId = match ? match[1] : null;
+        const splitGroupId = match ? match[1] : tx.splitGroupId;
+
+        const hasBackendAdjustment =
+          (tx as any).originalAmount !== undefined &&
+          (tx as any).settledAmount !== undefined;
 
         if (splitGroupId) {
           const settlements = settlementsMap[splitGroupId];
           if (settlements && settlements.total > 0) {
-            const adjustedAmount = Math.max(0, tx.amount - settlements.total);
+            const baseAmount = hasBackendAdjustment
+              ? (tx as any).originalAmount
+              : tx.amount;
+            const adjustedAmount = Math.max(0, baseAmount - settlements.total);
             return {
               ...tx,
               amount: adjustedAmount,
-              originalAmount: tx.amount,
+              originalAmount: baseAmount,
               settledAmount: settlements.total,
               settlementsList: settlements.items,
             };
@@ -477,8 +497,10 @@ export default function TransactionsList({
 
         return {
           ...tx,
-          originalAmount: tx.amount,
-          settledAmount: 0,
+          originalAmount: hasBackendAdjustment
+            ? (tx as any).originalAmount
+            : tx.amount,
+          settledAmount: hasBackendAdjustment ? (tx as any).settledAmount : 0,
           settlementsList: [],
         };
       });
@@ -1420,51 +1442,59 @@ export default function TransactionsList({
                                                 );
                                               })()}
 
-                                              {/* Settlement List */}
+                                              {/* Split Bill Status (✓ / ⏳) */}
                                               {Array.isArray(
-                                                (tx as any).settlementsList,
+                                                (tx as any).splitBills,
                                               ) &&
-                                                (tx as any).settlementsList
+                                                (tx as any).splitBills
                                                   .length > 0 && (
                                                   <div className="mt-3 pt-2.5 border-t border-border/10 flex flex-col gap-1.5">
-                                                    <span className="text-[9px] font-bold tracking-wider text-primary uppercase mb-0.5 px-0.5">
-                                                      Settlements (Paid Back)
+                                                    <span className="text-[9px] font-bold tracking-wider text-muted-foreground uppercase mb-0.5 px-0.5">
+                                                      Split Bill Status
                                                     </span>
-                                                    <div className="flex flex-col gap-1 pl-1.5 pr-0.5">
+                                                    <div className="flex flex-col gap-1.5 pl-1.5 pr-0.5">
                                                       {(
                                                         tx as any
-                                                      ).settlementsList.map(
+                                                      ).splitBills.map(
                                                         (
-                                                          settle: any,
-                                                          sIdx: number,
-                                                        ) => {
-                                                          const cleanSettleDesc =
-                                                            cleanDescription(
-                                                              settle.description,
-                                                            ).replace(
-                                                              /^Settled Bill with [^:]+:\s*/i,
-                                                              "",
-                                                            );
-                                                          return (
-                                                            <div
-                                                              key={sIdx}
-                                                              className="flex justify-between items-center text-xs text-primary font-medium"
-                                                            >
-                                                              <span>
-                                                                ✓{" "}
-                                                                {cleanSettleDesc ||
-                                                                  `Settled share`}
-                                                              </span>
-                                                              <span className="font-sans font-bold">
-                                                                +
-                                                                {formatCurrency(
-                                                                  settle.amount,
-                                                                  tx.currency,
-                                                                )}
+                                                          bill: any,
+                                                          bIdx: number,
+                                                        ) => (
+                                                          <div
+                                                            key={bIdx}
+                                                            className="flex justify-between items-center text-xs"
+                                                          >
+                                                            <div className="flex items-center gap-1.5">
+                                                              {bill.isSettled ? (
+                                                                <span className="text-emerald-500 font-bold">✓</span>
+                                                              ) : (
+                                                                <span className="text-amber-500 font-semibold">⏳</span>
+                                                              )}
+                                                              <span
+                                                                className={
+                                                                  bill.isSettled
+                                                                    ? "text-muted-foreground line-through"
+                                                                    : "text-foreground font-medium"
+                                                                }
+                                                              >
+                                                                {bill.personName}
                                                               </span>
                                                             </div>
-                                                          );
-                                                        },
+                                                            <span
+                                                              className={cn(
+                                                                "font-sans font-semibold",
+                                                                bill.isSettled
+                                                                  ? "text-muted-foreground"
+                                                                  : "text-foreground",
+                                                              )}
+                                                            >
+                                                              {formatCurrency(
+                                                                bill.amount,
+                                                                tx.currency,
+                                                              )}
+                                                            </span>
+                                                          </div>
+                                                        ),
                                                       )}
                                                     </div>
                                                   </div>
