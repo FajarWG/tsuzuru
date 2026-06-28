@@ -440,7 +440,7 @@ export default function TransactionsList({
         (tx.description.includes("[tx_id:split_") ||
          (tx.splitGroupId && tx.splitGroupId.startsWith("split_")));
 
-      if (isLegacyAdjustment || isReceiptSettlement) {
+      if ((isLegacyAdjustment || isReceiptSettlement) && tx.description) {
         const match = tx.description.match(/\[tx_id:([^\]]+)\]/);
         const splitGroupId = match ? match[1] : tx.splitGroupId;
         if (splitGroupId) {
