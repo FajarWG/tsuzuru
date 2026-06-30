@@ -20,10 +20,10 @@ export const transactionRepository = {
         NOT: [
           {
             category: "adjustment",
-            description: { contains: "[tx_id:" },
+            description: { not: null, contains: "[tx_id:" },
           },
           {
-            description: { startsWith: "Settled Bill with" },
+            description: { not: null, startsWith: "Settled Bill with" },
             OR: [
               { description: { contains: "[tx_id:split_" } },
               { splitGroupId: { startsWith: "split_" } },
