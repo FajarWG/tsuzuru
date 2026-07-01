@@ -24,6 +24,6 @@ export function formatInputAmount(value: string | number): string {
 
 export function parseInputAmount(value: string | number): number {
   if (typeof value === "number") return value;
-  const clean = value.replace(/\D/g, "");
-  return clean ? parseInt(clean, 10) : 0;
+  const clean = value.replace(/[^\d.]/g, "");
+  return clean ? parseFloat(clean) : 0;
 }

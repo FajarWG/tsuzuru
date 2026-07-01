@@ -302,7 +302,10 @@ export default function BillFriendsList({
     const matching = accounts.filter((a) => a.currency === bill.currency);
     const initialAllocations: Record<string, string> = {};
     matching.forEach((acc, idx) => {
-      initialAllocations[acc.id] = idx === 0 ? bill.amount.toString() : "";
+      const initialVal = idx === 0
+        ? (bill.currency === "JPY" || bill.currency === "IDR" ? Math.round(bill.amount) : bill.amount).toString()
+        : "";
+      initialAllocations[acc.id] = initialVal;
     });
     setAllocations(initialAllocations);
     setSelectedSettleAccountIds(matching.length > 0 ? [matching[0].id] : []);
@@ -333,9 +336,12 @@ export default function BillFriendsList({
       }
 
       if (updated.length === 1 && settleBillTarget) {
+        const roundedAmount = settleBillTarget.currency === "JPY" || settleBillTarget.currency === "IDR"
+          ? Math.round(settleBillTarget.amount)
+          : settleBillTarget.amount;
         setAllocations((all) => ({
           ...all,
-          [updated[0]]: settleBillTarget.amount.toString(),
+          [updated[0]]: roundedAmount.toString(),
         }));
       }
 
@@ -354,7 +360,9 @@ export default function BillFriendsList({
   }, 0);
 
   const isSettleValid = settleBillTarget
-    ? Math.abs(totalAllocated - settleBillTarget.amount) < 0.01
+    ? (settleBillTarget.currency === "JPY" || settleBillTarget.currency === "IDR"
+        ? Math.abs(totalAllocated - settleBillTarget.amount) < 0.51
+        : Math.abs(totalAllocated - settleBillTarget.amount) < 0.01)
     : false;
 
   const handleSettleSubmit = async () => {

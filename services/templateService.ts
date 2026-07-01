@@ -66,7 +66,10 @@ function buildSplitBills(params: {
 
   return splitConfig.friends
     .map((friend) => {
-      const shareAmount = Number(((amount * friend.percentage) / 100).toFixed(2));
+      const rawShare = (amount * friend.percentage) / 100;
+      const shareAmount = (currency === "JPY" || currency === "IDR")
+        ? Math.round(rawShare)
+        : Number(rawShare.toFixed(2));
       if (shareAmount <= 0) {
         return null;
       }

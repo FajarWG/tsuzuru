@@ -175,6 +175,39 @@ describe("templateService.markTemplatePaid", () => {
     );
   });
 
+  it("rounds bill friend amount to integer for JPY currency", async () => {
+    mockTemplateRepo.findById.mockResolvedValue(
+      makeTemplate({
+        amount: 4117,
+        currency: "JPY",
+        splitConfig: {
+          friends: [{ personName: "Aiko", percentage: 50 }],
+        },
+      })
+    );
+    mockAccountRepo.findById.mockResolvedValue(makeAccount({ currency: "JPY" }));
+
+    const tx = {
+      transaction: { create: vi.fn().mockResolvedValue(undefined) },
+      account: { update: vi.fn().mockResolvedValue(undefined) },
+      billFriend: { create: vi.fn().mockResolvedValue(undefined) },
+    };
+
+    mockPrisma.$transaction.mockImplementation(async (callback: (client: typeof tx) => Promise<void>) => callback(tx));
+
+    await templateService.markTemplatePaid("tpl-1", "user-1");
+
+    expect(tx.billFriend.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          personName: "Aiko",
+          amount: 2059, // rounded from 2058.5
+          direction: "they_owe",
+        }),
+      }),
+    );
+  });
+
   it("does not create Bill Friends entries for self-paid recurring bills", async () => {
     mockTemplateRepo.findById.mockResolvedValue(
       makeTemplate({ paymentMode: "self_paid", splitConfig: null }),

@@ -103,7 +103,8 @@ export const billFriendService = {
     }
 
     const totalAllocated = allocations.reduce((sum, a) => sum + a.amount, 0);
-    if (Math.abs(totalAllocated - bill.amount) > 0.01) {
+    const tolerance = (bill.currency === "JPY" || bill.currency === "IDR") ? 0.51 : 0.01;
+    if (Math.abs(totalAllocated - bill.amount) > tolerance) {
       throw new Error("Total allocation must equal bill amount");
     }
 

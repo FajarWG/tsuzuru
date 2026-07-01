@@ -245,6 +245,20 @@ describe("billFriendService.settleBillWithAllocations", () => {
       })
     );
   });
+
+  it("settles successfully with small rounding difference (tolerance) for JPY/IDR", async () => {
+    mockBillRepo.findById.mockResolvedValue(makeBill({ currency: "JPY", amount: 2058.5, direction: "i_owe" }));
+    mockAccRepo.findById.mockResolvedValue(makeAccount({ userId: "user-1", currency: "JPY" }));
+    mockBillRepo.settleBillWithAllocations.mockResolvedValue(undefined);
+
+    await expect(
+      billFriendService.settleBillWithAllocations(
+        "bill-1",
+        [{ accountId: "acc-1", amount: 2059 }],
+        "user-1"
+      )
+    ).resolves.not.toThrow();
+  });
 });
 
 describe("billFriendService.createBill with balance adjustment", () => {
