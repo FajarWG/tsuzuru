@@ -145,6 +145,7 @@ export const billFriendService = {
       billId,
       userId,
       settleDate: new Date(),
+      transactionDate: bill.createdAt,
       allocations: formattedAllocations.map((alloc) => ({
         ...alloc,
         // Fall back to billId if description does not contain a tx_id tag

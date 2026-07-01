@@ -114,6 +114,7 @@ export const billFriendRepository = {
     billId: string;
     userId: string;
     settleDate: Date;
+    transactionDate: Date;
     allocations: {
       accountId: string;
       amount: number;
@@ -126,7 +127,7 @@ export const billFriendRepository = {
       splitGroupId?: string | null;
     }[];
   }) {
-    const { billId, userId, settleDate, allocations } = params;
+    const { billId, userId, settleDate, transactionDate, allocations } = params;
 
     return prisma.$transaction(async (tx) => {
       // 1. Mark bill as settled
@@ -152,7 +153,7 @@ export const billFriendRepository = {
             subCategory: alloc.subCategory || null,
             description: alloc.description,
             splitGroupId: alloc.splitGroupId || null,
-            date: new Date(),
+            date: transactionDate,
           },
         });
 

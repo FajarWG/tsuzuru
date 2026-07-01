@@ -436,9 +436,7 @@ export default function TransactionsList({
 
       const isReceiptSettlement =
         tx.description &&
-        tx.description.includes("Settled Bill with") &&
-        (tx.description.includes("[tx_id:split_") ||
-         (tx.splitGroupId && tx.splitGroupId.startsWith("split_")));
+        tx.description.includes("Settled Bill with");
 
       if ((isLegacyAdjustment || isReceiptSettlement) && tx.description) {
         const match = tx.description.match(/\[tx_id:([^\]]+)\]/);
@@ -462,9 +460,7 @@ export default function TransactionsList({
 
         const isReceiptSettlement =
           tx.description &&
-          tx.description.includes("Settled Bill with") &&
-          (tx.description.includes("[tx_id:split_") ||
-           (tx.splitGroupId && tx.splitGroupId.startsWith("split_")));
+          tx.description.includes("Settled Bill with");
 
         return !(isLegacyAdjustment || isReceiptSettlement);
       })

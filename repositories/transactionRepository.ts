@@ -24,10 +24,6 @@ export const transactionRepository = {
           },
           {
             description: { not: null, startsWith: "Settled Bill with" },
-            OR: [
-              { description: { contains: "[tx_id:split_" } },
-              { splitGroupId: { startsWith: "split_" } },
-            ],
           },
         ],
       },

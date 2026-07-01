@@ -224,7 +224,8 @@ describe("billFriendService.settleBillWithAllocations", () => {
   });
 
   it("settles successfully with correct ownership and amount", async () => {
-    mockBillRepo.findById.mockResolvedValue(makeBill({ amount: 5000, direction: "i_owe" }));
+    const createdAt = new Date("2026-06-15T12:00:00Z");
+    mockBillRepo.findById.mockResolvedValue(makeBill({ amount: 5000, direction: "i_owe", createdAt }));
     mockAccRepo.findById.mockResolvedValue(makeAccount({ userId: "user-1", currency: "JPY" }));
     mockBillRepo.settleBillWithAllocations.mockResolvedValue(undefined);
 
@@ -236,9 +237,10 @@ describe("billFriendService.settleBillWithAllocations", () => {
       )
     ).resolves.not.toThrow();
 
-    // Verify splitGroupId is set on the allocation
+    // Verify splitGroupId is set on the allocation and transactionDate matches bill.createdAt
     expect(mockBillRepo.settleBillWithAllocations).toHaveBeenCalledWith(
       expect.objectContaining({
+        transactionDate: createdAt,
         allocations: expect.arrayContaining([
           expect.objectContaining({ splitGroupId: "bill-1" }),
         ]),
