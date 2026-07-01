@@ -29,28 +29,30 @@ model Account {
   type                    String        // "bank", "ewallet", "investment"
   isActive                Boolean       @default(true)
   defaultPaymentAccountId String?
+  isDefault               Boolean       @default(false)
   user                    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions            Transaction[]
 }
 
 model Transaction {
-  id           String   @id @default(cuid())
-  userId       String
-  accountId    String
-  type         String   // "expense" | "income"
-  amount       Float
-  currency     String
-  category     String   // "living_expenses" | "personal_spending" | "income" | "adjustment" (legacy: "pocket_money" | "shopping")
-  subCategory  String?  // "food", "drinks", etc.
-  mealNumber   Int?     // 1-4, only for food
-  description  String?
-  splitGroupId String?  // Links split-bill adjustment transactions to their source transaction
-  date         DateTime @default(now())
-  isTemplate   Boolean  @default(false)
-  isReceipt    Boolean  @default(false)
-  receiptItems Json?
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  account      Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  id              String   @id @default(cuid())
+  userId          String
+  accountId       String
+  type            String   // "expense" | "income"
+  amount          Float
+  currency        String
+  category        String   // "living_expenses" | "personal_spending" | "income" | "adjustment" (legacy: "pocket_money" | "shopping")
+  subCategory     String?  // "food", "drinks", etc.
+  mealNumber      Int?     // 1-4, only for food
+  description     String?
+  splitGroupId    String?  // Links split-bill adjustment transactions to their source transaction
+  transferGroupId String?  // Links the two transactions involved in a transfer
+  date            DateTime @default(now())
+  isTemplate      Boolean  @default(false)
+  isReceipt       Boolean  @default(false)
+  receiptItems    Json?
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
 }
 
 model MonthlyTemplate {

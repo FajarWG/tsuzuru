@@ -38,6 +38,7 @@ import {
   IconBriefcase,
   IconGift,
   IconCoins,
+  IconSwitchHorizontal,
 } from "@tabler/icons-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -96,6 +97,7 @@ interface TransactionItem {
   isReceipt?: boolean;
   receiptItems?: any;
   splitGroupId?: string | null;
+  transferGroupId?: string | null;
   splitBills?: any[];
   account: {
     id: string;
@@ -133,6 +135,8 @@ function getCategoryIcon(category: string, subCategory: string | null) {
   }
   if (category === "adjustment")
     return <IconAdjustments className="size-5 text-blue-500" />;
+  if (category === "transfer")
+    return <IconSwitchHorizontal className="size-5 text-zinc-500 dark:text-zinc-400" />;
 
   if (category === "living_expenses" || category === "pocket_money") {
     switch (subCategory) {
@@ -213,6 +217,16 @@ function formatCurrency(amount: number, currency: string) {
 const cleanDescription = (desc: string | null) => {
   if (!desc) return "";
   return desc.replace(/\[tx_id:[^\]]+\]/g, "").trim();
+};
+
+const cleanTransferDescription = (desc: string | null) => {
+  if (!desc) return "";
+  return desc
+    .replace(/\s*\(Transfer to [^)]+\)/gi, "")
+    .replace(/\s*\(Transfer from [^)]+\)/gi, "")
+    .replace(/^Transfer to [^)]+/gi, "")
+    .replace(/^Transfer from [^)]+/gi, "")
+    .trim();
 };
 
 export default function TransactionsList({
@@ -508,6 +522,13 @@ export default function TransactionsList({
       const txMonthKey = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, "0")}`;
 
       if (monthFilter !== "all" && txMonthKey !== monthFilter) return false;
+
+      // Handle transfer transactions
+      if (tx.category === "transfer") {
+        if (typeFilter !== "all") return false;
+        if (accountFilter === "all" && tx.type === "income") return false;
+      }
+
       if (typeFilter !== "all" && tx.type !== typeFilter) return false;
       if (accountFilter !== "all" && tx.account.id !== accountFilter)
         return false;
@@ -559,6 +580,7 @@ export default function TransactionsList({
   const summary = useMemo(() => {
     return filteredTransactions.reduce(
       (totals, tx) => {
+        if (tx.category === "transfer") return totals;
         const bucket = tx.currency === "JPY" ? "JPY" : "IDR";
         if (tx.type === "income") totals.income[bucket] += tx.amount;
         if (tx.type === "expense") totals.expense[bucket] += tx.amount;
@@ -572,15 +594,21 @@ export default function TransactionsList({
   }, [filteredTransactions]);
 
   const displayTransactions = useMemo(() => {
+    let txs = loadedTransactions;
     if (typeof window !== "undefined" && !navigator.onLine) {
-      return filteredTransactions.slice(0, page * 20);
+      txs = filteredTransactions.slice(0, page * 20);
+    } else if (!hasLoadedOnce && loadedTransactions.length === 0) {
+      txs = filteredTransactions.slice(0, page * 20);
     }
-    // Fallback to cached transactions if they exist and we haven't successfully completed a fetch yet
-    if (!hasLoadedOnce && loadedTransactions.length === 0) {
-      return filteredTransactions.slice(0, page * 20);
-    }
-    return loadedTransactions;
-  }, [loadedTransactions, filteredTransactions, page, hasLoadedOnce]);
+
+    return txs.filter((tx) => {
+      if (tx.category === "transfer") {
+        if (typeFilter !== "all") return false;
+        if (accountFilter === "all" && tx.type === "income") return false;
+      }
+      return true;
+    });
+  }, [loadedTransactions, filteredTransactions, page, hasLoadedOnce, typeFilter, accountFilter]);
 
   const displaySummary = useMemo(() => {
     if (typeof window !== "undefined" && !navigator.onLine) {
@@ -1144,7 +1172,7 @@ export default function TransactionsList({
             {Object.entries(groupedTransactions).map(([dateLabel, items]) => {
               const expenseByCurrency: Record<string, number> = {};
               for (const item of items) {
-                if (item.type === "expense") {
+                if (item.type === "expense" && item.category !== "transfer") {
                   expenseByCurrency[item.currency] =
                     (expenseByCurrency[item.currency] || 0) + item.amount;
                 }
@@ -1211,7 +1239,23 @@ export default function TransactionsList({
                                 </div>
                                 <div className="flex min-w-0 flex-col gap-0.5">
                                   <span className="truncate text-xs font-semibold text-foreground leading-tight">
-                                    {cleanDescription(tx.description) ||
+                                    {tx.category === "transfer" ? (
+                                      (() => {
+                                        const siblingTx = transactions.find(
+                                          (t) => t.transferGroupId === tx.transferGroupId && t.id !== tx.id,
+                                        );
+                                        const fromAccName =
+                                          tx.type === "expense"
+                                            ? tx.account.name
+                                            : siblingTx?.account.name || "Unknown";
+                                        const toAccName =
+                                          tx.type === "income"
+                                            ? tx.account.name
+                                            : siblingTx?.account.name || "Unknown";
+                                        return `Transfer: ${fromAccName} → ${toAccName}`;
+                                      })()
+                                    ) : (
+                                      cleanDescription(tx.description) ||
                                       (tx.category === "income" &&
                                       tx.subCategory
                                         ? tx.subCategory
@@ -1220,11 +1264,20 @@ export default function TransactionsList({
                                           tx.subCategory.slice(1)
                                         : tx.category === "income"
                                           ? "Income"
-                                          : tx.category.replace(/_/g, " "))}
+                                          : tx.category.replace(/_/g, " "))
+                                    )}
                                   </span>
                                   <span className="truncate text-[10px] text-muted-foreground leading-none">
-                                    {tx.account.name} ·{" "}
-                                    {tx.subCategory || tx.category}
+                                    {tx.category === "transfer" ? (
+                                      (() => {
+                                        const customDesc = cleanTransferDescription(tx.description);
+                                        return customDesc
+                                          ? `${customDesc} · Transfer`
+                                          : "Internal Transfer";
+                                      })()
+                                    ) : (
+                                      `${tx.account.name} · ${tx.subCategory || tx.category}`
+                                    )}
                                   </span>
                                 </div>
                               </div>
@@ -1233,18 +1286,22 @@ export default function TransactionsList({
                                 <div className="text-right flex flex-col items-end mr-1">
                                   <span
                                     className={`text-xs font-sans font-bold ${
-                                      tx.type === "expense"
-                                        ? tx.amount < 0
-                                          ? "text-primary"
-                                          : "text-destructive"
-                                        : "text-primary"
+                                      tx.category === "transfer"
+                                        ? "text-muted-foreground font-medium"
+                                        : tx.type === "expense"
+                                          ? tx.amount < 0
+                                            ? "text-primary"
+                                            : "text-destructive"
+                                          : "text-primary"
                                     }`}
                                   >
-                                    {tx.type === "expense"
-                                      ? tx.amount < 0
-                                        ? "+"
-                                        : "-"
-                                      : "+"}
+                                    {tx.category === "transfer"
+                                      ? ""
+                                      : tx.type === "expense"
+                                        ? tx.amount < 0
+                                          ? "+"
+                                          : "-"
+                                        : "+"}
                                     {formatCurrency(
                                       Math.abs(tx.amount),
                                       tx.currency,

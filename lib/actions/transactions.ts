@@ -298,6 +298,11 @@ export async function getPaginatedTransactionsAction(params: {
     };
 
     allMatching.forEach((tx) => {
+      // Exclude transfers from summaries
+      if (tx.category === "transfer") {
+        return;
+      }
+
       const splitGroupId = resolveSplitGroupId(tx);
       let finalAmount = tx.amount;
       if (splitGroupId && adjustmentsMap[splitGroupId]) {
@@ -361,5 +366,49 @@ export async function getPaginatedTransactionsAction(params: {
   } catch (error) {
     console.error("Error in getPaginatedTransactionsAction:", error);
     return { success: false, error: "Failed to fetch transactions" };
+  }
+}
+
+export async function createTransferAction(data: import("@/types/transfer").CreateTransferInput) {
+  try {
+    const session = await auth();
+    if (!session || !session.user || !session.user.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const { transferService } = await import("@/services/transferService");
+    await transferService.createTransfer(data, session.user.id);
+
+    revalidatePath("/");
+    revalidatePath("/transactions");
+    revalidatePath("/settings");
+    revalidatePath("/charts");
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to create transfer:", error);
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+export async function deleteTransferAction(transferGroupId: string) {
+  try {
+    const session = await auth();
+    if (!session || !session.user || !session.user.id) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const { transferService } = await import("@/services/transferService");
+    await transferService.deleteTransfer(transferGroupId, session.user.id);
+
+    revalidatePath("/");
+    revalidatePath("/transactions");
+    revalidatePath("/settings");
+    revalidatePath("/charts");
+
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to delete transfer:", error);
+    return { success: false, error: (error as Error).message };
   }
 }

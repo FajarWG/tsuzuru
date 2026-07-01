@@ -69,7 +69,9 @@ export default function TransactionForm({
 
   const [type, setType] = useState<"expense" | "income">("expense");
   const [amount, setAmount] = useState("");
-  const [accountId, setAccountId] = useState(accounts[0]?.id || "");
+  const [accountId, setAccountId] = useState(
+    accounts.find((a: any) => a.isDefault)?.id || accounts[0]?.id || "",
+  );
   const [category, setCategory] = useState<
     "living_expenses" | "personal_spending" | "income"
   >("living_expenses");

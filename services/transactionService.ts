@@ -98,6 +98,12 @@ export const transactionService = {
       throw new Error("Transaction not found");
     }
 
+    if (existing.transferGroupId) {
+      const { transferService } = await import("./transferService");
+      await transferService.deleteTransfer(existing.transferGroupId, userId);
+      return;
+    }
+
     const oldDelta = getBalanceDelta(existing.type as "expense" | "income", existing.amount);
 
     await transactionRepository.deleteWithBalanceUpdate(transactionId, existing.accountId, -oldDelta);

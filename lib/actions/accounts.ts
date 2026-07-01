@@ -91,3 +91,31 @@ export async function deleteAccountAction(accountId: string) {
     return { success: false, error: "Failed to delete account" };
   }
 }
+
+export async function setDefaultPaymentAccountAction(accountId: string) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+
+    const { prisma } = await import("@/lib/prisma");
+
+    await prisma.$transaction([
+      prisma.account.updateMany({
+        where: { userId: session.user.id },
+        data: { isDefault: false },
+      }),
+      prisma.account.update({
+        where: { id: accountId, userId: session.user.id },
+        data: { isDefault: true },
+      }),
+    ]);
+
+    revalidatePath("/");
+    revalidatePath("/settings");
+    revalidatePath("/transactions");
+    return { success: true };
+  } catch (err) {
+    console.error("setDefaultPaymentAccountAction error:", err);
+    return { success: false, error: "Failed to set default payment account" };
+  }
+}

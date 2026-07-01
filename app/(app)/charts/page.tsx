@@ -20,10 +20,15 @@ export default async function ChartsPage() {
       userId,
       currency: "JPY",
       date: { gte: sixMonthsAgo },
-      NOT: {
-        category: "adjustment",
-        description: { contains: "[tx_id:" },
-      },
+      NOT: [
+        {
+          category: "adjustment",
+          description: { contains: "[tx_id:" },
+        },
+        {
+          category: "transfer",
+        },
+      ],
     },
     include: { account: true },
   });

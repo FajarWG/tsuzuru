@@ -193,7 +193,9 @@ export default function TemplatesConfigList({
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createAmount, setCreateAmount] = useState("");
-  const [createAccountId, setCreateAccountId] = useState(accounts[0]?.id || "");
+  const [createAccountId, setCreateAccountId] = useState(
+    accounts.find((a: any) => a.isDefault)?.id || accounts[0]?.id || "",
+  );
   const [createIntervalMonths, setCreateIntervalMonths] = useState("1");
   const [createCategory, setCreateCategory] = useState("living_expenses");
   const [createSubCategory, setCreateSubCategory] = useState("utilities");
@@ -567,7 +569,9 @@ export default function TemplatesConfigList({
             onClick={() => {
               setCreateName("");
               setCreateAmount("");
-              setCreateAccountId(accounts[0]?.id || "");
+              setCreateAccountId(
+                accounts.find((a: any) => a.isDefault)?.id || accounts[0]?.id || "",
+              );
               setCreateIntervalMonths("1");
               setCreatePaymentMode("self_paid");
               setCreateSplitFriends([EMPTY_SPLIT_FRIEND]);

@@ -190,7 +190,9 @@ export default function AddTransactionFab({
   // Form state
   const [type, setType] = useState<"expense" | "income">("expense");
   const [amount, setAmount] = useState("");
-  const [accountId, setAccountId] = useState(accounts[0]?.id || "");
+  const [accountId, setAccountId] = useState(
+    accounts.find((a: any) => a.isDefault)?.id || accounts[0]?.id || "",
+  );
   const [category, setCategory] = useState<string>("living_expenses");
   const [subCategory, setSubCategory] = useState("others");
   const [mealNumber, setMealNumber] = useState<number | null>(null);
@@ -380,7 +382,9 @@ export default function AddTransactionFab({
     setIsAiParsing(false);
     setType("expense");
     setAmount("");
-    setAccountId(accounts[0]?.id || "");
+    setAccountId(
+      accounts.find((a: any) => a.isDefault)?.id || accounts[0]?.id || "",
+    );
     setCategory(categoriesToUse[0]?.name || "living_expenses");
     setSubCategory("others");
     setMealNumber(null);

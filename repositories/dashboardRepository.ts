@@ -25,10 +25,15 @@ export const dashboardRepository = {
           userId,
           currency: currency,
           date: { gte: startOfMonth, lte: endOfMonth },
-          NOT: {
-            category: "adjustment",
-            description: { contains: "[tx_id:" },
-          },
+          NOT: [
+            {
+              category: "adjustment",
+              description: { contains: "[tx_id:" },
+            },
+            {
+              category: "transfer",
+            },
+          ],
         },
         select: {
           id: true,
@@ -48,10 +53,15 @@ export const dashboardRepository = {
           userId,
           currency: currency,
           date: { gte: startOfPreviousMonth, lte: endOfPreviousMonth },
-          NOT: {
-            category: "adjustment",
-            description: { contains: "[tx_id:" },
-          },
+          NOT: [
+            {
+              category: "adjustment",
+              description: { contains: "[tx_id:" },
+            },
+            {
+              category: "transfer",
+            },
+          ],
         },
         select: {
           id: true,

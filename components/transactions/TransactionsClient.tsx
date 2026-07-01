@@ -20,6 +20,7 @@ interface TransactionItem {
   isReceipt?: boolean;
   receiptItems?: any;
   splitGroupId?: string | null;
+  transferGroupId?: string | null;
   splitBills?: any[];
   account: {
     id: string;

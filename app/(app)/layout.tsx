@@ -55,7 +55,7 @@ export default async function AppLayout({
   // Fetch accounts for the add transaction FAB dialog
   const accounts = await prisma.account.findMany({
     where: { userId: session.user.id, isActive: true },
-    select: { id: true, name: true, currency: true },
+    select: { id: true, name: true, currency: true, isDefault: true },
     orderBy: { name: "asc" },
   });
 

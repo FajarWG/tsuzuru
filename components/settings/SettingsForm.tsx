@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { signOut } from "next-auth/react";
 import {
   updateUserSettingsAction,
@@ -10,7 +10,9 @@ import {
   createAccountAction,
   updateAccountAction,
   deleteAccountAction,
+  setDefaultPaymentAccountAction,
 } from "@/lib/actions/accounts";
+import { createTransferAction } from "@/lib/actions/transactions";
 import {
   addBudgetLimitAction,
   updateBudgetLimitAction,
@@ -42,6 +44,8 @@ import {
   IconBuildingBank,
   IconActivity,
   IconRefresh,
+  IconSwitchHorizontal,
+  IconCalendar,
 } from "@tabler/icons-react";
 import {
   Popover,
@@ -64,6 +68,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Select,
   SelectContent,
@@ -90,6 +95,7 @@ interface AccountItem {
   type: string;
   isActive: boolean;
   defaultPaymentAccountId?: string | null;
+  isDefault?: boolean;
 }
 
 interface TemplateItem {
@@ -292,6 +298,109 @@ export default function SettingsForm({
 
   // Accounts CRUD state
   const [accountList, setAccountList] = useState<AccountItem[]>(accounts);
+
+  // Set Default Payment Account state
+  const [isSelectingDefault, setIsSelectingDefault] = useState(false);
+
+  // Transfer Dialog state
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [transferFromAccountId, setTransferFromAccountId] = useState("");
+  const [transferToAccountId, setTransferToAccountId] = useState("");
+  const [transferAmount, setTransferAmount] = useState("");
+  const [transferDescription, setTransferDescription] = useState("");
+  const [transferDate, setTransferDate] = useState(() => new Date());
+  const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false);
+
+  // Focus ref for accounts card
+  const accountsCardRef = useRef<HTMLDivElement>(null);
+
+  // Sync accountList with accounts prop
+  useEffect(() => {
+    setAccountList(accounts);
+  }, [accounts]);
+
+  // Handle auto-populating Transfer from/to accounts
+  useEffect(() => {
+    if (transferDialogOpen && accountList.length > 0) {
+      const active = accountList.filter((a) => a.isActive);
+      const def = active.find((a) => a.isDefault) || active[0];
+      if (def) {
+        setTransferFromAccountId(def.id);
+        const toAcc = active.find((a) => a.id !== def.id && a.currency === def.currency);
+        setTransferToAccountId(toAcc ? toAcc.id : "");
+      }
+    }
+  }, [transferDialogOpen, accountList]);
+
+  // Handler for setting default payment account
+  const handleSetDefaultAccount = async (accountId: string) => {
+    setIsSelectingDefault(false);
+    try {
+      const res = await setDefaultPaymentAccountAction(accountId);
+      if (res.success) {
+        toast.success("Default payment account updated");
+        setAccountList((prev) =>
+          prev.map((a) => ({
+            ...a,
+            isDefault: a.id === accountId,
+          })),
+        );
+        onRefresh?.();
+      } else {
+        toast.error(res.error || "Failed to update default account");
+      }
+    } catch {
+      toast.error("An unexpected error occurred");
+    }
+  };
+
+  // Handler for creating transfer
+  const handleCreateTransfer = async () => {
+    if (!transferFromAccountId) {
+      toast.error("Please select a source account");
+      return;
+    }
+    if (!transferToAccountId) {
+      toast.error("Please select a destination account");
+      return;
+    }
+    if (transferFromAccountId === transferToAccountId) {
+      toast.error("Source and destination accounts must be different");
+      return;
+    }
+    const parsedAmount = parseInputAmount(transferAmount);
+    if (parsedAmount <= 0) {
+      toast.error("Please enter a valid amount");
+      return;
+    }
+
+    setIsSubmittingTransfer(true);
+    try {
+      const res = await createTransferAction({
+        fromAccountId: transferFromAccountId,
+        toAccountId: transferToAccountId,
+        amount: parsedAmount,
+        description: transferDescription,
+        date: transferDate,
+      });
+
+      if (res.success) {
+        toast.success("Transfer completed successfully");
+        setTransferDialogOpen(false);
+        setTransferAmount("");
+        setTransferDescription("");
+        setTransferDate(new Date());
+        onRefresh?.();
+        window.dispatchEvent(new CustomEvent("transaction-added"));
+      } else {
+        toast.error(res.error || "Failed to complete transfer");
+      }
+    } catch {
+      toast.error("An unexpected error occurred");
+    } finally {
+      setIsSubmittingTransfer(false);
+    }
+  };
 
   // Add Account Dialog state
   const [addAccountOpen, setAddAccountOpen] = useState(false);
@@ -949,7 +1058,7 @@ export default function SettingsForm({
 
           <TabsContent value="profile" className="mt-0 flex flex-col gap-4">
             {/* Accounts Card */}
-            <section className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4">
+            <section ref={accountsCardRef} className="bg-white dark:bg-zinc-900 border border-border/40 shadow-sm rounded-2xl p-5 flex flex-col gap-4 scroll-mt-20">
               <div
                 className={cn(
                   "flex items-center justify-between cursor-pointer select-none transition-all",
@@ -962,28 +1071,10 @@ export default function SettingsForm({
                   <h2 className="text-sm font-bold text-foreground">
                     Financial Accounts
                   </h2>
-                  {showAccounts && (
-                    <IconChevronUp className="size-4 text-muted-foreground" />
-                  )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center">
                   {showAccounts ? (
-                    <Button
-                      variant="outline"
-                      size="icon-xs"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setAddAccName("");
-                        setAddAccBalance("");
-                        setAddAccCurrency("JPY");
-                        setAddAccType("bank");
-                        setAddAccountOpen(true);
-                      }}
-                      aria-label="Add financial account"
-                      className="cursor-pointer size-8 rounded-lg"
-                    >
-                      <IconPlus className="size-3.5" />
-                    </Button>
+                    <IconChevronUp className="size-4 text-muted-foreground" />
                   ) : (
                     <IconChevronDown className="size-4 text-muted-foreground" />
                   )}
@@ -1000,64 +1091,177 @@ export default function SettingsForm({
                     className="overflow-hidden"
                   >
                     <div className="flex flex-col gap-2 pt-2">
+                      {isSelectingDefault && (
+                        <Alert className="mb-2 bg-primary/10 border-primary/20 text-primary">
+                          <AlertDescription className="text-xs font-semibold flex items-center justify-between">
+                            <span>Tap an account to set it as default payment</span>
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsSelectingDefault(false);
+                              }}
+                              className="h-6 text-[10px] px-2 hover:bg-primary/20 text-primary"
+                            >
+                              Cancel
+                            </Button>
+                          </AlertDescription>
+                        </Alert>
+                      )}
+
                       {accountList.length === 0 ? (
                         <p className="text-xs text-muted-foreground text-center py-4">
                           No accounts added yet.
                         </p>
                       ) : (
-                        accountList.map((acc) => (
-                          <div
-                            key={acc.id}
-                            className={cn(
-                              "flex items-center justify-between gap-3 p-3 bg-muted/40 border border-border/25 rounded-xl hover:bg-muted/70 transition-colors",
-                              !acc.isActive && "opacity-60",
-                            )}
-                          >
-                            <div className="flex min-w-0 items-center gap-2.5">
-                              <div className="p-2 bg-white dark:bg-zinc-800 rounded-lg shadow-2xs border border-border/20">
-                                {acc.type === "investment" ? (
-                                  <IconActivity className="size-4 text-emerald-600 dark:text-emerald-400" />
-                                ) : acc.type === "credit_card" ? (
-                                  <IconCreditCard className="size-4 text-rose-500 dark:text-rose-400" />
-                                ) : acc.type === "ewallet" ? (
-                                  <IconWallet className="size-4 text-amber-500 dark:text-amber-400" />
-                                ) : (
-                                  <IconBuildingBank className="size-4 text-blue-500 dark:text-blue-400" />
-                                )}
-                              </div>
-                              <div className="flex min-w-0 flex-col gap-0.5">
-                                <span className="truncate text-xs font-semibold text-foreground leading-tight">
-                                  {acc.name}
-                                </span>
-                                <span className="truncate text-[10px] text-muted-foreground leading-none capitalize">
-                                  {acc.type === "credit_card"
-                                    ? "Credit Card"
-                                    : acc.type === "ewallet"
-                                      ? "E-Wallet"
-                                      : acc.type}{" "}
-                                  · {acc.currency}{" "}
-                                  {!acc.isActive && "· Inactive"}
-                                </span>
-                              </div>
-                            </div>
+                        accountList.map((acc) => {
+                          const hasExplicitDefault = accountList.some(
+                            (a) => a.isActive && a.isDefault,
+                          );
+                          const firstActiveAcc = accountList.find(
+                            (a) => a.isActive,
+                          );
+                          const isDefaultAcc = hasExplicitDefault
+                            ? acc.isDefault
+                            : firstActiveAcc
+                              ? firstActiveAcc.id === acc.id
+                              : false;
 
-                            <div className="flex shrink-0 items-center gap-2">
-                              <span className="text-xs font-sans font-bold text-foreground mr-1">
-                                {formatCurrency(acc.balance, acc.currency)}
-                              </span>
-                              <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                onClick={() => openEditAccount(acc)}
-                                aria-label="Edit account"
-                                className="cursor-pointer"
+                          return (
+                            <div
+                              key={acc.id}
+                              onClick={() => {
+                                if (isSelectingDefault) {
+                                  if (acc.isActive) {
+                                    handleSetDefaultAccount(acc.id);
+                                  } else {
+                                    toast.error(
+                                      "Inactive accounts cannot be set as default",
+                                    );
+                                  }
+                                } else {
+                                  openEditAccount(acc);
+                                }
+                              }}
+                              className={cn(
+                                "flex items-center justify-between gap-3 p-3 bg-muted/40 border rounded-xl transition-all cursor-pointer",
+                                isDefaultAcc
+                                  ? "border-primary ring-2 ring-primary/10 bg-white dark:bg-zinc-800/10 shadow-xs"
+                                  : "border-border/25 hover:bg-muted/70",
+                                !acc.isActive && "opacity-60",
+                                isSelectingDefault &&
+                                  acc.isActive &&
+                                  "hover:border-primary/50 animate-pulse",
+                              )}
+                            >
+                              <div className="flex min-w-0 items-center gap-2.5">
+                                <div className="p-2 bg-white dark:bg-zinc-800 rounded-lg shadow-2xs border border-border/20">
+                                  {acc.type === "investment" ? (
+                                    <IconActivity className="size-4 text-emerald-600 dark:text-emerald-400" />
+                                  ) : acc.type === "credit_card" ? (
+                                    <IconCreditCard className="size-4 text-rose-500 dark:text-rose-400" />
+                                  ) : acc.type === "ewallet" ? (
+                                    <IconWallet className="size-4 text-amber-500 dark:text-amber-400" />
+                                  ) : (
+                                    <IconBuildingBank className="size-4 text-blue-500 dark:text-blue-400" />
+                                  )}
+                                </div>
+                                <div className="flex min-w-0 flex-col gap-0.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="truncate text-xs font-semibold text-foreground leading-tight">
+                                      {acc.name}
+                                    </span>
+                                    {isDefaultAcc && (
+                                      <span className="shrink-0 text-[8px] font-sans font-bold bg-primary/10 text-primary px-1 py-0.5 rounded-sm">
+                                        Default
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="truncate text-[10px] text-muted-foreground leading-none capitalize">
+                                    {acc.type === "credit_card"
+                                      ? "Credit Card"
+                                      : acc.type === "ewallet"
+                                        ? "E-Wallet"
+                                        : acc.type}{" "}
+                                    · {acc.currency}{" "}
+                                    {!acc.isActive && "· Inactive"}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div
+                                className="flex shrink-0 items-center gap-2"
+                                onClick={(e) => e.stopPropagation()}
                               >
-                                <IconEdit className="size-3.5" />
-                              </Button>
+                                <span className="text-xs font-sans font-bold text-foreground mr-1">
+                                  {formatCurrency(acc.balance, acc.currency)}
+                                </span>
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={() => openEditAccount(acc)}
+                                  aria-label="Edit account"
+                                  className="cursor-pointer"
+                                >
+                                  <IconEdit className="size-3.5" />
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
+
+                      {/* Buttons at the bottom */}
+                      <div className="flex flex-col gap-2 mt-2.5 pt-2.5 border-t border-border/10">
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            variant="outline"
+                            size="xs"
+                            type="button"
+                            onClick={() => setTransferDialogOpen(true)}
+                            className="flex items-center justify-center gap-1.5 text-xs font-semibold h-9 rounded-xl cursor-pointer hover:bg-muted/70"
+                          >
+                            <IconSwitchHorizontal className="size-3.5 text-muted-foreground" />
+                            <span>Transfer</span>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="xs"
+                            type="button"
+                            onClick={() => {
+                              setAddAccName("");
+                              setAddAccBalance("");
+                              setAddAccCurrency("JPY");
+                              setAddAccType("bank");
+                              setAddAccountOpen(true);
+                            }}
+                            className="flex items-center justify-center gap-1.5 text-xs font-semibold h-9 rounded-xl cursor-pointer hover:bg-muted/70"
+                          >
+                            <IconPlus className="size-3.5 text-muted-foreground" />
+                            <span>Add Account</span>
+                          </Button>
+                        </div>
+                        <Button
+                          variant={isSelectingDefault ? "default" : "outline"}
+                          size="xs"
+                          type="button"
+                          onClick={() => {
+                            setIsSelectingDefault(true);
+                            accountsCardRef.current?.scrollIntoView({
+                              behavior: "smooth",
+                            });
+                          }}
+                          className={cn(
+                            "w-full flex items-center justify-center gap-1.5 text-xs font-semibold h-9 rounded-xl cursor-pointer hover:bg-muted/70",
+                            isSelectingDefault &&
+                              "bg-primary text-primary-foreground border-primary hover:bg-primary/95",
+                          )}
+                        >
+                          <IconCheck className="size-3.5" />
+                          <span>Set Default Payment Account</span>
+                        </Button>
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -1842,6 +2046,184 @@ export default function SettingsForm({
                   <IconLoader className="size-4 animate-spin" />
                 ) : (
                   "Apply"
+                )}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Transfer Between Own Accounts Dialog */}
+      <Dialog
+        open={transferDialogOpen}
+        onOpenChange={(open) => {
+          if (!isSubmittingTransfer) setTransferDialogOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-[360px] rounded-2xl p-0">
+          <div className="flex flex-col max-h-[85vh] p-5">
+            <DialogHeader className="pb-4 shrink-0 border-b border-border/20">
+              <DialogTitle className="font-sans">Transfer Money</DialogTitle>
+              <DialogDescription className="text-xs">
+                Transfer money between your own accounts.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-y-auto px-1 py-4 flex flex-col gap-4 min-h-0">
+              {/* From Account Select */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">From Account</Label>
+                <Select
+                  value={transferFromAccountId}
+                  onValueChange={(val) => {
+                    setTransferFromAccountId(val);
+                    const active = accountList.filter((a) => a.isActive);
+                    const sourceAcc = active.find((a) => a.id === val);
+                    const destAcc = active.find((a) => a.id === transferToAccountId);
+                    if (
+                      sourceAcc &&
+                      destAcc &&
+                      sourceAcc.currency !== destAcc.currency
+                    ) {
+                      const newDest = active.find(
+                        (a) => a.id !== val && a.currency === sourceAcc.currency,
+                      );
+                      setTransferToAccountId(newDest ? newDest.id : "");
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-10 text-xs font-semibold">
+                    <SelectValue placeholder="Select source account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accountList
+                      .filter((acc) => acc.isActive)
+                      .map((acc) => (
+                        <SelectItem key={acc.id} value={acc.id} className="text-xs">
+                          {acc.name} ({acc.currency} ·{" "}
+                          {formatCurrency(acc.balance, acc.currency)})
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* To Account Select */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">To Account</Label>
+                <Select
+                  value={transferToAccountId}
+                  onValueChange={setTransferToAccountId}
+                >
+                  <SelectTrigger className="h-10 text-xs font-semibold">
+                    <SelectValue placeholder="Select destination account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accountList
+                      .filter((acc) => {
+                        const active = acc.isActive;
+                        const notSame = acc.id !== transferFromAccountId;
+                        const sourceAcc = accountList.find(
+                          (a) => a.id === transferFromAccountId,
+                        );
+                        const sameCurrency = sourceAcc
+                          ? acc.currency === sourceAcc.currency
+                          : true;
+                        return active && notSame && sameCurrency;
+                      })
+                      .map((acc) => (
+                        <SelectItem key={acc.id} value={acc.id} className="text-xs">
+                          {acc.name} ({acc.currency} ·{" "}
+                          {formatCurrency(acc.balance, acc.currency)})
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Amount */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Amount</Label>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={transferAmount}
+                  onChange={(e) =>
+                    setTransferAmount(formatInputAmount(e.target.value))
+                  }
+                  className="h-10 font-semibold"
+                  placeholder="0"
+                  required
+                />
+              </div>
+
+              {/* Description */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">
+                  Description (Optional)
+                </Label>
+                <Input
+                  value={transferDescription}
+                  onChange={(e) => setTransferDescription(e.target.value)}
+                  className="h-10 text-xs font-semibold"
+                  placeholder="e.g. Savings allocation"
+                />
+              </div>
+
+              {/* Date Selector */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs font-semibold">Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="h-10 w-full justify-start text-left font-normal text-xs font-semibold gap-2 border border-input rounded-xl bg-background hover:bg-muted/50"
+                    >
+                      <IconCalendar className="size-3.5 text-muted-foreground" />
+                      {transferDate ? (
+                        transferDate.toLocaleDateString("en-US", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })
+                      ) : (
+                        <span>Pick a date</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-auto p-0 rounded-2xl"
+                    align="start"
+                  >
+                    <Calendar
+                      mode="single"
+                      selected={transferDate}
+                      onSelect={(day) => day && setTransferDate(day)}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+
+            <DialogFooter className="shrink-0 pt-4 border-t border-border/20 gap-2">
+              <Button
+                variant="ghost"
+                type="button"
+                disabled={isSubmittingTransfer}
+                onClick={() => setTransferDialogOpen(false)}
+                className="flex-1 text-xs font-semibold h-10 rounded-xl cursor-pointer"
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={isSubmittingTransfer}
+                onClick={handleCreateTransfer}
+                className="flex-1 text-xs font-semibold h-10 rounded-xl cursor-pointer"
+              >
+                {isSubmittingTransfer ? (
+                  <IconLoader className="size-4 animate-spin" />
+                ) : (
+                  "Transfer"
                 )}
               </Button>
             </DialogFooter>
